@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f5f1;
+  --foreground: #34332f;
+  --surface: #ffffff;
+  --surface-soft: #eeebe4;
+  --surface-image: #f3efe8;
+  --accent: #6f735f;
+  --accent-hover: #5f6450;
+  --muted: #747066;
+  --border: #dfd9cf;
+  --dark: #2b2b2b;
+  --image-sand: #d7cdbb;
+  --image-clay: #b9aa95;
+  --image-shadow: #52463a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background:
+    radial-gradient(900px 520px at 90% -10%, color-mix(in srgb, var(--image-sand) 12%, transparent), transparent 66%),
+    var(--background);
+  color: var(--foreground);
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.font-black {
+  font-weight: 620 !important;
+}
+
+.font-bold {
+  font-weight: 520 !important;
+}
+
+.tracking-tighter,
+.tracking-tight {
+  letter-spacing: 0.01em !important;
+}
+
+.tracking-widest,
+.tracking-\[0\.2em\],
+.tracking-\[0\.3em\] {
+  letter-spacing: 0.09em !important;
+}
+
+.uppercase {
+  text-transform: none !important;
+}
+
+/* Global palette remap for existing utility-heavy components */
+.bg-white {
+  background-color: var(--surface) !important;
+}
+
+.bg-slate-50,
+.bg-slate-50\/50 {
+  background-color: var(--background) !important;
+}
+
+.bg-slate-100,
+.hover\:bg-slate-100:hover {
+  background-color: var(--surface-soft) !important;
+}
+
+.bg-slate-200 {
+  background-color: var(--surface-image) !important;
+}
+
+.bg-slate-900\/40 {
+  background-color: color-mix(in srgb, var(--image-shadow) 55%, transparent) !important;
+}
+
+.bg-slate-900,
+.hover\:bg-slate-900:hover {
+  background-color: var(--dark) !important;
+}
+
+.text-slate-900,
+.text-slate-800,
+.text-slate-700 {
+  color: var(--foreground) !important;
+}
+
+.text-slate-600,
+.text-slate-500,
+.text-slate-400,
+.text-slate-300 {
+  color: var(--muted) !important;
+}
+
+.border-slate-50,
+.border-slate-100,
+.border-slate-200 {
+  border-color: var(--border) !important;
+}
+
+.text-emerald-700,
+.text-emerald-600,
+.text-emerald-500,
+.text-emerald-400 {
+  color: var(--accent) !important;
+}
+
+.bg-emerald-50 {
+  background-color: color-mix(in srgb, var(--image-sand) 22%, white) !important;
+}
+
+.bg-emerald-600,
+.hover\:bg-emerald-600:hover,
+.bg-emerald-500,
+.hover\:bg-emerald-500:hover {
+  background-color: var(--accent) !important;
+}
+
+.bg-emerald-600\/10 {
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent) !important;
+}
+
+.bg-emerald-500\/20 {
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent) !important;
+}
+
+.border-emerald-50,
+.border-emerald-100,
+.border-emerald-200,
+.border-emerald-300,
+.border-emerald-500,
+.border-emerald-600 {
+  border-color: var(--accent) !important;
+}
+
+.border-emerald-500\/20,
+.border-emerald-400\/20 {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border)) !important;
+}
+
+.focus\:border-emerald-200:focus,
+.focus\:ring-emerald-500:focus,
+.focus\:ring-emerald-500\/10:focus {
+  border-color: var(--accent) !important;
+  --tw-ring-color: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+
+.hover\:text-emerald-600:hover,
+.hover\:text-emerald-500:hover {
+  color: var(--accent-hover) !important;
+}
+
+.hover\:border-emerald-200:hover,
+.hover\:border-emerald-300:hover,
+.hover\:border-emerald-500:hover,
+.hover\:border-emerald-600:hover {
+  border-color: var(--accent-hover) !important;
+}
+
+.accent-emerald-500,
+.accent-emerald-600 {
+  accent-color: var(--accent) !important;
+}
+
+.shadow-emerald-100,
+.shadow-emerald-200,
+.shadow-emerald-900\/20 {
+  --tw-shadow-color: color-mix(in srgb, var(--image-clay) 45%, transparent) !important;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px rgba(52, 51, 47, 0.05) !important;
+}
+
+.shadow-lg {
+  box-shadow: 0 8px 18px rgba(52, 51, 47, 0.09) !important;
+}
+
+.shadow-xl,
+.shadow-2xl {
+  box-shadow: 0 14px 30px rgba(52, 51, 47, 0.1) !important;
+}
