@@ -6,14 +6,22 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { cookies } from 'next/headers';
 
+const databaseUrl =
+  String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || '').trim();
+
 // Datenbank-Verbindung
-const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "equipro",
-  password: String(process.env.DB_PASSWORD || ""),
-  port: 5432,
-});
+const pool = databaseUrl
+  ? new Pool({
+      connectionString: databaseUrl,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+    })
+  : new Pool({
+      user: "postgres",
+      host: "localhost",
+      database: "equipro",
+      password: String(process.env.DB_PASSWORD || ""),
+      port: 5432,
+    });
 
 let extraSchemaReady = false;
 const PASSWORD_RESET_WINDOW_MINUTES = 15;
@@ -3171,7 +3179,7 @@ export async function requestPasswordReset(email: string) {
       message: 'Wenn ein Konto existiert, wurde ein Link erstellt.'
     };
   } catch (error: any) {
-    return { success: false, error: error.message || 'Server-Fehler' };
+    return { success: false, error: 'Passwort-Reset ist derzeit nicht verfügbar. Bitte versuche es in wenigen Minuten erneut.' };
   }
 }
 
@@ -3339,10 +3347,11 @@ export async function registerUser(formData: any) {
 // --- LOGIN ---
 export async function loginUser(credentials: any) { 
   try {
-    const { email, password } = credentials;
+    const email = String(credentials?.email || '').trim().toLowerCase();
+    const password = String(credentials?.password || '');
     if (!email || !password) return { success: false, error: "Bitte Daten eingeben." };
 
-    const query = "SELECT id, vorname, nachname, role, password FROM users WHERE email = $1";
+    const query = "SELECT id, vorname, nachname, role, password FROM users WHERE LOWER(email) = $1";
     const result = await pool.query(query, [email]);
 
     if (result.rows.length === 0) return { success: false, error: "Nutzer nicht gefunden" };
@@ -3358,6 +3367,10 @@ export async function loginUser(credentials: any) {
     }
     return { success: false, error: "Falsches Passwort" };
   } catch (error: any) {
+    const code = String(error?.code || '');
+    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
+      return { success: false, error: 'Server-Fehler: Datenbankverbindung fehlgeschlagen.' };
+    }
     return { success: false, error: "Server-Fehler" };
   }
 }

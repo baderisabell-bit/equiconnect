@@ -3,13 +3,21 @@
 import crypto from "crypto";
 import { Pool } from "pg";
 
-const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "equipro",
-  password: String(process.env.DB_PASSWORD || ""),
-  port: 5432,
-});
+const databaseUrl =
+  String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || '').trim();
+
+const pool = databaseUrl
+  ? new Pool({
+      connectionString: databaseUrl,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+    })
+  : new Pool({
+      user: "postgres",
+      host: "localhost",
+      database: "equipro",
+      password: String(process.env.DB_PASSWORD || ""),
+      port: 5432,
+    });
 
 function getPublicAppUrl() {
   return String(process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");

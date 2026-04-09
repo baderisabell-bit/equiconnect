@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { requestPasswordReset, getPrivateSettingsData } from '../actions';
+import { requestPasswordReset } from '../actions';
 
 export default function PasswortVergessenPage() {
   const [email, setEmail] = useState('');
@@ -11,20 +11,6 @@ export default function PasswortVergessenPage() {
   const [error, setError] = useState('');
   const [devHint, setDevHint] = useState('');
   const [devResetUrl, setDevResetUrl] = useState('');
-
-  useEffect(() => {
-    const userIdRaw = sessionStorage.getItem("userId");
-    if (userIdRaw) {
-      const userId = parseInt(userIdRaw, 10);
-      if (!Number.isNaN(userId)) {
-        getPrivateSettingsData(userId).then(res => {
-          if (res.success && res.data?.email) {
-            setEmail(res.data.email);
-          }
-        });
-      }
-    }
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
