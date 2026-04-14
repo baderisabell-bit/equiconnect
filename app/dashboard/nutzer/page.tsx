@@ -83,7 +83,7 @@ export default function NutzerDashboardStart() {
         userName={userName}
         onOpenSidebar={openSidebar}
         onOpenProfile={openProfile}
-        brandText="EquiConnect"
+        brandText="Equily"
       />
 
       <main className="p-12 max-w-5xl mx-auto w-full">

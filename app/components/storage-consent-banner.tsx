@@ -19,7 +19,7 @@ export default function StorageConsentBanner(props: StorageConsentBannerProps) {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Speicher-Hinweis</p>
             <h2 className="mt-2 text-2xl font-black italic uppercase text-slate-900">Bevor du weiterklickst</h2>
             <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-              EquiConnect nutzt notwendige Browser-Speicher für Login und Portal-Funktionen. Optionale Speicher helfen nur bei Komfortfunktionen wie gemerkten Chat-Ansichten und Direktstarts in Nachrichten.
+              Equily nutzt notwendige Browser-Speicher für Login und Portal-Funktionen. Optionale Speicher helfen nur bei Komfortfunktionen wie gemerkten Chat-Ansichten und Direktstarts in Nachrichten.
             </p>
             <Link href="/cookies" className="mt-3 inline-block text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700">
               Mehr zu Cookies & Speicher

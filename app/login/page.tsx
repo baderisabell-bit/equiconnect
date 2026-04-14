@@ -24,6 +24,9 @@ export default function LoginPage() {
         sessionStorage.setItem('userEmail', email);
         sessionStorage.setItem('userName', res.user.name);
         sessionStorage.setItem('userRole', String(res.user.role || '').trim().toLowerCase());
+        if (String(res.user.role || '').trim().toLowerCase() === 'experte') {
+          sessionStorage.setItem('equiconnect-founding-info-pending', '1');
+        }
 
         // 2. Nach Login immer auf die Startseite
         window.location.href = '/';

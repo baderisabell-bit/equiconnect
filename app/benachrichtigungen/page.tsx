@@ -175,7 +175,7 @@ export default function BenachrichtigungenPage() {
             <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200">
               ☰
             </button>
-            <Link href="/" className="font-black text-emerald-600 text-2xl italic uppercase tracking-tighter">EquiConnect</Link>
+            <Link href="/" className="font-black text-emerald-600 text-2xl italic uppercase tracking-tighter">Equily</Link>
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell userId={userId} />

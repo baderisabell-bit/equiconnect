@@ -33,12 +33,33 @@ type OfferDetails = {
     kategorie: string;
     beschreibung: string;
     titleImageUrl: string;
+    mediaItems: Array<{ url: string; mediaType: 'image' | 'video' }>;
     visibility: "public" | "draft";
     prices: OfferPrice[];
   };
   ratings: OfferRating[];
   ratingAvg: number;
   ratingCount: number;
+};
+
+const REQUEST_TIMEOUT_MS = 15000;
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} Timeout`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
 };
 
 export default function OfferDetailPage() {
@@ -56,29 +77,36 @@ export default function OfferDetailPage() {
 
   useEffect(() => {
     const load = async () => {
-      if (!Number.isInteger(profileUserId) || profileUserId <= 0 || !offerId) {
-        setError("Ungültige Anzeige-URL.");
+      try {
+        if (!Number.isInteger(profileUserId) || profileUserId <= 0 || !offerId) {
+          setError("Ungültige Anzeige-URL.");
+          return;
+        }
+
+        const viewerRaw = sessionStorage.getItem("userId");
+        const viewerUserId = viewerRaw ? parseInt(viewerRaw, 10) : 0;
+
+        const res = await withTimeout(
+          getPublicOfferDetails({
+            profileUserId,
+            offerId,
+            viewerUserId: Number.isInteger(viewerUserId) && viewerUserId > 0 ? viewerUserId : null,
+          }),
+          REQUEST_TIMEOUT_MS,
+          "Anzeigenvorschau laden"
+        );
+
+        if (!res.success || !res.data) {
+          setError(res.error || "Anzeige konnte nicht geladen werden.");
+          return;
+        }
+
+        setDetails(res.data as OfferDetails);
+      } catch {
+        setError("Anzeige konnte nicht geladen werden.");
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const viewerRaw = sessionStorage.getItem("userId");
-      const viewerUserId = viewerRaw ? parseInt(viewerRaw, 10) : 0;
-
-      const res = await getPublicOfferDetails({
-        profileUserId,
-        offerId,
-        viewerUserId: Number.isInteger(viewerUserId) && viewerUserId > 0 ? viewerUserId : null,
-      });
-
-      if (!res.success || !res.data) {
-        setError(res.error || "Anzeige konnte nicht geladen werden.");
-        setLoading(false);
-        return;
-      }
-
-      setDetails(res.data as OfferDetails);
-      setLoading(false);
     };
 
     load();
@@ -107,7 +135,7 @@ export default function OfferDetailPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="bg-white border-b border-slate-200 px-5 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <p className="font-black text-emerald-600 text-xl italic uppercase leading-none">EquiConnect</p>
+          <p className="font-black text-emerald-600 text-xl italic uppercase leading-none">Equily</p>
           <div className="flex items-center gap-2">
             <Link href="/suche" className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-700">
               Suche
@@ -146,6 +174,23 @@ export default function OfferDetailPage() {
 
           {details.offer.titleImageUrl && (
             <img src={details.offer.titleImageUrl} alt={details.offer.titel || "Anzeige"} className="w-full h-72 rounded-2xl object-cover border border-slate-200" />
+          )}
+
+          {details.offer.mediaItems.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Weitere Medien</p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {details.offer.mediaItems.map((item, idx) => (
+                  <div key={`${details.offer.id}-media-${idx}`} className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                    {item.mediaType === 'video' ? (
+                      <video src={item.url} controls className="w-full h-40 object-cover" />
+                    ) : (
+                      <img src={item.url} alt={`Anzeigenmedium ${idx + 1}`} className="w-full h-40 object-cover" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {details.offer.beschreibung && (

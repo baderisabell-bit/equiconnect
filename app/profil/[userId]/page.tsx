@@ -36,7 +36,8 @@ import {
   getUserPromotionSettings,
   purchaseVisibilityPromotion,
   uploadNetworkMedia,
-  reportPublicProfile
+  reportPublicProfile,
+  persistProfileImageUrl
 } from '../../actions';
 
 type ProfileState = {
@@ -167,7 +168,14 @@ export default function PublicProfilePage() {
   const [uploadingPostMedia, setUploadingPostMedia] = useState(false);
   const [editingPostId, setEditingPostId] = useState<number | null>(null);
   const [editingPostForm, setEditingPostForm] = useState({ title: '', content: '' });
-  const [newOfferForm, setNewOfferForm] = useState({ titel: '', kategorie: '', beschreibung: '' });
+  const [newOfferForm, setNewOfferForm] = useState({
+    titel: '',
+    kategorie: '',
+    beschreibung: '',
+    titleImageUrl: '',
+    mediaItems: [] as GalerieItem[]
+  });
+  const [uploadingOfferMedia, setUploadingOfferMedia] = useState(false);
   const [newSearchForm, setNewSearchForm] = useState({ titel: '', kategorie: '', beschreibung: '' });
   const [draftsHydrated, setDraftsHydrated] = useState(false);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
@@ -637,7 +645,13 @@ export default function PublicProfilePage() {
   const offerDraftKey = profile?.userId ? `equi:draft:profile:${profile.userId}:new-offer` : '';
   const searchDraftKey = profile?.userId ? `equi:draft:profile:${profile.userId}:new-search` : '';
   const hasPostDraft = Boolean(newPostForm.title.trim() || newPostForm.content.trim());
-  const hasOfferDraft = Boolean(newOfferForm.titel.trim() || newOfferForm.kategorie.trim() || newOfferForm.beschreibung.trim());
+  const hasOfferDraft = Boolean(
+    newOfferForm.titel.trim()
+    || newOfferForm.kategorie.trim()
+    || newOfferForm.beschreibung.trim()
+    || newOfferForm.titleImageUrl.trim()
+    || newOfferForm.mediaItems.length > 0
+  );
   const hasSearchDraft = Boolean(newSearchForm.titel.trim() || newSearchForm.kategorie.trim() || newSearchForm.beschreibung.trim());
   const offerBoostOption = useMemo(() => {
     if (!promotionSettings || !Array.isArray(promotionSettings.options)) return null;
@@ -856,7 +870,16 @@ export default function PublicProfilePage() {
         setNewOfferForm({
           titel: String(parsedOffer?.titel || ''),
           kategorie: String(parsedOffer?.kategorie || ''),
-          beschreibung: String(parsedOffer?.beschreibung || '')
+          beschreibung: String(parsedOffer?.beschreibung || ''),
+          titleImageUrl: String(parsedOffer?.titleImageUrl || ''),
+          mediaItems: Array.isArray(parsedOffer?.mediaItems)
+            ? parsedOffer.mediaItems
+                .map((item: any) => ({
+                  type: String(item?.type || '').trim() === 'video' ? 'video' : 'image',
+                  url: String(item?.url || '').trim()
+                }))
+                .filter((item: GalerieItem) => item.url)
+            : []
         });
       }
     } catch {
@@ -883,7 +906,13 @@ export default function PublicProfilePage() {
     if (!isOwnProfile || !editMode || !offerDraftKey || !draftsHydrated) return;
     if (typeof window === 'undefined') return;
 
-    const hasOfferDraft = Boolean(newOfferForm.titel.trim() || newOfferForm.kategorie.trim() || newOfferForm.beschreibung.trim());
+    const hasOfferDraft = Boolean(
+      newOfferForm.titel.trim()
+      || newOfferForm.kategorie.trim()
+      || newOfferForm.beschreibung.trim()
+      || newOfferForm.titleImageUrl.trim()
+      || newOfferForm.mediaItems.length > 0
+    );
     if (!hasOfferDraft) {
       localStorage.removeItem(offerDraftKey);
       return;
@@ -955,58 +984,87 @@ export default function PublicProfilePage() {
     setEditBusy(true);
 
     const nextProfilData = {
-      ...(profile.profilData || {}),
       profilbild_url: editForm.profilbildUrl,
-      freitextBeschreibung: editForm.description
+      freitextBeschreibung: editForm.description,
+      website: editForm.website,
+      startseitenwerbungText: editForm.werbungText
     };
 
-    const res = profile.role === 'experte'
-      ? await saveExpertProfileData(profile.userId, {
+    try {
+      const res = profile.role === 'experte'
+        ? await saveExpertProfileData(profile.userId, {
+            name: editForm.name,
+            ort: editForm.ort,
+            plz: editForm.plz,
+            angebote: editCategories,
+            zertifikate: profile.zertifikate,
+            angebotText: editForm.mainText,
+            ...nextProfilData
+          })
+        : await saveUserProfileData(profile.userId, {
+            profilName: editForm.name,
+            ort: editForm.ort,
+            plz: editForm.plz,
+            kategorien: profile.kategorien,
+            sucheText: editForm.mainText,
+            ...nextProfilData
+          });
+
+      if (!res.success) {
+        alert(res.error || 'Profil konnte nicht gespeichert werden.');
+        return;
+      }
+
+      setProfile((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
           name: editForm.name,
           ort: editForm.ort,
           plz: editForm.plz,
-          angebote: editCategories,
-          zertifikate: profile.zertifikate,
-          angebotText: editForm.mainText,
-          ...nextProfilData
-        })
-      : await saveUserProfileData(profile.userId, {
-          profilName: editForm.name,
-          ort: editForm.ort,
-          plz: editForm.plz,
-          kategorien: profile.kategorien,
-          sucheText: editForm.mainText,
-          ...nextProfilData
-        });
+          kategorien: prev.role === 'experte' ? editCategories : prev.kategorien,
+          angebotText: prev.role === 'experte' ? editForm.mainText : prev.angebotText,
+          sucheText: prev.role === 'nutzer' ? editForm.mainText : prev.sucheText,
+          profilData: {
+            ...(prev.profilData || {}),
+            profilbild_url: editForm.profilbildUrl,
+            freitextBeschreibung: editForm.description,
+            website: editForm.website,
+          }
+        };
+      });
 
-    setEditBusy(false);
-    if (!res.success) {
-      alert(res.error || 'Profil konnte nicht gespeichert werden.');
-      return;
+      sessionStorage.setItem('userName', editForm.name || viewerName);
+      setViewerName(editForm.name || viewerName);
+
+      const refreshedRes = await getStoredProfileData(profile.userId);
+      if (refreshedRes.success && refreshedRes.data) {
+        const row = refreshedRes.data;
+        const profilData = {
+          ...(row.profil_data || {}),
+          gesuche: row.gesuche || row.profil_data?.gesuche || []
+        };
+        setProfile((prev) => ({
+          role: row.role === 'experte' ? 'experte' : 'nutzer',
+          userId: profile.userId,
+          name: row.display_name || `${profilData.vorname || ''} ${profilData.nachname || ''}`.trim() || prev?.name || editForm.name,
+          ort: row.ort || '',
+          plz: row.plz || '',
+          verifiziert: Boolean(row.user_verifiziert ?? row.verifiziert),
+          kategorien: Array.isArray(row.kategorien) ? row.kategorien : [],
+          zertifikate: Array.isArray(row.zertifikate) ? row.zertifikate : [],
+          angebotText: row.angebot_text || '',
+          sucheText: row.suche_text || '',
+          profilData
+        }));
+      }
+
+      setEditMode(false);
+    } catch {
+      alert('Speichern fehlgeschlagen. Bitte erneut versuchen.');
+    } finally {
+      setEditBusy(false);
     }
-
-    setProfile((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        name: editForm.name,
-        ort: editForm.ort,
-        plz: editForm.plz,
-        kategorien: prev.role === 'experte' ? editCategories : prev.kategorien,
-        angebotText: prev.role === 'experte' ? editForm.mainText : prev.angebotText,
-        sucheText: prev.role === 'nutzer' ? editForm.mainText : prev.sucheText,
-        profilData: {
-          ...(prev.profilData || {}),
-          profilbild_url: editForm.profilbildUrl,
-          freitextBeschreibung: editForm.description,
-          website: editForm.website,
-        }
-      };
-    });
-
-    sessionStorage.setItem('userName', editForm.name || viewerName);
-    setViewerName(editForm.name || viewerName);
-    setEditMode(false);
   };
 
   const handleCancelEdit = () => {
@@ -1033,26 +1091,47 @@ export default function PublicProfilePage() {
     if (!profile || !isOwnProfile || files.length === 0) return;
 
     setUploadingProfileImage(true);
-    
-    const file = files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const uploadRes = await uploadProfileImage(profile.userId, formData);
-    
-    setUploadingProfileImage(false);
-    
-    if (!uploadRes.success) {
-      alert(uploadRes.error || 'Profilbild konnte nicht hochgeladen werden.');
-      return;
+
+    try {
+      const file = files[0];
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadRes = await uploadProfileImage(profile.userId, formData);
+
+      if (!uploadRes.success) {
+        alert(uploadRes.error || 'Profilbild konnte nicht hochgeladen werden.');
+        return;
+      }
+
+      const persistedRes = await persistProfileImageUrl(profile.userId, String(uploadRes.url || ''));
+      if (!persistedRes.success) {
+        alert(persistedRes.error || 'Profilbild konnte nicht gespeichert werden.');
+        return;
+      }
+
+      setEditForm((prev) => ({
+        ...prev,
+        profilbildUrl: uploadRes.url || ''
+      }));
+
+      setProfile((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          profilData: {
+            ...(prev.profilData || {}),
+            profilbild_url: String(uploadRes.url || '').trim()
+          }
+        };
+      });
+
+      alert('Profilbild erfolgreich hochgeladen!');
+    } catch {
+      alert('Upload fehlgeschlagen. Bitte Bild verkleinern und erneut versuchen.');
+    } finally {
+      setUploadingProfileImage(false);
     }
-    
-    setEditForm((prev) => ({
-      ...prev,
-      profilbildUrl: uploadRes.url || ''
-    }));
-    
-    alert('Profilbild erfolgreich hochgeladen!');
   };
 
   const setContentFeedback = (message: string, error = '') => {
@@ -1093,6 +1172,58 @@ export default function PublicProfilePage() {
 
   const removePostMediaItem = (index: number) => {
     setNewPostMediaItems((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const handleOfferMediaUpload = async (files: File[], target: 'title' | 'gallery') => {
+    if (!profile || !isOwnProfile || profile.role !== 'experte' || files.length === 0) return;
+
+    setUploadingOfferMedia(true);
+    setContentError('');
+
+    const uploadedItems: GalerieItem[] = [];
+    const uploadErrors: string[] = [];
+
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await uploadNetworkMedia(profile.userId, formData);
+      if (uploadRes.success && uploadRes.url) {
+        uploadedItems.push({
+          url: String(uploadRes.url),
+          type: uploadRes.mediaType === 'video' ? 'video' : 'image'
+        });
+      } else {
+        uploadErrors.push(`${file.name}: ${uploadRes.error || 'Upload fehlgeschlagen.'}`);
+      }
+    }
+
+    setUploadingOfferMedia(false);
+
+    if (uploadedItems.length > 0) {
+      setNewOfferForm((prev) => {
+        if (target === 'title') {
+          const firstImage = uploadedItems.find((item) => item.type === 'image');
+          if (firstImage) {
+            return { ...prev, titleImageUrl: firstImage.url };
+          }
+          return prev;
+        }
+
+        const nextMediaItems = [...prev.mediaItems, ...uploadedItems].slice(0, 8);
+        return { ...prev, mediaItems: nextMediaItems };
+      });
+    }
+
+    if (uploadErrors.length > 0) {
+      setContentFeedback('', uploadErrors.slice(0, 2).join(' '));
+    }
+  };
+
+  const removeOfferMediaItem = (index: number) => {
+    setNewOfferForm((prev) => ({
+      ...prev,
+      mediaItems: prev.mediaItems.filter((_, itemIndex) => itemIndex !== index)
+    }));
   };
 
   const refreshProfileCollections = async () => {
@@ -1271,14 +1402,25 @@ export default function PublicProfilePage() {
     setContentBusy(true);
     setContentFeedback('', '');
     const offers = getOffersRaw();
-    offers.unshift({ id: `angebot-${Date.now()}`, titel, kategorie, beschreibung, preise: [] });
+    offers.unshift({
+      id: `angebot-${Date.now()}`,
+      titel,
+      kategorie,
+      beschreibung,
+      titleImageUrl: String(newOfferForm.titleImageUrl || '').trim(),
+      mediaItems: newOfferForm.mediaItems.map((item) => ({
+        url: String(item.url || '').trim(),
+        mediaType: item.type === 'video' ? 'video' : 'image'
+      })).filter((item) => item.url),
+      preise: []
+    });
     const res = await saveOffersRaw(offers);
     setContentBusy(false);
     if (!res.success) {
       setContentFeedback('', res.error || 'Anzeige konnte nicht gespeichert werden.');
       return;
     }
-    setNewOfferForm({ titel: '', kategorie: '', beschreibung: '' });
+    setNewOfferForm({ titel: '', kategorie: '', beschreibung: '', titleImageUrl: '', mediaItems: [] });
     if (typeof window !== 'undefined' && offerDraftKey) {
       localStorage.removeItem(offerDraftKey);
     }
@@ -1635,8 +1777,8 @@ export default function PublicProfilePage() {
       return;
     }
     const link = getTeamRegisterLink();
-    const subject = encodeURIComponent('Einladung zur Registrierung bei EquiConnect');
-    const body = encodeURIComponent(`Hallo,\n\nbitte registriere dich hier bei EquiConnect:\n${link}\n\nViele Grüße`);
+    const subject = encodeURIComponent('Einladung zur Registrierung bei Equily');
+    const body = encodeURIComponent(`Hallo,\n\nbitte registriere dich hier bei Equily:\n${link}\n\nViele Grüße`);
     window.location.href = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   };
 
@@ -1889,9 +2031,22 @@ export default function PublicProfilePage() {
                 )}
               </div>
               {isOwnProfile && editMode && (
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  {uploadingProfileImage ? 'Wird hochgeladen...' : 'Bild hier einfügen'}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    {uploadingProfileImage ? 'Wird hochgeladen...' : 'Bild hier einfügen'}
+                  </p>
+                  <MediaDropzone
+                    title="Profilbild hochladen"
+                    description="Datei auswählen"
+                    accept="image/*"
+                    multiple={false}
+                    disabled={uploadingProfileImage}
+                    buttonLabel="Profilbild auswählen"
+                    busyLabel="Lade Profilbild..."
+                    onFiles={handleUploadProfileImage}
+                    className="rounded-2xl border border-slate-200 bg-white p-3"
+                  />
+                </div>
               )}
               {galerieItems.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-1">
@@ -2092,13 +2247,15 @@ export default function PublicProfilePage() {
                     placeholder="Allgemeine Informationen bearbeiten"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
                   />
-                  <textarea
-                    value={editForm.mainText}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, mainText: e.target.value }))}
-                    rows={4}
-                    placeholder={profile.role === 'experte' ? 'Angebotstext bearbeiten' : 'Suchtext bearbeiten'}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
-                  />
+                  {profile.role !== 'experte' && (
+                    <textarea
+                      value={editForm.mainText}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, mainText: e.target.value }))}
+                      rows={4}
+                      placeholder="Suchtext bearbeiten"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
+                    />
+                  )}
                   <input
                     type="url"
                     value={editForm.website}
@@ -2527,10 +2684,59 @@ export default function PublicProfilePage() {
                       placeholder="Beschreibung"
                       className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
                     />
+                    <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Titelbild</p>
+                      <MediaDropzone
+                        title="Titelbild hochladen"
+                        description="JPG, PNG oder WebP"
+                        accept="image/*"
+                        multiple={false}
+                        disabled={uploadingOfferMedia}
+                        buttonLabel="Titelbild auswählen"
+                        busyLabel="Lädt..."
+                        onFiles={(files) => handleOfferMediaUpload(files, 'title')}
+                      />
+                      {newOfferForm.titleImageUrl && (
+                        <img src={newOfferForm.titleImageUrl} alt="Titelbild" className="w-full max-w-sm h-32 object-cover rounded-xl border border-slate-200" />
+                      )}
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Weitere Bilder / Videos</p>
+                      <MediaDropzone
+                        title="Weitere Medien hinzufügen"
+                        description="Bis zu 8 Medien pro Anzeige"
+                        accept="image/*,video/*"
+                        multiple
+                        disabled={uploadingOfferMedia}
+                        buttonLabel="Dateien auswählen"
+                        busyLabel="Lädt..."
+                        onFiles={(files) => handleOfferMediaUpload(files, 'gallery')}
+                      />
+                      {newOfferForm.mediaItems.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {newOfferForm.mediaItems.map((item, index) => (
+                            <div key={`${item.url}-${index}`} className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                              {item.type === 'video' ? (
+                                <video src={item.url} className="w-full h-24 object-cover" muted playsInline />
+                              ) : (
+                                <img src={item.url} alt="Anzeigenmedium" className="w-full h-24 object-cover" />
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeOfferMediaItem(index)}
+                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 text-slate-700 flex items-center justify-center"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={handleCreateOfferInline}
-                      disabled={contentBusy}
+                      disabled={contentBusy || uploadingOfferMedia}
                       className="px-4 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white disabled:opacity-60"
                     >
                       Anzeige speichern

@@ -269,7 +269,7 @@ export default function ExpertTeamPage() {
                   placeholder="Benutzer-ID aus dem System"
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  Wenn dieses Teammitglied bereits ein EquiConnect-Konto hat
+                  Wenn dieses Teammitglied bereits ein Equily-Konto hat
                 </p>
               </div>
 

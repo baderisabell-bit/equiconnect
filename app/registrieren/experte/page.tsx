@@ -262,6 +262,7 @@ export default function RegistrierungExperte() {
 
     sessionStorage.setItem('userRole', 'experte');
     sessionStorage.setItem('userName', `${formData.vorname} ${formData.nachname}`.trim() || formData.gewerbeName || 'Experte');
+    sessionStorage.setItem('equiconnect-founding-info-pending', '1');
     alert('Auswahl gespeichert. Du kannst sie jetzt im Profil und in der Suche sehen.');
     window.location.href = '/abo?onboarding=1&role=experte';
   };

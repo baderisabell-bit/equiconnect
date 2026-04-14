@@ -32,7 +32,7 @@ export default function LoggedInHeader({
   userName,
   onOpenSidebar,
   onOpenProfile,
-  brandText = 'EquiConnect'
+  brandText = 'Equily'
 }: LoggedInHeaderProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const initial = String(userName || 'P').trim().charAt(0).toUpperCase() || 'P';

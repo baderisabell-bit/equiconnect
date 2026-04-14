@@ -14,6 +14,7 @@ import {
   getUserBookings,
   purchaseVisibilityPromotion,
   getOwnAdvertisingSubmissions,
+  requestOwnSubscriptionCancellation,
   submitOwnAdvertising,
   saveGalerieItems,
   deleteOwnAccount,
@@ -63,7 +64,12 @@ type SubscriptionData = {
   payment_method: "sepa" | "paypal";
   monthly_price_cents: number;
   status: string;
+  started_at?: string | null;
   next_charge_at?: string | null;
+  cancel_requested_at?: string | null;
+  cancel_effective_at?: string | null;
+  cancel_reason?: string | null;
+  cancelled_at?: string | null;
   sepa_account_holder?: string | null;
   sepa_iban?: string | null;
   paypal_email?: string | null;
@@ -168,6 +174,8 @@ export default function EinstellungenPage() {
   const [uploadingGalerie, setUploadingGalerie] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [subscriptionSaving, setSubscriptionSaving] = useState(false);
+  const [subscriptionCancelBusy, setSubscriptionCancelBusy] = useState(false);
+  const [subscriptionCancelReason, setSubscriptionCancelReason] = useState("");
   const [promotionSettings, setPromotionSettings] = useState<PromotionSettings | null>(null);
   const [promotionScopeSaving, setPromotionScopeSaving] = useState<string | null>(null);
   const [calendarSlots, setCalendarSlots] = useState<CalendarSlot[]>([]);
@@ -457,6 +465,40 @@ export default function EinstellungenPage() {
     setSuccess('Abo-Zahlungsart aktualisiert.');
   };
 
+  const requestSubscriptionCancellation = async () => {
+    if (!userId || !subscription) return;
+    const confirmed = window.confirm("Abo wirklich kündigen? Die Kündigung wird zum nächsten Abrechnungsdatum wirksam, wenn sie mindestens 3 Tage vorher eingeht.");
+    if (!confirmed) return;
+
+    setSubscriptionCancelBusy(true);
+    setError("");
+    setSuccess("");
+
+    const res = await requestOwnSubscriptionCancellation({
+      userId,
+      reason: subscriptionCancelReason,
+    });
+
+    setSubscriptionCancelBusy(false);
+
+    if (!res.success) {
+      setError(res.error || "Kündigung konnte nicht gespeichert werden.");
+      return;
+    }
+
+    const reloadRes = await getUserSubscriptionSettings(userId);
+    if (reloadRes.success && reloadRes.data) {
+      setSubscription(reloadRes.data as SubscriptionData);
+    }
+
+    if ((res as any).alreadyRequested) {
+      setSuccess(`Kündigung ist bereits vorgemerkt. Wirksam zum ${formatDate((res as any).effectiveAt || null)}.`);
+      return;
+    }
+
+    setSuccess(`Kündigung vorgemerkt. Wirksam zum ${formatDate((res as any).effectiveAt || null)}.`);
+  };
+
   const handlePromotionPurchase = async (scope: PromotionOption["scope"], label: string) => {
     if (!userId) return;
     setPromotionScopeSaving(scope);
@@ -650,7 +692,7 @@ export default function EinstellungenPage() {
         userName={userName}
         onOpenSidebar={() => setSidebarOpen(true)}
         onOpenProfile={openProfile}
-        brandText="EquiConnect"
+        brandText="Equily"
       />
 
       <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-8">
@@ -845,6 +887,9 @@ export default function EinstellungenPage() {
                 <p className="mt-2 text-sm font-medium text-slate-600">
                   Verwalte dein Abo, eine Zahlungsart mit SEPA (günstiger) oder PayPal und sieh deine Rechnungen ein.
                 </p>
+                <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                  Kündigungen müssen spätestens 3 Tage vor Abo-Ende eingehen. Abbuchung erfolgt immer am gleichen Kalendertag wie beim Abschluss.
+                </p>
               </div>
 
               {subscription ? (
@@ -864,6 +909,11 @@ export default function EinstellungenPage() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                     Nächste Abbuchung: {formatDate(subscription.next_charge_at || null)}
                   </p>
+                  {subscription.cancel_requested_at && (
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                      Kündigung vorgemerkt am {formatDate(subscription.cancel_requested_at || null)} · Wirksam zum {formatDate(subscription.cancel_effective_at || null)}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-3">
                     <button
                       type="button"
@@ -885,6 +935,29 @@ export default function EinstellungenPage() {
                       Abo vollständig verwalten
                     </Link>
                   </div>
+                  {subscription.monthly_price_cents > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Kündigung</p>
+                      <input
+                        type="text"
+                        value={subscriptionCancelReason}
+                        onChange={(e) => setSubscriptionCancelReason(e.target.value)}
+                        placeholder="Optionaler Kündigungsgrund"
+                        className="w-full p-3 rounded-xl border border-amber-200 bg-white text-sm font-medium outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={requestSubscriptionCancellation}
+                        disabled={subscriptionCancelBusy || subscription.status === 'cancel_pending'}
+                        className="px-4 py-2 rounded-xl border border-amber-400 bg-white text-[10px] font-black uppercase tracking-widest text-amber-700 disabled:opacity-60"
+                      >
+                        {subscriptionCancelBusy ? 'Kündige...' : subscription.status === 'cancel_pending' ? 'Kündigung vorgemerkt' : 'Abo kündigen'}
+                      </button>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        Frist: mindestens 3 Tage vor dem nächsten Abbuchungstermin.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">

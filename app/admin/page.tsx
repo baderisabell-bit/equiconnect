@@ -117,7 +117,7 @@ export default function AdminHomePage() {
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Hinweis</p>
               <p className="mt-2 text-sm text-emerald-900 leading-relaxed">
-                Das Passwort wird nur fuer die Admin-Sitzung verwendet. Bei Logout oder Ablauf musst du dich erneut anmelden.
+                Das Passwort wird nur für die Admin-Sitzung verwendet. Bei Logout oder Ablauf musst du dich erneut anmelden.
               </p>
             </div>
           </div>

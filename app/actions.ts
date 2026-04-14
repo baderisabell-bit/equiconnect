@@ -100,6 +100,26 @@ function getPublicAppUrl() {
   return String(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
 }
 
+function getGoCardlessApiBase() {
+  const mode = String(process.env.GOCARDLESS_ENV || process.env.GO_CARDLESS_ENV || 'sandbox').trim().toLowerCase();
+  return mode === 'live' ? 'https://api.gocardless.com' : 'https://api-sandbox.gocardless.com';
+}
+
+function getGoCardlessAccessToken() {
+  return String(process.env.GOCARDLESS_ACCESS_TOKEN || process.env.GO_CARDLESS_ACCESS_TOKEN || '').trim();
+}
+
+function normalizeGoCardlessError(payload: any, fallback: string) {
+  const firstError = Array.isArray(payload?.errors) ? payload.errors[0] : null;
+  const message = String(firstError?.message || '').trim();
+  const reason = String(firstError?.reason || '').trim();
+  const field = String(firstError?.field || '').trim();
+  if (message && reason && field) return `${message} (${field}: ${reason})`;
+  if (message && reason) return `${message} (${reason})`;
+  if (message) return message;
+  return fallback;
+}
+
 function resolveMailConfig() {
   const brevoUser = String(process.env.BREVO_SMTP_LOGIN || process.env.BREVO_LOGIN || '').trim();
   const brevoPass = String(process.env.BREVO_SMTP_KEY || process.env.BREVO_KEY || '').trim();
@@ -254,8 +274,8 @@ async function sendPasswordResetEmail(email: string, resetUrl: string) {
     from,
     to: email,
     subject: 'Passwort zurücksetzen',
-    text: `Du hast eine Passwort-Zurücksetzung angefordert.\n\nÖffne diesen Link: ${resetUrl}\n\nDer Link ist 60 Minuten gültig.`,
-    html: `
+      text: `Du hast eine Passwort-Zurücksetzung angefordert.\n\nÖffne diesen Link: ${resetUrl}\n\nDer Link ist 60 Minuten gültig.`,
+      html: `
       <p>Du hast eine Passwort-Zurücksetzung angefordert.</p>
       <p><a href="${resetUrl}">Passwort zurücksetzen</a></p>
       <p>Der Link ist 60 Minuten gültig.</p>
@@ -294,12 +314,12 @@ async function sendWelcomeEmail(email: string, vorname: string, role: string) {
   const { transporter, from } = createMailTransport();
 
   const subject = isExperte
-    ? `Willkommen bei EquiConnect, ${safeVorname} - Expertenprofil aktiv`
-    : `Willkommen bei EquiConnect, ${safeVorname} - Nutzerkonto aktiv`;
+    ? `Willkommen bei Equily, ${safeVorname} - Expertenprofil aktiv`
+    : `Willkommen bei Equily, ${safeVorname} - Nutzerkonto aktiv`;
 
   const text = isExperte
-    ? `Hallo ${safeVorname},\n\nToller Start! Dein Experten-Profil wurde erfolgreich angelegt.\n\nDein Login: ${safeEmail}\n\nDein Profil wird nun von unserem Team geprüft. Sobald du freigeschaltet bist, kannst du dein Angebot veröffentlichen und Kunden gewinnen.\n\nBis dahin kannst du dein Profil bereits vollständig ausfüllen und dein Angebot beschreiben.\n\nViele Grüße,\nDas EquiConnect-Team`
-    : `Hallo ${safeVorname},\n\nSchön, dass du dabei bist! Dein Nutzerkonto ist jetzt aktiv.\n\nDein Login: ${safeEmail}\n\nDu kannst ab sofort qualifizierte Experten in deiner Nähe finden, Termine buchen und dein Netzwerk aufbauen.\n\nViele Grüße,\nDas EquiConnect-Team`;
+    ? `Hallo ${safeVorname},\n\nToller Start! Dein Experten-Profil wurde erfolgreich angelegt.\n\nDein Login: ${safeEmail}\n\nDein Profil wird nun von unserem Team geprüft. Sobald du freigeschaltet bist, kannst du dein Angebot veröffentlichen und Kunden gewinnen.\n\nBis dahin kannst du dein Profil bereits vollständig ausfüllen und dein Angebot beschreiben.\n\nViele Grüße,\nDas Equily-Team`
+    : `Hallo ${safeVorname},\n\nSchön, dass du dabei bist! Dein Nutzerkonto ist jetzt aktiv.\n\nDein Login: ${safeEmail}\n\nDu kannst ab sofort qualifizierte Experten in deiner Nähe finden, Termine buchen und dein Netzwerk aufbauen.\n\nViele Grüße,\nDas Equily-Team`;
 
   const html = isExperte
     ? `
@@ -308,14 +328,14 @@ async function sendWelcomeEmail(email: string, vorname: string, role: string) {
       <p><strong>Dein Login:</strong> ${safeEmail}</p>
       <p>Dein Profil wird nun von unserem Team geprüft. Sobald du freigeschaltet bist, kannst du dein Angebot veröffentlichen und Kunden gewinnen.</p>
       <p>Bis dahin kannst du dein Profil bereits vollständig ausfüllen und dein Angebot beschreiben.</p>
-      <p>Viele Grüße,<br/>Das EquiConnect-Team</p>
+      <p>Viele Grüße,<br/>Das Equily-Team</p>
     `
     : `
       <p>Hallo ${safeVorname},</p>
       <p><strong>Schön, dass du dabei bist!</strong> Dein Nutzerkonto ist jetzt aktiv.</p>
       <p><strong>Dein Login:</strong> ${safeEmail}</p>
       <p>Du kannst ab sofort qualifizierte Experten in deiner Nähe finden, Termine buchen und dein Netzwerk aufbauen.</p>
-      <p>Viele Grüße,<br/>Das EquiConnect-Team</p>
+      <p>Viele Grüße,<br/>Das Equily-Team</p>
     `;
 
   await transporter.sendMail({ from, to: email, subject, text, html });
@@ -327,7 +347,7 @@ async function sendAccountSetupEmail(email: string, setupUrl: string) {
   await transporter.sendMail({
     from,
     to: email,
-    subject: 'Dein Zugang zu EquiConnect',
+    subject: 'Dein Zugang zu Equily',
     text: `Für dich wurde ein Kundenkonto vorbereitet. Öffne diesen Link, um dein Passwort festzulegen und dein Konto zu aktivieren: ${setupUrl}\n\nDer Link ist 7 Tage gültig.`,
     html: `
       <p>Für dich wurde ein Kundenkonto vorbereitet.</p>
@@ -337,11 +357,11 @@ async function sendAccountSetupEmail(email: string, setupUrl: string) {
   });
 }
 
-async function sendKontaktEmail(payload: { name: string; email: string; subject: string; message: string; ticketCode: string }) {
+async function sendKontaktEmail(payload: { name: string; email: string; subject: string; message: string; ticketCode: string; sourceLabel: string }) {
   const { contactTemplateId } = resolveBrevoTemplateConfig();
 
   if (contactTemplateId > 0) {
-    const { name, email, subject, message, ticketCode } = payload;
+    const { name, email, subject, message, ticketCode, sourceLabel } = payload;
     const firstName = String(name || '').trim().split(/\s+/)[0] || 'du';
 
     await sendBrevoTemplateEmail({
@@ -353,6 +373,8 @@ async function sendKontaktEmail(payload: { name: string; email: string; subject:
         NAME: name,
         SUBJECT: subject,
         MESSAGE: message,
+        SOURCE: sourceLabel,
+        SOURCE_LABEL: sourceLabel,
         TICKETCODE: ticketCode,
         ticketCode,
         ticket_code: ticketCode
@@ -368,16 +390,17 @@ async function sendKontaktEmail(payload: { name: string; email: string; subject:
     throw new Error('Kontakt-Empfänger ist nicht konfiguriert (CONTACT_TO_EMAIL).');
   }
 
-  const { name, email, subject, message, ticketCode } = payload;
+  const { name, email, subject, message, ticketCode, sourceLabel } = payload;
 
   await transporter.sendMail({
     from,
     to,
     replyTo: email,
-    subject: `[Kontaktformular] ${subject} (${ticketCode})`,
-    text: `Neue Kontaktanfrage\n\nTicket: ${ticketCode}\nName: ${name}\nE-Mail: ${email}\n\nNachricht:\n${message}`,
+    subject: `[Kontaktformular | ${sourceLabel}] ${subject} (${ticketCode})`,
+    text: `Neue Kontaktanfrage\n\nQuelle: ${sourceLabel}\nTicket: ${ticketCode}\nName: ${name}\nE-Mail: ${email}\n\nNachricht:\n${message}`,
     html: `
       <p><strong>Neue Kontaktanfrage</strong></p>
+      <p><strong>Quelle:</strong> ${sourceLabel}</p>
       <p><strong>Ticket:</strong> ${ticketCode}</p>
       <p><strong>Name:</strong> ${name}</p>
       <p><strong>E-Mail:</strong> ${email}</p>
@@ -407,7 +430,64 @@ async function createUserNotification(client: Pool | any, payload: {
   );
 }
 
-export async function submitKontaktForm(payload: { name: string; email: string; subject: string; message: string; website?: string }) {
+function resolveContactSourceLabel(roleHint: string, status: string, planKey: string) {
+  const role = String(roleHint || '').trim().toLowerCase();
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  const normalizedPlanKey = String(planKey || '').trim().toLowerCase();
+
+  if (role === 'nutzer') {
+    if (normalizedStatus === 'active' && normalizedPlanKey === 'nutzer_plus') return { sourceKey: 'nutzer_abo', sourceLabel: 'Nutzer Abo' };
+    return { sourceKey: 'nutzer', sourceLabel: 'Nutzer' };
+  }
+
+  if (role === 'experte') {
+    if (normalizedStatus === 'active' && normalizedPlanKey === 'experte_pro') return { sourceKey: 'experte_premium_abo', sourceLabel: 'Experte Premium Abo' };
+    if (normalizedStatus === 'active' && normalizedPlanKey === 'experte_abo') return { sourceKey: 'experte_abo', sourceLabel: 'Experte Abo' };
+    return { sourceKey: 'experte', sourceLabel: 'Experte' };
+  }
+
+  return { sourceKey: 'guest', sourceLabel: 'Nicht eingeloggt' };
+}
+
+async function resolveContactSource(payload: { sourceUserId?: number | null; sourceRole?: string | null }) {
+  const rawUserId = Number(payload.sourceUserId || 0);
+  const roleHint = String(payload.sourceRole || '').trim().toLowerCase();
+
+  if (!Number.isInteger(rawUserId) || rawUserId <= 0) {
+    return { userId: null, sourceRole: 'guest', sourceKey: 'guest', sourceLabel: 'Nicht eingeloggt', sourcePlanKey: null };
+  }
+
+  try {
+    const res = await getUserSubscriptionSettings(rawUserId);
+    if (res.success && res.data) {
+      const role = normalizeSubscriptionRole(String(res.data.role || roleHint || 'nutzer'));
+      const planKey = String(res.data.plan_key || '').trim().toLowerCase();
+      const status = String(res.data.status || '').trim().toLowerCase();
+      const source = resolveContactSourceLabel(role, status, planKey);
+      return {
+        userId: rawUserId,
+        sourceRole: role,
+        sourceKey: source.sourceKey,
+        sourceLabel: source.sourceLabel,
+        sourcePlanKey: planKey || null,
+      };
+    }
+  } catch {
+    // fall back to the session hint below
+  }
+
+  const fallbackRole = roleHint === 'experte' ? 'experte' : roleHint === 'nutzer' ? 'nutzer' : 'guest';
+  const source = resolveContactSourceLabel(fallbackRole, '', '');
+  return {
+    userId: rawUserId,
+    sourceRole: fallbackRole,
+    sourceKey: source.sourceKey,
+    sourceLabel: source.sourceLabel,
+    sourcePlanKey: null,
+  };
+}
+
+export async function submitKontaktForm(payload: { name: string; email: string; subject: string; message: string; website?: string; sourceUserId?: number | null; sourceRole?: string | null }) {
   try {
     await ensureExtraSchema();
 
@@ -461,11 +541,13 @@ export async function submitKontaktForm(payload: { name: string; email: string; 
       return { success: false, error: 'Bitte warte kurz, bevor du erneut sendest.' };
     }
 
+    const source = await resolveContactSource({ sourceUserId: payload.sourceUserId, sourceRole: payload.sourceRole });
+
     const insertRes = await pool.query(
-      `INSERT INTO contact_form_messages (name, email, subject, message, send_status)
-       VALUES ($1, $2, $3, $4, 'queued')
+      `INSERT INTO contact_form_messages (name, email, subject, message, send_status, user_id, source_role, source_key, source_label)
+       VALUES ($1, $2, $3, $4, 'queued', $5, $6, $7, $8)
        RETURNING id`,
-      [name, email, subject, message]
+      [name, email, subject, message, source.userId, source.sourceRole, source.sourceKey, source.sourceLabel]
     );
 
     const messageId = insertRes.rows[0]?.id;
@@ -479,7 +561,7 @@ export async function submitKontaktForm(payload: { name: string; email: string; 
     );
 
     try {
-      await sendKontaktEmail({ name, email, subject, message, ticketCode });
+      await sendKontaktEmail({ name, email, subject, message, ticketCode, sourceLabel: source.sourceLabel });
       await pool.query(
         `UPDATE contact_form_messages
          SET send_status = 'sent', sent_at = NOW(), send_error = NULL
@@ -637,9 +719,33 @@ async function ensureExtraSchema() {
       message TEXT NOT NULL,
       send_status TEXT NOT NULL DEFAULT 'queued',
       send_error TEXT,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      source_role TEXT,
+      source_key TEXT,
+      source_label TEXT,
       created_at TIMESTAMP DEFAULT NOW(),
       sent_at TIMESTAMP
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE contact_form_messages
+    ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+  `);
+
+  await pool.query(`
+    ALTER TABLE contact_form_messages
+    ADD COLUMN IF NOT EXISTS source_role TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE contact_form_messages
+    ADD COLUMN IF NOT EXISTS source_key TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE contact_form_messages
+    ADD COLUMN IF NOT EXISTS source_label TEXT;
   `);
 
   await pool.query(`
@@ -1446,6 +1552,41 @@ async function ensureExtraSchema() {
   `);
 
   await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS gocardless_redirect_flow_id TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS gocardless_customer_id TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS gocardless_customer_bank_account_id TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS gocardless_mandate_id TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS gocardless_mandate_status TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS gocardless_connected_at TIMESTAMP;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS gocardless_last_error TEXT;
+  `);
+
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status
     ON user_subscriptions(status, updated_at DESC);
   `);
@@ -1571,6 +1712,26 @@ async function ensureExtraSchema() {
   await pool.query(`
     ALTER TABLE user_subscriptions
     ADD COLUMN IF NOT EXISTS custom_price_set_at TIMESTAMP;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS cancel_requested_at TIMESTAMP;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS cancel_effective_at TIMESTAMP;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscriptions
+    ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP;
   `);
 
   await pool.query(`
@@ -1811,7 +1972,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     key: 'experte_free',
     role: 'experte',
     label: 'Experte ohne Abo',
-    audience: 'Grundtarif fuer Experten ohne Monatsabo',
+    audience: 'Grundtarif für Experten ohne Monatsabo',
     baseCents: 0,
     paypalFeeCents: 0,
     providerCommissionBps: 1000,
@@ -1839,7 +2000,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     key: 'experte_abo',
     role: 'experte',
     label: 'Experten Abo',
-    audience: 'Monatsabo fuer Experten',
+    audience: 'Monatsabo für Experten',
     baseCents: 1999,
     paypalFeeCents: 200,
     providerCommissionBps: 500,
@@ -1860,7 +2021,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     calendarBookingEnabled: false,
     offerPreviewHours: 0,
     benefits: [
-      'Buchen ueber Equi Connect (Kaufschutz und automatisierte Rechnungen auch fuer bereits bestehende Kunden)',
+      'Buchen über Equily Connect (Kaufschutz und automatisierte Rechnungen auch für bereits bestehende Kunden)',
       'Reduzierter Schutzaufschlag auf Buchungen',
       'Im ersten Monat Marketing auf der Startseite',
       '1x Anzeige hochschieben inklusive, danach 0,50 Euro',
@@ -1872,7 +2033,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     key: 'experte_pro',
     role: 'experte',
     label: 'Experten Pro Abo',
-    audience: 'Premium-Monatsabo fuer Experten',
+    audience: 'Premium-Monatsabo für Experten',
     baseCents: 3499,
     paypalFeeCents: 200,
     providerCommissionBps: 500,
@@ -1903,7 +2064,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     key: 'nutzer_free',
     role: 'nutzer',
     label: 'Nutzer ohne Abo',
-    audience: 'Grundtarif fuer Nutzer ohne Monatsabo',
+    audience: 'Grundtarif für Nutzer ohne Monatsabo',
     baseCents: 0,
     paypalFeeCents: 0,
     providerCommissionBps: 0,
@@ -1924,7 +2085,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     calendarBookingEnabled: false,
     offerPreviewHours: 0,
     benefits: [
-      'Sichtbarkeit ueber Aktivitaet im Netzwerk',
+      'Sichtbarkeit über Aktivität im Netzwerk',
       'Werbung innerhalb des Portals aktiv'
     ]
   },
@@ -1932,7 +2093,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     key: 'nutzer_plus',
     role: 'nutzer',
     label: 'Nutzer mit Abo',
-    audience: 'Monatsabo fuer Nutzer',
+    audience: 'Monatsabo für Nutzer',
     baseCents: 799,
     paypalFeeCents: 100,
     providerCommissionBps: 0,
@@ -2575,9 +2736,20 @@ export async function getUserSubscriptionSettings(userId: number) {
               sepa_iban,
               paypal_email,
               paypal_fee_cents,
+              gocardless_redirect_flow_id,
+              gocardless_customer_id,
+              gocardless_customer_bank_account_id,
+              gocardless_mandate_id,
+              gocardless_mandate_status,
+              gocardless_connected_at,
+              gocardless_last_error,
               custom_monthly_price_cents,
               custom_price_note,
               custom_price_set_at,
+              cancel_requested_at,
+              cancel_effective_at,
+              cancel_reason,
+              cancelled_at,
               homepage_marketing_until,
               started_at,
               next_charge_at,
@@ -2613,11 +2785,26 @@ export async function getUserSubscriptionSettings(userId: number) {
     else if (row.is_founding_member === true && row.founding_member_free_until && new Date(row.founding_member_free_until) > new Date()) {
       effectiveMonthlyPriceCents = 0;
     }
-    // Gründungsmitglied nach kostenloser Phase: 40% Rabatt auf Standardpreis
+    // Gründungsmitglied nach kostenloser Phase:
+    // - experte_abo: 30% Rabatt auf Experten-Abo-Basispreis
+    // - experte_pro: 30% Rabatt auf Experten-Abo-Anteil + 20% Rabatt auf Premium-Aufpreis
     else if (row.is_founding_member === true && row.lifetime_discount_percent && row.lifetime_discount_percent > 0) {
-      const baseCents = pricing.monthlyPriceCents;
       const discountPercent = Number(row.lifetime_discount_percent) || 0;
-      effectiveMonthlyPriceCents = Math.round(baseCents * (1 - discountPercent / 100));
+
+      if (String(row.plan_key || '').trim().toLowerCase() === 'experte_pro') {
+        const experteAboPricing = getSubscriptionPricing('experte', row.payment_method === 'paypal' ? 'paypal' : 'sepa', 'experte_abo');
+        const experteProPricing = getSubscriptionPricing('experte', row.payment_method === 'paypal' ? 'paypal' : 'sepa', 'experte_pro');
+
+        const aboPart = Number(experteAboPricing.monthlyPriceCents || 0);
+        const premiumAddOn = Math.max(0, Number(experteProPricing.monthlyPriceCents || 0) - aboPart);
+
+        const discountedAboPart = Math.round(aboPart * (1 - discountPercent / 100));
+        const discountedPremiumAddOn = Math.round(premiumAddOn * 0.8);
+        effectiveMonthlyPriceCents = discountedAboPart + discountedPremiumAddOn;
+      } else {
+        const baseCents = pricing.monthlyPriceCents;
+        effectiveMonthlyPriceCents = Math.round(baseCents * (1 - discountPercent / 100));
+      }
     }
 
     return {
@@ -2634,10 +2821,21 @@ export async function getUserSubscriptionSettings(userId: number) {
         custom_monthly_price_cents: row.custom_monthly_price_cents === null || row.custom_monthly_price_cents === undefined ? null : Number(row.custom_monthly_price_cents),
         custom_price_note: row.custom_price_note || null,
         custom_price_set_at: row.custom_price_set_at || null,
+        cancel_requested_at: row.cancel_requested_at || null,
+        cancel_effective_at: row.cancel_effective_at || null,
+        cancel_reason: row.cancel_reason || null,
+        cancelled_at: row.cancelled_at || null,
         is_founding_member: Boolean(row.is_founding_member),
         founding_member_free_until: row.founding_member_free_until || null,
         lifetime_free_access: Boolean(row.lifetime_free_access),
         lifetime_discount_percent: Number(row.lifetime_discount_percent || 0),
+        gocardless_redirect_flow_id: row.gocardless_redirect_flow_id || null,
+        gocardless_customer_id: row.gocardless_customer_id || null,
+        gocardless_customer_bank_account_id: row.gocardless_customer_bank_account_id || null,
+        gocardless_mandate_id: row.gocardless_mandate_id || null,
+        gocardless_mandate_status: row.gocardless_mandate_status || null,
+        gocardless_connected_at: row.gocardless_connected_at || null,
+        gocardless_last_error: row.gocardless_last_error || null,
         abo_blocked: Boolean(aboSanction),
         abo_blocked_until: aboSanction?.ends_at || null,
         abo_blocked_reason: aboSanction?.reason || null,
@@ -2676,8 +2874,9 @@ export async function upsertUserSubscriptionSettings(payload: {
     }
 
     const paymentMethod: SubscriptionPaymentMethod = payload.paymentMethod === 'paypal' ? 'paypal' : 'sepa';
-    const currentRes = await pool.query('SELECT role FROM user_subscriptions WHERE user_id = $1 LIMIT 1', [safeUserId]);
+    const currentRes = await pool.query('SELECT role, gocardless_mandate_id FROM user_subscriptions WHERE user_id = $1 LIMIT 1', [safeUserId]);
     const role = normalizeSubscriptionRole(payload.role || currentRes.rows[0]?.role);
+    const hasGoCardlessMandate = String(currentRes.rows[0]?.gocardless_mandate_id || '').trim().length > 0;
     const pricing = getSubscriptionPricing(role, paymentMethod, payload.planKey);
 
     const sepaAccountHolder = String(payload.sepaAccountHolder || '').trim();
@@ -2686,12 +2885,12 @@ export async function upsertUserSubscriptionSettings(payload: {
     const paypalEmail = String(payload.paypalEmail || '').trim().toLowerCase();
     const isPaidPlan = pricing.baseCents > 0;
 
-    if (isPaidPlan && paymentMethod === 'sepa') {
+    if (isPaidPlan && paymentMethod === 'sepa' && !hasGoCardlessMandate) {
       if (!sepaAccountHolder) {
-        return { success: false, error: 'Bitte Kontoinhaber fuer SEPA angeben.' };
+        return { success: false, error: 'Bitte Kontoinhaber fuer SEPA angeben oder GoCardless verbinden.' };
       }
       if (!/^[A-Z]{2}[0-9A-Z]{13,32}$/.test(sepaIban)) {
-        return { success: false, error: 'Bitte eine gueltige IBAN angeben.' };
+        return { success: false, error: 'Bitte eine gueltige IBAN angeben oder GoCardless verbinden.' };
       }
     }
 
@@ -2716,6 +2915,10 @@ export async function upsertUserSubscriptionSettings(payload: {
            payment_method = $4,
            monthly_price_cents = COALESCE(custom_monthly_price_cents, $5),
            status = 'active',
+           cancel_requested_at = NULL,
+           cancel_effective_at = NULL,
+           cancel_reason = NULL,
+           cancelled_at = NULL,
            sepa_account_holder = $6,
            sepa_iban = $7,
            paypal_email = $8,
@@ -2726,7 +2929,10 @@ export async function upsertUserSubscriptionSettings(payload: {
              ELSE homepage_marketing_until
            END,
            started_at = COALESCE(started_at, NOW()),
-             next_charge_at = CASE WHEN COALESCE(custom_monthly_price_cents, $5) = 0 THEN NULL ELSE COALESCE(next_charge_at, NOW() + INTERVAL '30 days') END,
+           next_charge_at = CASE
+             WHEN COALESCE(custom_monthly_price_cents, $5) = 0 THEN NULL
+             ELSE GREATEST(COALESCE(next_charge_at, NOW()), NOW() + INTERVAL '2 months')
+           END,
            updated_at = NOW()
        WHERE user_id = $1`,
       [
@@ -2775,6 +2981,176 @@ export async function upsertUserSubscriptionSettings(payload: {
   }
 }
 
+export async function createGoCardlessRedirectFlow(userId: number) {
+  try {
+    await ensureUserSubscriptionRow(userId);
+    const safeUserId = Number(userId);
+    if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+      return { success: false, error: 'Ungueltige Nutzer-ID.' };
+    }
+
+    const token = getGoCardlessAccessToken();
+    if (!token) {
+      return { success: false, error: 'GoCardless ist nicht konfiguriert (GOCARDLESS_ACCESS_TOKEN fehlt).' };
+    }
+
+    const appUrl = getPublicAppUrl();
+    if (!appUrl) {
+      return { success: false, error: 'NEXT_PUBLIC_APP_URL fehlt. GoCardless-Rueckleitung nicht moeglich.' };
+    }
+
+    const userRes = await pool.query(
+      `SELECT email, vorname, nachname FROM users WHERE id = $1 LIMIT 1`,
+      [safeUserId]
+    );
+
+    const row = userRes.rows[0] || {};
+    const email = String(row.email || '').trim().toLowerCase();
+    const givenName = String(row.vorname || '').trim();
+    const familyName = String(row.nachname || '').trim();
+    const sessionToken = crypto.randomUUID();
+
+    const response = await fetch(`${getGoCardlessApiBase()}/redirect_flows`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'GoCardless-Version': '2015-07-06',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        redirect_flows: {
+          description: `Equily Abo Nutzer ${safeUserId}`,
+          session_token: sessionToken,
+          success_redirect_url: `${appUrl}/abo?gocardless=success`,
+          prefilled_customer: {
+            email,
+            given_name: givenName || undefined,
+            family_name: familyName || undefined,
+          },
+        },
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const normalizedError = normalizeGoCardlessError(payload, 'GoCardless-Verbindung konnte nicht gestartet werden.');
+      await pool.query(
+        `UPDATE user_subscriptions
+         SET gocardless_last_error = $2,
+             updated_at = NOW()
+         WHERE user_id = $1`,
+        [safeUserId, normalizedError]
+      );
+      return { success: false, error: normalizedError };
+    }
+
+    const redirectFlow = payload?.redirect_flows || {};
+    const flowId = String(redirectFlow.id || '').trim();
+    const redirectUrl = String(redirectFlow.redirect_url || '').trim();
+
+    if (!flowId || !redirectUrl) {
+      return { success: false, error: 'GoCardless lieferte keine gueltige Redirect-URL.' };
+    }
+
+    await pool.query(
+      `UPDATE user_subscriptions
+       SET gocardless_redirect_flow_id = $2,
+           gocardless_last_error = NULL,
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [safeUserId, flowId]
+    );
+
+    return { success: true, redirectUrl, flowId, sessionToken };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'GoCardless-Verbindung konnte nicht gestartet werden.' };
+  }
+}
+
+export async function completeGoCardlessRedirectFlow(userId: number, redirectFlowId: string, sessionToken: string) {
+  try {
+    await ensureUserSubscriptionRow(userId);
+    const safeUserId = Number(userId);
+    if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+      return { success: false, error: 'Ungueltige Nutzer-ID.' };
+    }
+
+    const flowId = String(redirectFlowId || '').trim();
+    const session = String(sessionToken || '').trim();
+    if (!flowId || !session) {
+      return { success: false, error: 'GoCardless-Rueckgabedaten fehlen.' };
+    }
+
+    const token = getGoCardlessAccessToken();
+    if (!token) {
+      return { success: false, error: 'GoCardless ist nicht konfiguriert (GOCARDLESS_ACCESS_TOKEN fehlt).' };
+    }
+
+    const response = await fetch(`${getGoCardlessApiBase()}/redirect_flows/${encodeURIComponent(flowId)}/actions/complete`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'GoCardless-Version': '2015-07-06',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        data: {
+          session_token: session,
+        },
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const normalizedError = normalizeGoCardlessError(payload, 'GoCardless-Verbindung konnte nicht abgeschlossen werden.');
+      await pool.query(
+        `UPDATE user_subscriptions
+         SET gocardless_last_error = $2,
+             updated_at = NOW()
+         WHERE user_id = $1`,
+        [safeUserId, normalizedError]
+      );
+      return { success: false, error: normalizedError };
+    }
+
+    const redirectFlow = payload?.redirect_flows || {};
+    const mandateId = String(redirectFlow?.links?.mandate || '').trim();
+    const customerId = String(redirectFlow?.links?.customer || '').trim();
+    const customerBankAccountId = String(redirectFlow?.links?.customer_bank_account || '').trim();
+
+    if (!mandateId) {
+      return { success: false, error: 'GoCardless hat kein Mandat zurueckgegeben.' };
+    }
+
+    await pool.query(
+      `UPDATE user_subscriptions
+       SET payment_method = 'sepa',
+           status = 'active',
+           gocardless_redirect_flow_id = $2,
+           gocardless_customer_id = $3,
+           gocardless_customer_bank_account_id = $4,
+           gocardless_mandate_id = $5,
+           gocardless_mandate_status = 'submitted',
+           gocardless_connected_at = NOW(),
+           gocardless_last_error = NULL,
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [safeUserId, flowId, customerId || null, customerBankAccountId || null, mandateId]
+    );
+
+    return {
+      success: true,
+      mandateId,
+      customerId: customerId || null,
+      customerBankAccountId: customerBankAccountId || null,
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'GoCardless-Verbindung konnte nicht abgeschlossen werden.' };
+  }
+}
+
 async function grantEarlyAccessForUser(userId: number) {
   try {
     const safeUserId = Number(userId);
@@ -2817,7 +3193,9 @@ async function getVisibilityPromotionCycleStart(userId: number) {
   const nextChargeAt = res.rows[0]?.next_charge_at ? new Date(res.rows[0].next_charge_at) : null;
 
   if (nextChargeAt && Number.isFinite(nextChargeAt.getTime())) {
-    return new Date(nextChargeAt.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const cycleStart = new Date(nextChargeAt);
+    cycleStart.setMonth(cycleStart.getMonth() - 1);
+    return cycleStart;
   }
   if (startedAt && Number.isFinite(startedAt.getTime())) {
     return startedAt;
@@ -3179,6 +3557,11 @@ export async function requestPasswordReset(email: string) {
       message: 'Wenn ein Konto existiert, wurde ein Link erstellt.'
     };
   } catch (error: any) {
+    console.error('requestPasswordReset error:', {
+      code: error?.code,
+      message: error?.message,
+      stack: error?.stack,
+    });
     return { success: false, error: 'Passwort-Reset ist derzeit nicht verfügbar. Bitte versuche es in wenigen Minuten erneut.' };
   }
 }
@@ -3367,6 +3750,11 @@ export async function loginUser(credentials: any) {
     }
     return { success: false, error: "Falsches Passwort" };
   } catch (error: any) {
+    console.error('loginUser error:', {
+      code: error?.code,
+      message: error?.message,
+      stack: error?.stack,
+    });
     const code = String(error?.code || '');
     if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
       return { success: false, error: 'Server-Fehler: Datenbankverbindung fehlgeschlagen.' };
@@ -4651,6 +5039,15 @@ export async function getPublicOfferDetails(payload: { profileUserId: number; of
           .filter((preis: { label: string; preis: string; einheit: string }) => preis.label || preis.preis || preis.einheit)
       : [];
 
+    const mediaItems = Array.isArray(matchedOffer?.mediaItems)
+      ? matchedOffer.mediaItems
+          .map((item: any) => ({
+            url: String(item?.url || '').trim(),
+            mediaType: String(item?.mediaType || '').trim() === 'video' ? 'video' : 'image',
+          }))
+          .filter((item: { url: string; mediaType: 'image' | 'video' }) => item.url)
+      : [];
+
     return {
       success: true,
       data: {
@@ -4665,6 +5062,7 @@ export async function getPublicOfferDetails(payload: { profileUserId: number; of
           kategorie: String(matchedOffer?.kategorie || '').trim(),
           beschreibung: String(matchedOffer?.beschreibung || '').trim(),
           titleImageUrl: String(matchedOffer?.titleImageUrl || '').trim(),
+          mediaItems,
           visibility,
           prices,
         },
@@ -5012,6 +5410,10 @@ export async function getContactMessages(adminCode: string) {
               message,
               send_status,
               send_error,
+              user_id,
+              source_role,
+              source_key,
+              source_label,
               created_at,
               sent_at
        FROM contact_form_messages
@@ -11474,6 +11876,41 @@ export async function uploadProfileImage(userId: number, formData: FormData) {
   }
 }
 
+export async function persistProfileImageUrl(userId: number, imageUrl: string) {
+  try {
+    await ensureExtraSchema();
+
+    const validUserId = Number(userId);
+    if (!Number.isInteger(validUserId) || validUserId <= 0) {
+      return { success: false, error: 'Ungueltige Nutzer-ID.' };
+    }
+
+    const safeUrl = String(imageUrl || '').trim();
+    if (!safeUrl) {
+      return { success: false, error: 'Ungueltige Bild-URL.' };
+    }
+
+    const userRes = await pool.query(
+      `SELECT role FROM users WHERE id = $1 LIMIT 1`,
+      [validUserId]
+    );
+    const role = String(userRes.rows[0]?.role || '').trim().toLowerCase() === 'experte' ? 'experte' : 'nutzer';
+
+    await pool.query(
+      `INSERT INTO user_profiles (user_id, role, profil_data, updated_at)
+       VALUES ($1, $2, jsonb_build_object('profilbild_url', $3::text), NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         profil_data = COALESCE(user_profiles.profil_data, '{}'::jsonb) || jsonb_build_object('profilbild_url', $3::text),
+         updated_at = NOW()`,
+      [validUserId, role, safeUrl]
+    );
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Profilbild konnte nicht gespeichert werden.' };
+  }
+}
+
 export async function uploadOwnAdvertisingMedia(userId: number, formData: FormData) {
   try {
     const validUserId = Number(userId);
@@ -11902,6 +12339,16 @@ export async function adminSearchSubscriptionUsers(payload: {
               us.custom_monthly_price_cents,
               us.custom_price_note,
               us.custom_price_set_at,
+              us.started_at,
+              us.next_charge_at,
+              us.cancel_requested_at,
+              us.cancel_effective_at,
+              us.cancel_reason,
+              us.cancelled_at,
+              CASE
+                WHEN us.started_at IS NULL THEN NULL
+                ELSE us.started_at + INTERVAL '2 months'
+              END AS intro_period_ends_at,
               us.updated_at AS subscription_updated_at
        FROM users u
        LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -12119,6 +12566,75 @@ export async function adminGetSubscriptionPriceHistory(payload: {
     return { success: true, entries: res.rows || [] };
   } catch (error: any) {
     return { success: false, error: error.message || 'Preisverlauf konnte nicht geladen werden.', entries: [] };
+  }
+}
+
+export async function adminFinalizeSubscriptionCancellation(payload: {
+  adminCode: string;
+  userId: number;
+  note?: string;
+}) {
+  try {
+    await ensureExtraSchema();
+    if (!(await isAdminAuthorizedWithCookie(payload.adminCode))) {
+      return { success: false, error: 'Nicht autorisiert.' };
+    }
+
+    const safeUserId = Number(payload.userId);
+    if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+      return { success: false, error: 'Ungueltige Nutzer-ID.' };
+    }
+
+    await ensureUserSubscriptionRow(safeUserId);
+
+    const currentRes = await pool.query(
+      `SELECT role, payment_method, status, plan_key, cancel_effective_at
+       FROM user_subscriptions
+       WHERE user_id = $1
+       LIMIT 1`,
+      [safeUserId]
+    );
+
+    const row = currentRes.rows[0] || {};
+    const cancelEffectiveAt = row.cancel_effective_at ? new Date(row.cancel_effective_at) : null;
+    if (cancelEffectiveAt && Number.isFinite(cancelEffectiveAt.getTime()) && Date.now() < cancelEffectiveAt.getTime()) {
+      return {
+        success: false,
+        error: `Abo bleibt bis zum Ende aktiv. Finalisierung erst ab ${cancelEffectiveAt.toLocaleString('de-DE')} moeglich.`
+      };
+    }
+    const role = normalizeSubscriptionRole(String(row.role || 'nutzer'));
+    const paymentMethod: SubscriptionPaymentMethod = String(row.payment_method || '').trim().toLowerCase() === 'paypal' ? 'paypal' : 'sepa';
+    const freePlanKey = getDefaultPlanKeyForRole(role);
+    const freePricing = getSubscriptionPricing(role, paymentMethod, freePlanKey);
+
+    await pool.query(
+      `UPDATE user_subscriptions
+       SET plan_key = $2,
+           status = 'active',
+           monthly_price_cents = $3,
+           paypal_fee_cents = $4,
+           custom_monthly_price_cents = NULL,
+           custom_price_note = NULL,
+           custom_price_set_at = NULL,
+           next_charge_at = NULL,
+           cancel_requested_at = COALESCE(cancel_requested_at, NOW()),
+           cancel_effective_at = COALESCE(cancel_effective_at, NOW()),
+           cancel_reason = CASE WHEN $5::TEXT <> '' THEN $5 ELSE cancel_reason END,
+           cancelled_at = NOW(),
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [safeUserId, freePlanKey, freePricing.monthlyPriceCents, freePricing.paypalFeeCents, String(payload.note || '').trim()]
+    );
+
+    return {
+      success: true,
+      userId: safeUserId,
+      newPlanKey: freePlanKey,
+      message: `Kuendigung fuer Nutzer ${safeUserId} wurde finalisiert.`,
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Kuendigung konnte nicht finalisiert werden.' };
   }
 }
 
@@ -12773,12 +13289,12 @@ export async function adminGetLifetimeAccessList(adminCode: string, limit: numbe
   }
 }
 
-export async function adminMarkAsFoundingMember(adminCode: string, userId: number, lifetimeDiscountPercent: number = 40) {
+export async function adminMarkAsFoundingMember(adminCode: string, userId: number, lifetimeDiscountPercent: number = 30) {
   await ensureExtraSchema();
   if (!(await isAdminAuthorizedWithCookie(adminCode))) return { success: false, error: 'Admin-Code ungültig.' };
   try {
     const now = new Date();
-    const foundingMemberFreeUntil = new Date(now.getTime() + 4 * 30 * 24 * 60 * 60 * 1000); // 4 Monate
+    const foundingMemberFreeUntil = new Date(now.getTime() + 2 * 30 * 24 * 60 * 60 * 1000); // 2 Monate
 
     await pool.query(`
       UPDATE user_subscriptions
@@ -12898,7 +13414,7 @@ export async function adminRevokeLifetimeFreeAccess(adminCode: string, userId: n
   }
 }
 
-// Automatische Gründungsmitglied-Markierung für erste 150 Experten-Abo-Kunden
+// Automatische Gründungsmitglied-Markierung für erste 100 Experten-Abo-Kunden
 export async function checkAndMarkFoundingMemberIfEligible(userId: number) {
   try {
     // Prüfe, ob Nutzer bereits Gründungsmitglied ist
@@ -12922,17 +13438,17 @@ export async function checkAndMarkFoundingMemberIfEligible(userId: number) {
 
     const foundingMemberCount = Number(countRes.rows[0]?.count || 0);
 
-    // Wenn noch nicht 150 Gründungsmitglieder, markiere diesen Nutzer
-    if (foundingMemberCount < 150) {
+    // Wenn noch nicht 100 Gründungsmitglieder, markiere diesen Nutzer
+    if (foundingMemberCount < 100) {
       const now = new Date();
-      const foundingMemberFreeUntil = new Date(now.getTime() + 4 * 30 * 24 * 60 * 60 * 1000); // 4 Monate
+      const foundingMemberFreeUntil = new Date(now.getTime() + 2 * 30 * 24 * 60 * 60 * 1000); // 2 Monate
 
       await pool.query(`
         UPDATE user_subscriptions
         SET
           is_founding_member = TRUE,
           founding_member_free_until = $2,
-          lifetime_discount_percent = 40,
+          lifetime_discount_percent = 30,
           updated_at = NOW()
         WHERE user_id = $1
       `, [userId, foundingMemberFreeUntil.toISOString()]);
@@ -12948,10 +13464,92 @@ export async function checkAndMarkFoundingMemberIfEligible(userId: number) {
     return {
       success: true,
       wasMarked: false,
-      reason: 'Die ersten 150 Gründungsmitglieder sind bereits markiert.'
+      reason: 'Die ersten 100 Gründungsmitglieder sind bereits markiert.'
     };
   } catch (error: any) {
     console.error('Error checking/marking founding member:', error);
     return { success: false, error: error.message };
+  }
+}
+
+export async function requestOwnSubscriptionCancellation(payload: {
+  userId: number;
+  reason?: string;
+}) {
+  try {
+    await ensureUserSubscriptionRow(payload.userId);
+
+    const safeUserId = Number(payload.userId);
+    if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+      return { success: false, error: 'Ungueltige Nutzer-ID.' };
+    }
+
+    const rowRes = await pool.query(
+      `SELECT role,
+              plan_key,
+              payment_method,
+              status,
+              monthly_price_cents,
+              custom_monthly_price_cents,
+              next_charge_at,
+              cancel_effective_at
+       FROM user_subscriptions
+       WHERE user_id = $1
+       LIMIT 1`,
+      [safeUserId]
+    );
+
+    const row = rowRes.rows[0] || {};
+    const role = normalizeSubscriptionRole(String(row.role || 'nutzer'));
+    const paymentMethod: SubscriptionPaymentMethod = String(row.payment_method || '').trim().toLowerCase() === 'paypal' ? 'paypal' : 'sepa';
+    const pricing = getSubscriptionPricing(role, paymentMethod, String(row.plan_key || ''));
+    const effectiveMonthlyPriceCents = row.custom_monthly_price_cents === null || row.custom_monthly_price_cents === undefined
+      ? Number(row.monthly_price_cents ?? pricing.monthlyPriceCents)
+      : Number(row.custom_monthly_price_cents);
+
+    if (!Number.isFinite(effectiveMonthlyPriceCents) || effectiveMonthlyPriceCents <= 0) {
+      return { success: false, error: 'Es ist aktuell kein kostenpflichtiges Abo aktiv.' };
+    }
+
+    const currentStatus = String(row.status || '').trim().toLowerCase();
+    if (currentStatus === 'cancel_pending' && row.cancel_effective_at) {
+      return { success: true, alreadyRequested: true, effectiveAt: row.cancel_effective_at };
+    }
+
+    const nextChargeAtValue = row.next_charge_at ? new Date(row.next_charge_at) : null;
+    if (!nextChargeAtValue || !Number.isFinite(nextChargeAtValue.getTime())) {
+      return { success: false, error: 'Der naechste Abbuchungstermin fehlt. Bitte Support kontaktieren.' };
+    }
+
+    const deadline = new Date(nextChargeAtValue);
+    deadline.setDate(deadline.getDate() - 3);
+
+    const now = new Date();
+    if (now.getTime() > deadline.getTime()) {
+      return {
+        success: false,
+        error: `Kuendigung zu spaet. Sie muss spaetestens bis ${deadline.toLocaleString('de-DE')} eingehen.`
+      };
+    }
+
+    const reason = String(payload.reason || '').trim().slice(0, 240);
+    await pool.query(
+      `UPDATE user_subscriptions
+       SET status = 'cancel_pending',
+           cancel_requested_at = NOW(),
+           cancel_effective_at = next_charge_at,
+           cancel_reason = $2,
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [safeUserId, reason || null]
+    );
+
+    return {
+      success: true,
+      effectiveAt: nextChargeAtValue.toISOString(),
+      deadlineAt: deadline.toISOString(),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Kuendigung konnte nicht gespeichert werden.' };
   }
 }

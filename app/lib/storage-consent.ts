@@ -6,8 +6,12 @@ const OPTIONAL_STORAGE_PREFIXES = ['chatMeta-'];
 
 export function getStorageConsentChoice(): StorageConsentChoice | null {
   if (typeof window === 'undefined') return null;
-  const value = window.localStorage.getItem(STORAGE_CONSENT_KEY);
-  return value === 'accepted' || value === 'necessary' ? value : null;
+  try {
+    const value = window.localStorage.getItem(STORAGE_CONSENT_KEY);
+    return value === 'accepted' || value === 'necessary' ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 export function hasStorageConsentChoice() {
@@ -16,7 +20,11 @@ export function hasStorageConsentChoice() {
 
 export function setStorageConsentChoice(choice: StorageConsentChoice) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_CONSENT_KEY, choice);
+  try {
+    window.localStorage.setItem(STORAGE_CONSENT_KEY, choice);
+  } catch {
+    // Ignore storage write failures in restricted environments.
+  }
 }
 
 export function canUseOptionalStorage() {
@@ -26,20 +34,24 @@ export function canUseOptionalStorage() {
 export function clearOptionalStorageData() {
   if (typeof window === 'undefined') return;
 
-  for (const key of OPTIONAL_STORAGE_KEYS) {
-    window.localStorage.removeItem(key);
-  }
-
-  const keysToRemove: string[] = [];
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index);
-    if (!key) continue;
-    if (OPTIONAL_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
-      keysToRemove.push(key);
+  try {
+    for (const key of OPTIONAL_STORAGE_KEYS) {
+      window.localStorage.removeItem(key);
     }
-  }
 
-  for (const key of keysToRemove) {
-    window.localStorage.removeItem(key);
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key) continue;
+      if (OPTIONAL_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+        keysToRemove.push(key);
+      }
+    }
+
+    for (const key of keysToRemove) {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage access failures in restricted environments.
   }
 }

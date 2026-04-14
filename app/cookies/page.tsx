@@ -7,7 +7,7 @@ export default function CookiesPage() {
         <div className="grid gap-6 lg:grid-cols-[320px_1fr] items-start">
           <aside className="lg:sticky lg:top-6 space-y-4">
             <div className="rounded-[2rem] border border-white/70 bg-white/80 backdrop-blur-xl shadow-[0_20px_60px_rgba(15,23,42,0.08)] p-6 sm:p-8 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-700">EquiConnect</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-700">Equily</p>
               <h1 className="text-4xl sm:text-5xl font-black italic uppercase tracking-tight text-slate-900">Cookies & Speicher</h1>
               <div className="flex flex-wrap gap-3">
                 <Link href="/datenschutz" className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-emerald-300 hover:text-emerald-700 transition-colors">
@@ -27,7 +27,7 @@ export default function CookiesPage() {
         <section className="bg-white/85 backdrop-blur-xl border border-white/70 rounded-[2rem] p-6 sm:p-8 shadow-[0_16px_50px_rgba(15,23,42,0.08)] space-y-5">
           <h2 className="text-xl font-black italic uppercase text-slate-900">1. Grundsatz</h2>
           <p className="text-sm text-slate-600 leading-relaxed">
-            EquiConnect verwendet aktuell keine Werbe- oder Tracking-Cookies von Drittanbietern zu Marketingzwecken.
+            Equily verwendet aktuell keine Werbe- oder Tracking-Cookies von Drittanbietern zu Marketingzwecken.
             Es werden jedoch notwendige und optionale Browser-Speicher genutzt, damit Login, Sicherheit, Bedienkomfort und einzelne Funktionen zuverlässig arbeiten.
           </p>
         </section>

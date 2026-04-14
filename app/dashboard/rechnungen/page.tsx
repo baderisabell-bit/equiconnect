@@ -254,7 +254,7 @@ export default function RechnungenPage() {
     <article key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">{booking.isEquiConnect ? "Equi Connect" : "Weitere Buchungen"}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">{booking.isEquiConnect ? "Equily Connect" : "Weitere Buchungen"}</p>
           <h3 className="mt-2 text-lg font-black uppercase italic text-slate-900">{formatTitle(booking.booking_type)}</h3>
           <p className="mt-1 text-sm text-slate-600">{booking.provider_name || "–"}</p>
         </div>
@@ -310,7 +310,7 @@ export default function RechnungenPage() {
           <p className="mt-2 text-sm text-slate-600">Hier findest du deine Equi-Connect-Buchungen und weitere Buchungen getrennt nach Kategorie. Über den Druck-Button kannst du die aktuelle Ansicht als PDF speichern.</p>
           <div className="mt-5 flex flex-wrap gap-3">
             {categoryButton("all", "Alle", groups.equiConnect.length + groups.other.length)}
-            {categoryButton("equi", "Equi Connect", groups.equiConnect.length)}
+            {categoryButton("equi", "Equily Connect", groups.equiConnect.length)}
             {categoryButton("other", "Weitere Buchungen", groups.other.length)}
           </div>
         </div>
@@ -383,7 +383,7 @@ export default function RechnungenPage() {
 
             <div className="flex flex-wrap gap-3">
               {categoryButton("all", "Alle Positionen", groups.equiConnect.length + groups.other.length)}
-              {categoryButton("equi", "Equi Connect", groups.equiConnect.length)}
+              {categoryButton("equi", "Equily Connect", groups.equiConnect.length)}
               {categoryButton("other", "Weitere Buchungen", groups.other.length)}
             </div>
 
@@ -430,7 +430,7 @@ export default function RechnungenPage() {
         userName={userName}
         onOpenSidebar={() => setSidebarOpen(true)}
         onOpenProfile={openProfile}
-        brandText="EquiConnect"
+        brandText="Equily"
       />
 
       <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-8">

@@ -783,7 +783,7 @@ export default function NetzwerkPage() {
                         <p className="text-[10px] font-black uppercase text-slate-400">{group.member_count} Mitglieder</p>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => openGroup(group.id)} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-200 text-emerald-700">Oeffnen</button>
+                        <button onClick={() => openGroup(group.id)} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-200 text-emerald-700">Öffnen</button>
                         {group.is_member ? (
                           <span className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-emerald-50 text-emerald-700">Mitglied</span>
                         ) : (

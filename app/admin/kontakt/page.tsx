@@ -14,6 +14,10 @@ type ContactMessage = {
   message: string;
   send_status: string;
   send_error: string | null;
+  user_id: number | null;
+  source_role: string | null;
+  source_key: string | null;
+  source_label: string | null;
   created_at: string;
   sent_at: string | null;
 };
@@ -196,6 +200,9 @@ export default function AdminKontaktPage() {
                         {item.send_status}
                       </span>
                     </div>
+                    <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400 truncate">
+                      {item.source_label || 'Nicht eingeloggt'}
+                    </p>
                   </button>
                 );
               })}
@@ -227,6 +234,9 @@ export default function AdminKontaktPage() {
                     <p className="mt-2 text-sm font-black text-slate-800">{activeItem.name}</p>
                     <p className="mt-1 text-sm font-bold text-slate-600 inline-flex items-center gap-2">
                       <Mail size={14} /> {activeItem.email}
+                    </p>
+                    <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                      {activeItem.source_label || 'Nicht eingeloggt'}
                     </p>
                   </div>
 

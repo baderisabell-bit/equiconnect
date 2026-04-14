@@ -8,7 +8,7 @@ export default function RegistrierungAuswahl() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-5">
       {/* Logo Bereich */}
       <div className="mb-10 text-center">
-        <Link href="/" className="font-bold text-emerald-700 text-2xl italic">EquiConnect</Link>
+        <Link href="/" className="font-bold text-emerald-700 text-2xl italic">Equily</Link>
         <h1 className="text-lg text-gray-600 mt-2 font-medium">Wie möchtest du starten?</h1>
       </div>
 

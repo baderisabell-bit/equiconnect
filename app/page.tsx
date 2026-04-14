@@ -77,7 +77,6 @@ export default function Startseite() {
   const [role, setRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [newcomers, setNewcomers] = useState<HomePerson[]>([]);
   const [topTen, setTopTen] = useState<HomePerson[]>([]);
@@ -232,15 +231,20 @@ export default function Startseite() {
   useEffect(() => {
     let isActive = true;
 
-    const savedRole = sessionStorage.getItem('userRole');
-    const savedName = sessionStorage.getItem('userName');
-    const savedUserId = parseInt(sessionStorage.getItem('userId') || '', 10);
-    setRole(savedRole);
-    setUserName(savedName);
-    const normalizedUserId = Number.isNaN(savedUserId) ? null : savedUserId;
-    setUserId(normalizedUserId);
-    setIsLoaded(true);
-
+    let normalizedUserId: number | null = null;
+    try {
+      const savedRole = window.sessionStorage.getItem('userRole');
+      const savedName = window.sessionStorage.getItem('userName');
+      const savedUserId = parseInt(window.sessionStorage.getItem('userId') || '', 10);
+      setRole(savedRole);
+      setUserName(savedName);
+      normalizedUserId = Number.isNaN(savedUserId) ? null : savedUserId;
+      setUserId(normalizedUserId);
+    } catch {
+      setRole(null);
+      setUserName(null);
+      setUserId(null);
+    }
     const loadHub = async () => {
       setHubLoading(true);
       try {
@@ -349,7 +353,11 @@ export default function Startseite() {
   };
 
   const handleLogout = () => {
-    sessionStorage.clear();
+    try {
+      window.sessionStorage.clear();
+    } catch {
+      // Ignore session storage errors.
+    }
     window.location.reload();
   };
 
@@ -357,7 +365,12 @@ export default function Startseite() {
   const isExpertRole = normalizedRole === 'experte';
 
   const openProfile = () => {
-    const userIdRaw = sessionStorage.getItem('userId');
+    let userIdRaw: string | null = null;
+    try {
+      userIdRaw = window.sessionStorage.getItem('userId');
+    } catch {
+      userIdRaw = null;
+    }
     const parsedUserId = userIdRaw ? parseInt(userIdRaw, 10) : NaN;
     if (!Number.isNaN(parsedUserId) && parsedUserId > 0) {
       router.push(`/profil/${parsedUserId}`);
@@ -380,8 +393,6 @@ export default function Startseite() {
   const openGuestCategory = (category: string) => {
     router.push(`/suche?kategorie=${encodeURIComponent(category)}`);
   };
-
-  if (!isLoaded) return null;
 
   function HomeHubSections({ isLoggedIn }: { isLoggedIn: boolean }) {
     if (hubLoading) {
@@ -636,7 +647,7 @@ export default function Startseite() {
               <div className="w-4 h-0.5 bg-slate-900" />
             </button>
             <div className="flex flex-col">
-              <span className="font-black text-emerald-600 text-2xl italic uppercase tracking-tighter">EquiConnect</span>
+              <span className="font-black text-emerald-600 text-2xl italic uppercase tracking-tighter">Equily</span>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Herzlich Willkommen {userName?.split(' ')[0]}</span>
             </div>
           </div>
@@ -683,7 +694,7 @@ export default function Startseite() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <header className="bg-white border-b px-8 py-5 flex items-center gap-4 sticky top-0 z-50">
         <div className="flex flex-col">
-          <span className="font-black text-emerald-600 text-2xl tracking-tighter italic uppercase">EquiConnect</span>
+          <span className="font-black text-emerald-600 text-2xl tracking-tighter italic uppercase">Equily</span>
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Herzlich Willkommen</span>
         </div>
 

@@ -1017,7 +1017,7 @@ export default function Suchseite() {
               <Filter size={14} /> Filter
             </button>
             <div className="hidden xl:block pl-2 pr-4 border-r border-slate-100">
-              <span className="font-black text-emerald-600 text-xl tracking-tighter italic uppercase">EquiConnect</span>
+              <span className="font-black text-emerald-600 text-xl tracking-tighter italic uppercase">Equily</span>
             </div>
           </div>
 

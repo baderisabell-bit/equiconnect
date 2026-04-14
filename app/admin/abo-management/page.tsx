@@ -175,7 +175,7 @@ export default function AdminAboManagementPage() {
     setError("");
     setMessage("");
 
-    const res = await adminMarkAsFoundingMember(adminCode, userId, 40);
+    const res = await adminMarkAsFoundingMember(adminCode, userId, 30);
     setSingleUserActionBusy(false);
 
     if (!res.success) {

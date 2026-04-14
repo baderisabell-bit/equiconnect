@@ -8,6 +8,7 @@ import {
   adminGetNewsletterRecipients,
   adminGetNewsletterSegmentsOverview,
   adminUpdateUserSubscriptionCustomPrice,
+  adminFinalizeSubscriptionCancellation,
   adminPreviewNewsletterSegmentSync,
   adminSyncNewsletterSegmentToBrevo
 } from "../../actions";
@@ -58,6 +59,13 @@ type SubscriptionUserRow = {
   custom_monthly_price_cents: number | null;
   custom_price_note: string | null;
   custom_price_set_at: string | null;
+  started_at: string | null;
+  next_charge_at: string | null;
+  cancel_requested_at: string | null;
+  cancel_effective_at: string | null;
+  cancel_reason: string | null;
+  cancelled_at: string | null;
+  intro_period_ends_at: string | null;
   subscription_updated_at: string | null;
 };
 
@@ -92,6 +100,7 @@ export default function AdminAboPage() {
   const [subSearch, setSubSearch] = useState("");
   const [subRoleFilter, setSubRoleFilter] = useState<"all" | "experte" | "nutzer">("all");
   const [subCustomFilter, setSubCustomFilter] = useState<"all" | "with_custom" | "without_custom">("all");
+  const [issueFilterMode, setIssueFilterMode] = useState<"all" | "issues" | "overdue-cancellations">("all");
   const [subscriptionUsers, setSubscriptionUsers] = useState<SubscriptionUserRow[]>([]);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
   const [selectedSubscriptionUserIds, setSelectedSubscriptionUserIds] = useState<number[]>([]);
@@ -102,6 +111,7 @@ export default function AdminAboPage() {
   const [inlinePriceByUserId, setInlinePriceByUserId] = useState<Record<number, string>>({});
   const [inlineNoteByUserId, setInlineNoteByUserId] = useState<Record<number, string>>({});
   const [inlineBusyUserId, setInlineBusyUserId] = useState<number | null>(null);
+  const [finalizeBusyUserId, setFinalizeBusyUserId] = useState<number | null>(null);
   const [historyEntries, setHistoryEntries] = useState<SubscriptionPriceHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -216,7 +226,7 @@ export default function AdminAboPage() {
   };
 
   const toggleSelectAllVisibleSubscriptionUsers = () => {
-    const visibleIds = subscriptionUsers.map((item) => Number(item.id));
+    const visibleIds = displayedSubscriptionUsers.map((item) => Number(item.id));
     const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSubscriptionUserIds.includes(id));
     if (allSelected) {
       setSelectedSubscriptionUserIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
@@ -340,6 +350,28 @@ export default function AdminAboPage() {
     setCustomPriceMessage(`Preis für Nutzer ${userId} auf Standard zurückgesetzt.`);
     await loadSubscriptionUsers(adminCode);
     await loadPriceHistory(adminCode, userId);
+  };
+
+  const finalizeCancellationNow = async (user: SubscriptionUserRow) => {
+    const confirmed = window.confirm(`Kündigung für Nutzer ${user.id} jetzt finalisieren und auf Free-Tarif zurücksetzen?`);
+    if (!confirmed) return;
+
+    setFinalizeBusyUserId(user.id);
+    const res = await adminFinalizeSubscriptionCancellation({
+      adminCode,
+      userId: user.id,
+      note: user.cancel_reason || 'Admin-Finalisierung',
+    });
+    setFinalizeBusyUserId(null);
+
+    if (!res.success) {
+      setCustomPriceMessage((res as any).error || `Kündigung für Nutzer ${user.id} konnte nicht finalisiert werden.`);
+      return;
+    }
+
+    setCustomPriceMessage(`Kündigung für Nutzer ${user.id} wurde finalisiert.`);
+    await loadSubscriptionUsers(adminCode);
+    await loadPriceHistory(adminCode, user.id);
   };
 
   const syncToBrevo = async () => {
@@ -475,6 +507,48 @@ export default function AdminAboPage() {
   };
 
   const selectedLabel = segments.find((item) => item.segment === activeSegment)?.label || "Segment";
+  const formatDateTime = (value: string | null) => {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleString("de-DE");
+  };
+
+  const getIntroStatus = (item: SubscriptionUserRow) => {
+    if (!item.intro_period_ends_at) return "-";
+    const end = new Date(item.intro_period_ends_at);
+    if (!Number.isFinite(end.getTime())) return "-";
+    const now = new Date();
+    const diffMs = end.getTime() - now.getTime();
+    if (diffMs <= 0) return "2 Monate beendet";
+    const daysLeft = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    return `noch ${daysLeft} Tage`;
+  };
+
+  const getSubscriptionIssueFlags = (item: SubscriptionUserRow) => {
+    const effectiveCents =
+      item.custom_monthly_price_cents !== null && item.custom_monthly_price_cents !== undefined
+        ? Number(item.custom_monthly_price_cents)
+        : (item.monthly_price_cents === null || item.monthly_price_cents === undefined ? 0 : Number(item.monthly_price_cents));
+    const hasTimingIssue = effectiveCents > 0 && !item.next_charge_at;
+    const cancelPendingWithoutDate = item.subscription_status === "cancel_pending" && !item.cancel_effective_at;
+    const cancelEffectivePast = item.subscription_status === "cancel_pending" && item.cancel_effective_at
+      ? new Date(item.cancel_effective_at).getTime() < Date.now()
+      : false;
+    return { hasTimingIssue, cancelPendingWithoutDate, cancelEffectivePast };
+  };
+
+  const displayedSubscriptionUsers = useMemo(() => {
+    if (issueFilterMode === "all") return subscriptionUsers;
+    return subscriptionUsers.filter((item) => {
+      const flags = getSubscriptionIssueFlags(item);
+      if (issueFilterMode === "overdue-cancellations") {
+        return flags.cancelEffectivePast;
+      }
+      return flags.hasTimingIssue || flags.cancelPendingWithoutDate || flags.cancelEffectivePast;
+    });
+  }, [issueFilterMode, subscriptionUsers]);
+
   const dryRunStatus =
     dryRunData === null
       ? "idle"
@@ -483,7 +557,7 @@ export default function AdminAboPage() {
         : dryRunData.totals.invalidEmails > 0
           ? "yellow"
           : "green";
-  const activeSubscriptionFilterText = `Rolle: ${subRoleFilter === "all" ? "Alle" : subRoleFilter === "experte" ? "Experten" : "Nutzer"} · Custom-Preis: ${subCustomFilter === "all" ? "Alle" : subCustomFilter === "with_custom" ? "Nur aktiv" : "Nur nicht aktiv"}`;
+  const activeSubscriptionFilterText = `Rolle: ${subRoleFilter === "all" ? "Alle" : subRoleFilter === "experte" ? "Experten" : "Nutzer"} · Custom-Preis: ${subCustomFilter === "all" ? "Alle" : subCustomFilter === "with_custom" ? "Nur aktiv" : "Nur nicht aktiv"} · Ansicht: ${issueFilterMode === "all" ? "Alle" : issueFilterMode === "issues" ? "Nur Problemfälle" : "Nur überfällige Kündigungen"}`;
 
   if (!authorized) {
     return (
@@ -782,13 +856,29 @@ export default function AdminAboPage() {
 
           <div className="flex items-center justify-between text-xs text-slate-600">
             <p>{selectedSubscriptionUserIds.length} Nutzer ausgewählt</p>
-            <button
-              type="button"
-              onClick={toggleSelectAllVisibleSubscriptionUsers}
-              className="px-3 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest"
-            >
-              Sichtbare alle markieren
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIssueFilterMode((prev) => (prev === "issues" ? "all" : "issues"))}
+                className={`px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest ${issueFilterMode === "issues" ? "border-red-300 bg-red-50 text-red-700" : "border-slate-300 bg-white text-slate-700"}`}
+              >
+                {issueFilterMode === "issues" ? "Alle Fälle" : "Nur Problemfälle"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIssueFilterMode((prev) => (prev === "overdue-cancellations" ? "all" : "overdue-cancellations"))}
+                className={`px-3 py-1 rounded-lg border text-[10px] font-black uppercase tracking-widest ${issueFilterMode === "overdue-cancellations" ? "border-amber-300 bg-amber-50 text-amber-700" : "border-slate-300 bg-white text-slate-700"}`}
+              >
+                {issueFilterMode === "overdue-cancellations" ? "Alle Fälle" : "Nur überfällige Kündigungen"}
+              </button>
+              <button
+                type="button"
+                onClick={toggleSelectAllVisibleSubscriptionUsers}
+                className="px-3 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest"
+              >
+                Sichtbare alle markieren
+              </button>
+            </div>
           </div>
 
           <div className="overflow-auto border border-slate-200 rounded-xl">
@@ -800,18 +890,21 @@ export default function AdminAboPage() {
                   <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">E-Mail</th>
                   <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Rolle / Plan</th>
                   <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Monatspreis</th>
+                  <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Abo-Zeitplan</th>
+                  <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">2-Monate / Kündigung</th>
                   <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Custom</th>
                   <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Inline-Aktion</th>
                 </tr>
               </thead>
               <tbody>
-                {subscriptionUsers.map((item) => {
+                {displayedSubscriptionUsers.map((item) => {
                   const selected = selectedSubscriptionUserIds.includes(Number(item.id));
                   const effectiveCents =
                     item.custom_monthly_price_cents !== null && item.custom_monthly_price_cents !== undefined
                       ? Number(item.custom_monthly_price_cents)
                       : (item.monthly_price_cents === null || item.monthly_price_cents === undefined ? 0 : Number(item.monthly_price_cents));
                   const effectivePrice = (effectiveCents / 100).toFixed(2).replace(".", ",");
+                  const { hasTimingIssue, cancelPendingWithoutDate, cancelEffectivePast } = getSubscriptionIssueFlags(item);
 
                   return (
                     <tr key={`sub-user-${item.id}`} className="border-t border-slate-100">
@@ -829,6 +922,35 @@ export default function AdminAboPage() {
                       <td className="p-3 text-slate-700">{item.email}</td>
                       <td className="p-3 text-slate-700 uppercase">{item.role} / {item.plan_key}</td>
                       <td className="p-3 text-slate-700">{effectivePrice} EUR</td>
+                      <td className="p-3 text-slate-600">
+                        <p className="text-xs"><span className="font-bold">Abschluss:</span> {formatDateTime(item.started_at)}</p>
+                        <p className="text-xs"><span className="font-bold">Nächster Einzug:</span> {formatDateTime(item.next_charge_at)}</p>
+                      </td>
+                      <td className="p-3 text-slate-600">
+                        <p className="text-xs"><span className="font-bold">2 Monate bis:</span> {formatDateTime(item.intro_period_ends_at)}</p>
+                        <p className="text-xs"><span className="font-bold">Status:</span> {getIntroStatus(item)}</p>
+                        {item.cancel_requested_at && (
+                          <p className="text-xs text-amber-700 font-bold">Kündigung angefordert: {formatDateTime(item.cancel_requested_at)}</p>
+                        )}
+                        {item.cancel_effective_at && (
+                          <p className="text-xs text-amber-700">Wirksam zum: {formatDateTime(item.cancel_effective_at)}</p>
+                        )}
+                        {item.cancel_reason && (
+                          <p className="text-xs text-slate-500">Grund: {item.cancel_reason}</p>
+                        )}
+                        {item.cancelled_at && (
+                          <p className="text-xs text-red-700 font-bold">Beendet am: {formatDateTime(item.cancelled_at)}</p>
+                        )}
+                        {hasTimingIssue && (
+                          <p className="text-xs text-red-700 font-bold">Warnung: Kein nächster Einzug gesetzt.</p>
+                        )}
+                        {cancelPendingWithoutDate && (
+                          <p className="text-xs text-red-700 font-bold">Warnung: Kündigung ohne Wirksamkeitsdatum.</p>
+                        )}
+                        {cancelEffectivePast && (
+                          <p className="text-xs text-red-700 font-bold">Warnung: Kündigung überfällig, aber Status noch aktiv.</p>
+                        )}
+                      </td>
                       <td className="p-3 text-slate-600">
                         {item.custom_monthly_price_cents !== null && item.custom_monthly_price_cents !== undefined ? (
                           <span className="inline-block px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">Aktiv</span>
@@ -876,15 +998,25 @@ export default function AdminAboPage() {
                             >
                               Verlauf
                             </button>
+                            {cancelEffectivePast && (
+                              <button
+                                type="button"
+                                onClick={() => finalizeCancellationNow(item)}
+                                disabled={finalizeBusyUserId === item.id}
+                                className="px-2 py-1 rounded-lg border border-red-300 bg-red-50 text-red-700 text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+                              >
+                                {finalizeBusyUserId === item.id ? "Finalisiere..." : "Kündigung finalisieren"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </td>
                     </tr>
                   );
                 })}
-                {subscriptionUsers.length === 0 && (
+                {displayedSubscriptionUsers.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-6 text-center text-slate-500">Keine Abo-Nutzer fuer die aktuellen Filter gefunden.</td>
+                    <td colSpan={9} className="p-6 text-center text-slate-500">Keine Abo-Nutzer für die aktuellen Filter gefunden.</td>
                   </tr>
                 )}
               </tbody>

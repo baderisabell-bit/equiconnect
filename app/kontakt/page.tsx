@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getResolvedUserRole, submitKontaktForm } from '../actions';
+import { getResolvedUserRole } from '../actions';
+import PublicContactForm from '../components/public-contact-form';
 import LoggedInHeader from '../components/logged-in-header';
 
 export default function KontaktUndFaqPage() {
@@ -11,16 +12,6 @@ export default function KontaktUndFaqPage() {
   const [role, setRole] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [userName, setUserName] = useState('Profil');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [betreff, setBetreff] = useState('');
-  const [nachricht, setNachricht] = useState('');
-  const [website, setWebsite] = useState('');
-  const [sending, setSending] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [ticketCode, setTicketCode] = useState('');
-  const [error, setError] = useState('');
-
   useEffect(() => {
     const currentRole = sessionStorage.getItem('userRole');
     const userIdRaw = sessionStorage.getItem('userId');
@@ -68,40 +59,6 @@ export default function KontaktUndFaqPage() {
     setCanCloseSidebar(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitted(false);
-    setTicketCode('');
-    setError('');
-    setSending(true);
-
-    const res = await submitKontaktForm({
-      name,
-      email,
-      subject: betreff,
-      message: nachricht,
-      website
-    });
-
-    setSending(false);
-
-    if (!res.success) {
-      setError(res.error || 'E-Mail konnte nicht versendet werden.');
-      return;
-    }
-
-    setSubmitted(true);
-    setTicketCode(res.ticketCode || '');
-    setName('');
-    setEmail('');
-    setBetreff('');
-    setNachricht('');
-    setWebsite('');
-  };
-
-  const normalizedRole = String(role || '').trim().toLowerCase();
-  const isExpertRole = normalizedRole === 'experte';
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div
@@ -138,102 +95,34 @@ export default function KontaktUndFaqPage() {
         onOpenProfile={openProfile}
       />
           
-      <main className="max-w-5xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8">
-        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Kontakt & FAQ</p>
-          <h1 className="mt-2 text-3xl font-black italic uppercase tracking-tight text-slate-900">Schreib uns eine Nachricht</h1>
-          <p className="mt-3 text-sm font-medium text-slate-600">
-            Hier kannst du uns direkt per E-Mail kontaktieren. Die FAQ-Bereiche ergänzen wir als nächstes.
-          </p>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Dein Name"
-                required
-                className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
-              />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Deine E-Mail"
-                required
-                className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
-              />
-            </div>
-
-            <input
-              type="text"
-              value={betreff}
-              onChange={(e) => setBetreff(e.target.value)}
-              placeholder="Betreff"
-              required
-              className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
-            />
-
-            <textarea
-              value={nachricht}
-              onChange={(e) => setNachricht(e.target.value)}
-              placeholder="Deine Nachricht"
-              required
-              rows={8}
-              className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-medium outline-none focus:border-emerald-300 resize-none"
-            />
-
-            <div className="absolute -left-[9999px] top-auto w-px h-px overflow-hidden" aria-hidden="true">
-              <label htmlFor="kontakt-website">Website</label>
-              <input
-                id="kontakt-website"
-                type="text"
-                tabIndex={-1}
-                autoComplete="off"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={sending}
-              className="w-full md:w-auto px-8 py-4 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-500"
-            >
-              {sending ? 'Wird gesendet...' : 'Nachricht senden'}
-            </button>
-          </form>
-
-          {error && (
-            <p className="mt-4 text-[11px] font-bold uppercase tracking-widest text-red-600">
-              {error}
+      <main className="max-w-6xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-[1fr_0.95fr] gap-8 items-start">
+        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-8">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Kontakt & FAQ</p>
+            <h1 className="mt-2 text-3xl font-black italic uppercase tracking-tight text-slate-900">Schreib uns eine Nachricht</h1>
+            <p className="mt-3 text-sm font-medium text-slate-600">
+              Hier findest du Antworten und Hinweise rund um Registrierung, Login und Support.
             </p>
-          )}
+          </div>
 
-          {submitted && (
-            <p className="mt-4 text-[11px] font-bold uppercase tracking-widest text-emerald-700">
-              Danke, deine Nachricht wurde versendet{ticketCode ? ` (Ticket: ${ticketCode})` : ''}. Wir melden uns in der Regel innerhalb von 24 Stunden.
-            </p>
-          )}
-        </section>
-
-        <aside className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm">
-          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">FAQ (demnächst)</h2>
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             <div className="p-4 rounded-xl border border-slate-100 bg-slate-50">
               <p className="text-[10px] font-black uppercase text-slate-700">Wie erstelle ich ein Profil?</p>
-              <p className="mt-1 text-xs font-medium text-slate-500">Wird in der FAQ-Sektion bald ergänzt.</p>
+              <p className="mt-1 text-xs font-medium text-slate-500">Über die Registrierungsseiten für Nutzer oder Experten.</p>
             </div>
             <div className="p-4 rounded-xl border border-slate-100 bg-slate-50">
               <p className="text-[10px] font-black uppercase text-slate-700">Wie läuft die Verifizierung ab?</p>
-              <p className="mt-1 text-xs font-medium text-slate-500">Wird in der FAQ-Sektion bald ergänzt.</p>
+              <p className="mt-1 text-xs font-medium text-slate-500">Die Prüfung erfolgt nach dem Anlegen des Profils durch unser Team.</p>
             </div>
             <div className="p-4 rounded-xl border border-slate-100 bg-slate-50">
               <p className="text-[10px] font-black uppercase text-slate-700">Wie kontaktiere ich Support?</p>
-              <p className="mt-1 text-xs font-medium text-slate-500">Nutze aktuell einfach das Kontaktformular links.</p>
+              <p className="mt-1 text-xs font-medium text-slate-500">Nutze dafür das Formular in der rechten Sidebar.</p>
             </div>
           </div>
+        </section>
+
+        <aside className="lg:sticky lg:top-6">
+          <PublicContactForm />
         </aside>
       </main>
     </div>

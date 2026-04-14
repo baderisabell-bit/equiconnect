@@ -133,9 +133,9 @@ type MainTab = "uebersicht" | "hinzufuegen" | "rechnungseinstellungen";
 type AddSubTab = "suche" | "einladen" | "manuell";
 
 const INVOICE_TEMPLATES = [
-  { id: 1, name: "Klassisch", hint: "Klar und kompakt" },
-  { id: 2, name: "Modern", hint: "Akzent mit Kopfzeile" },
-  { id: 3, name: "Minimal", hint: "Ruhig mit Seitenleiste" },
+  { id: 1, name: "Klassisch", hint: "Serif, Linien, traditioneller Beleg" },
+  { id: 2, name: "Modern", hint: "Farbfläche, starke Akzente, Card-Look" },
+  { id: 3, name: "Minimal", hint: "Monochrom, Sidebar, technische Anmutung" },
 ] as const;
 
 // ─────────────────────────────────────── Utility ────────────────────────────
@@ -159,6 +159,26 @@ const currentMonth = () => {
 const toDateTimeLocalValue = (date: Date) => {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const REQUEST_TIMEOUT_MS = 15000;
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} Timeout`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -259,26 +279,35 @@ export default function SchuelerPage() {
 
     (async () => {
       setLoading(true);
-      const [stuRes, invRes, subRes] = await Promise.all([
-        getMyStudents(id),
-        getInvoiceSettings(id),
-        getUserSubscriptionSettings(id),
-      ]);
+      try {
+        const [stuRes, invRes, subRes] = await withTimeout(
+          Promise.all([
+            getMyStudents(id),
+            getInvoiceSettings(id),
+            getUserSubscriptionSettings(id),
+          ]),
+          REQUEST_TIMEOUT_MS,
+          "Initialdaten laden"
+        );
 
-      const planKey = String((subRes as any)?.data?.plan_key || "").trim().toLowerCase();
-      const planLabel = String((subRes as any)?.data?.plan_label || "Free").trim();
-      setSubscriptionPlanLabel(planLabel || "Free");
-      setHasPremiumAccess(planKey === "experte_pro");
+        const planKey = String((subRes as any)?.data?.plan_key || "").trim().toLowerCase();
+        const planLabel = String((subRes as any)?.data?.plan_label || "Free").trim();
+        setSubscriptionPlanLabel(planLabel || "Free");
+        setHasPremiumAccess(planKey === "experte_pro");
 
-      if (stuRes.success) {
-        const nextStudents = (stuRes as any).students || [];
-        setStudents(nextStudents);
-        if (nextStudents.length > 0 && !quickInvoiceStudentId) {
-          setQuickInvoiceStudentId(nextStudents[0].student_id);
+        if (stuRes.success) {
+          const nextStudents = (stuRes as any).students || [];
+          setStudents(nextStudents);
+          if (nextStudents.length > 0 && !quickInvoiceStudentId) {
+            setQuickInvoiceStudentId(nextStudents[0].student_id);
+          }
         }
+        if (invRes.success) setInvoiceSettings((invRes as any).settings || {});
+      } catch {
+        notify("err", "Vorschau-Daten konnten nicht geladen werden.");
+      } finally {
+        setLoading(false);
       }
-      if (invRes.success) setInvoiceSettings((invRes as any).settings || {});
-      setLoading(false);
     })();
   }, [router, quickInvoiceStudentId]);
 
@@ -307,18 +336,26 @@ export default function SchuelerPage() {
     setInvoiceArchiveLoading(true);
     setInvoiceArchiveError("");
 
-    getInvoiceArchiveData(userId).then((res) => {
-      if (cancelled) return;
+    withTimeout(getInvoiceArchiveData(userId), REQUEST_TIMEOUT_MS, "Rechnungsarchiv laden")
+      .then((res) => {
+        if (cancelled) return;
 
-      if (res.success) {
-        setInvoiceArchiveItems(Array.isArray((res as any).items) ? (res as any).items : []);
-      } else {
+        if (res.success) {
+          setInvoiceArchiveItems(Array.isArray((res as any).items) ? (res as any).items : []);
+        } else {
+          setInvoiceArchiveItems([]);
+          setInvoiceArchiveError((res as any).error || "Rechnungsarchiv konnte nicht geladen werden.");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
         setInvoiceArchiveItems([]);
-        setInvoiceArchiveError((res as any).error || "Rechnungsarchiv konnte nicht geladen werden.");
-      }
-
-      setInvoiceArchiveLoading(false);
-    });
+        setInvoiceArchiveError("Rechnungsarchiv konnte nicht geladen werden.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setInvoiceArchiveLoading(false);
+      });
 
     return () => {
       cancelled = true;
@@ -366,27 +403,39 @@ export default function SchuelerPage() {
     setSelectedStudent(s);
     setStudentTab("buchungen");
     setLoadingDetail(true);
-    if (!userId) return;
-    const [bkRes, blRes, plRes, calRes] = await Promise.all([
-      getStudentBookings(userId, s.student_id, 50),
-      getBillingInfo(userId, s.student_id),
-      getStudentServicePlan(userId, s.student_id),
-      getExpertCalendarSlotsForExpert(userId, s.student_id, invoiceMonth),
-    ]);
-    const nextPlan = (plRes as any).plan || {};
-    setBookings((bkRes as any).bookings || []);
-    setBilling((blRes as any).billing || null);
-    setServicePlan(nextPlan);
-    setCalendarSlots((calRes as any).items || []);
-    setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
-    setCalendarPlanLabel(String((calRes as any).planLabel || ""));
-    setCalendarSlotForm((prev) => ({
-      ...prev,
-      serviceTitle: prev.serviceTitle || nextPlan.service_title || "",
-      durationMinutes: prev.durationMinutes || String(nextPlan.duration_minutes || 60),
-      unitPriceEuro: prev.unitPriceEuro || (nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : ""),
-    }));
-    setLoadingDetail(false);
+    if (!userId) {
+      setLoadingDetail(false);
+      return;
+    }
+    try {
+      const [bkRes, blRes, plRes, calRes] = await withTimeout(
+        Promise.all([
+          getStudentBookings(userId, s.student_id, 50),
+          getBillingInfo(userId, s.student_id),
+          getStudentServicePlan(userId, s.student_id),
+          getExpertCalendarSlotsForExpert(userId, s.student_id, invoiceMonth),
+        ]),
+        REQUEST_TIMEOUT_MS,
+        "Kundenvorschau laden"
+      );
+      const nextPlan = (plRes as any).plan || {};
+      setBookings((bkRes as any).bookings || []);
+      setBilling((blRes as any).billing || null);
+      setServicePlan(nextPlan);
+      setCalendarSlots((calRes as any).items || []);
+      setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
+      setCalendarPlanLabel(String((calRes as any).planLabel || ""));
+      setCalendarSlotForm((prev) => ({
+        ...prev,
+        serviceTitle: prev.serviceTitle || nextPlan.service_title || "",
+        durationMinutes: prev.durationMinutes || String(nextPlan.duration_minutes || 60),
+        unitPriceEuro: prev.unitPriceEuro || (nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : ""),
+      }));
+    } catch {
+      notify("err", "Kundendaten konnten nicht geladen werden.");
+    } finally {
+      setLoadingDetail(false);
+    }
   };
 
   const openProfile = () => {
@@ -538,16 +587,25 @@ export default function SchuelerPage() {
   const doLoadInvoice = async () => {
     if (!userId || !selectedStudent) return;
     setLoadingDetail(true);
-    const [res, calRes] = await Promise.all([
-      getInvoiceData(userId, selectedStudent.student_id, invoiceMonth),
-      getExpertCalendarSlotsForExpert(userId, selectedStudent.student_id, invoiceMonth),
-    ]);
-    if (res.success) setInvoiceData((res as any));
-    else notify("err", (res as any).error || "Rechnungsdaten konnten nicht geladen werden.");
-    setCalendarSlots((calRes as any).items || []);
-    setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
-    setCalendarPlanLabel(String((calRes as any).planLabel || ""));
-    setLoadingDetail(false);
+    try {
+      const [res, calRes] = await withTimeout(
+        Promise.all([
+          getInvoiceData(userId, selectedStudent.student_id, invoiceMonth),
+          getExpertCalendarSlotsForExpert(userId, selectedStudent.student_id, invoiceMonth),
+        ]),
+        REQUEST_TIMEOUT_MS,
+        "Rechnungsvorschau laden"
+      );
+      if (res.success) setInvoiceData((res as any));
+      else notify("err", (res as any).error || "Rechnungsdaten konnten nicht geladen werden.");
+      setCalendarSlots((calRes as any).items || []);
+      setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
+      setCalendarPlanLabel(String((calRes as any).planLabel || ""));
+    } catch {
+      notify("err", "Rechnungsdaten konnten nicht geladen werden.");
+    } finally {
+      setLoadingDetail(false);
+    }
   };
 
   const doSaveInvoiceSettings = async () => {
@@ -563,61 +621,6 @@ export default function SchuelerPage() {
     if (!userId || !selectedStudent || !invoiceData) return;
     await incrementInvoiceCounter(userId);
     window.print();
-  };
-
-  const openTemplatePdfPreview = (templateId: number) => {
-    const safeTemplateId = [1, 2, 3].includes(templateId) ? templateId : 1;
-    const previewWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=800");
-    if (!previewWindow) {
-      notify("err", "Popup blockiert. Bitte Popups erlauben, um die PDF-Vorschau zu öffnen.");
-      return;
-    }
-
-    const accent = activeBrandColor || "#10b981";
-    const headline = safeTemplateId === 2 ? "Rechnungsvorlage Modern" : safeTemplateId === 3 ? "Rechnungsvorlage Minimal" : "Rechnungsvorlage Klassisch";
-    const html = `<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${headline}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 32px; color: #0f172a; }
-    .sheet { border: 1px solid #e2e8f0; border-radius: 18px; padding: 28px; }
-    .bar { height: 10px; background: ${accent}; border-radius: 8px; margin-bottom: 16px; }
-    .kicker { text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; color: #64748b; font-weight: 700; }
-    h1 { margin: 10px 0 8px; font-size: 30px; text-transform: uppercase; font-style: italic; }
-    .muted { color: #64748b; font-size: 13px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-    th, td { border-bottom: 1px solid #e2e8f0; padding: 10px 6px; font-size: 13px; text-align: left; }
-    th { font-size: 11px; text-transform: uppercase; color: #64748b; letter-spacing: 0.1em; }
-    .right { text-align: right; }
-  </style>
-</head>
-<body>
-  <section class="sheet">
-    ${safeTemplateId === 2 ? `<div class="bar"></div>` : ""}
-    <p class="kicker">PDF Vorschau</p>
-    <h1>${headline}</h1>
-    <p class="muted">Beispielvorschau. Nach Auswahl wird die Vorlage in deinen Rechnungen angewendet.</p>
-    <table>
-      <thead>
-        <tr><th>Leistung</th><th class="right">Menge</th><th class="right">Einzelpreis</th><th class="right">Gesamt</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Beispielstunde</td><td class="right">1</td><td class="right">45,00 €</td><td class="right">45,00 €</td></tr>
-        <tr><td>Zusatztraining</td><td class="right">2</td><td class="right">20,00 €</td><td class="right">40,00 €</td></tr>
-      </tbody>
-    </table>
-    <p class="right" style="font-weight:700; margin-top: 14px;">Gesamt: 85,00 €</p>
-  </section>
-  <script>window.focus(); window.print();</script>
-</body>
-</html>`;
-
-    previewWindow.document.open();
-    previewWindow.document.write(html);
-    previewWindow.document.close();
   };
 
   const doReleaseCalendarSlot = async () => {
@@ -683,32 +686,40 @@ export default function SchuelerPage() {
       return;
     }
     setLoadingDetail(true);
-    const [res, plRes, calRes] = await Promise.all([
-      getInvoiceData(userId, quickInvoiceStudentId, quickInvoiceMonth),
-      getStudentServicePlan(userId, quickInvoiceStudentId),
-      getExpertCalendarSlotsForExpert(userId, quickInvoiceStudentId, quickInvoiceMonth),
-    ]);
-    if (!res.success) {
-      notify("err", (res as any).error || "Rechnungsdaten konnten nicht geladen werden.");
+    try {
+      const [res, plRes, calRes] = await withTimeout(
+        Promise.all([
+          getInvoiceData(userId, quickInvoiceStudentId, quickInvoiceMonth),
+          getStudentServicePlan(userId, quickInvoiceStudentId),
+          getExpertCalendarSlotsForExpert(userId, quickInvoiceStudentId, quickInvoiceMonth),
+        ]),
+        REQUEST_TIMEOUT_MS,
+        "Kundenrechnung laden"
+      );
+      if (!res.success) {
+        notify("err", (res as any).error || "Rechnungsdaten konnten nicht geladen werden.");
+        return;
+      }
+      const nextPlan = (plRes as any).plan || {};
+      setSelectedStudent(targetStudent);
+      setStudentTab("rechnung");
+      setInvoiceMonth(quickInvoiceMonth);
+      setInvoiceData(res as any);
+      setServicePlan(nextPlan);
+      setCalendarSlots((calRes as any).items || []);
+      setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
+      setCalendarPlanLabel(String((calRes as any).planLabel || ""));
+      setCalendarSlotForm((prev) => ({
+        ...prev,
+        serviceTitle: nextPlan.service_title || prev.serviceTitle,
+        durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
+        unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
+      }));
+    } catch {
+      notify("err", "Rechnungsdaten konnten nicht geladen werden.");
+    } finally {
       setLoadingDetail(false);
-      return;
     }
-    const nextPlan = (plRes as any).plan || {};
-    setSelectedStudent(targetStudent);
-    setStudentTab("rechnung");
-    setInvoiceMonth(quickInvoiceMonth);
-    setInvoiceData(res as any);
-    setServicePlan(nextPlan);
-    setCalendarSlots((calRes as any).items || []);
-    setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
-    setCalendarPlanLabel(String((calRes as any).planLabel || ""));
-    setCalendarSlotForm((prev) => ({
-      ...prev,
-      serviceTitle: nextPlan.service_title || prev.serviceTitle,
-      durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
-      unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
-    }));
-    setLoadingDetail(false);
   };
 
   const openArchiveInvoice = async (archiveItem: InvoiceArchiveItem) => {
@@ -725,31 +736,39 @@ export default function SchuelerPage() {
     setInvoiceMonth(archiveItem.invoice_month);
     setLoadingDetail(true);
 
-    const [res, plRes, calRes] = await Promise.all([
-      getInvoiceData(userId, archiveItem.student_id, archiveItem.invoice_month),
-      getStudentServicePlan(userId, archiveItem.student_id),
-      getExpertCalendarSlotsForExpert(userId, archiveItem.student_id, archiveItem.invoice_month),
-    ]);
+    try {
+      const [res, plRes, calRes] = await withTimeout(
+        Promise.all([
+          getInvoiceData(userId, archiveItem.student_id, archiveItem.invoice_month),
+          getStudentServicePlan(userId, archiveItem.student_id),
+          getExpertCalendarSlotsForExpert(userId, archiveItem.student_id, archiveItem.invoice_month),
+        ]),
+        REQUEST_TIMEOUT_MS,
+        "Archiv-Rechnung laden"
+      );
 
-    if (!res.success) {
-      notify("err", (res as any).error || "Rechnungsdaten konnten nicht geladen werden.");
+      if (!res.success) {
+        notify("err", (res as any).error || "Rechnungsdaten konnten nicht geladen werden.");
+        return;
+      }
+
+      const nextPlan = (plRes as any).plan || {};
+      setInvoiceData(res as any);
+      setServicePlan(nextPlan);
+      setCalendarSlots((calRes as any).items || []);
+      setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
+      setCalendarPlanLabel(String((calRes as any).planLabel || ""));
+      setCalendarSlotForm((prev) => ({
+        ...prev,
+        serviceTitle: nextPlan.service_title || prev.serviceTitle,
+        durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
+        unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
+      }));
+    } catch {
+      notify("err", "Rechnungsdaten konnten nicht geladen werden.");
+    } finally {
       setLoadingDetail(false);
-      return;
     }
-
-    const nextPlan = (plRes as any).plan || {};
-    setInvoiceData(res as any);
-    setServicePlan(nextPlan);
-    setCalendarSlots((calRes as any).items || []);
-    setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
-    setCalendarPlanLabel(String((calRes as any).planLabel || ""));
-    setCalendarSlotForm((prev) => ({
-      ...prev,
-      serviceTitle: nextPlan.service_title || prev.serviceTitle,
-      durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
-      unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
-    }));
-    setLoadingDetail(false);
   };
 
   // ═══════════════════════════ Render ═══════════════════════════════════════
@@ -768,6 +787,12 @@ export default function SchuelerPage() {
   const activeTemplateId = [1, 2, 3].includes(activeTemplateIdRaw) ? activeTemplateIdRaw : 1;
   const activeBrandColor = (invoiceSettings.brand_color || "#10b981").trim() || "#10b981";
   const activeTemplateName = INVOICE_TEMPLATES.find((tpl) => tpl.id === activeTemplateId)?.name || "Klassisch";
+  const templatePreviewHeadline =
+    activeTemplateId === 2
+      ? "Rechnungsvorlage Modern"
+      : activeTemplateId === 3
+        ? "Rechnungsvorlage Minimal"
+        : "Rechnungsvorlage Klassisch";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
@@ -812,7 +837,7 @@ export default function SchuelerPage() {
         userName={userName}
         onOpenSidebar={() => setSidebarOpen(true)}
         onOpenProfile={openProfile}
-        brandText="EquiConnect"
+        brandText="Equily"
       />
 
       {/* ── Toast ── */}
@@ -1310,114 +1335,128 @@ export default function SchuelerPage() {
 
                   {/* Invoice preview */}
                   {invoiceData && invoiceData.success && (
-                    <section
-                      className={`bg-white border rounded-[2rem] p-8 shadow-sm print:shadow-none print:border-0 print:rounded-none ${activeTemplateId === 2 ? "border-2" : "border-slate-200"} ${activeTemplateId === 3 ? "relative overflow-hidden" : ""} ${activeTemplateId === 1 ? "font-serif" : ""}`}
-                      style={activeTemplateId === 2 ? { borderColor: activeBrandColor } : undefined}
-                    >
-                      {activeTemplateId === 3 && (
-                        <div className="absolute inset-y-0 left-0 w-2" style={{ backgroundColor: activeBrandColor }} />
-                      )}
-                      {activeTemplateId === 2 && (
-                        <div className="mb-8 -mt-8 -mx-8 px-8 py-4 text-white" style={{ backgroundColor: activeBrandColor }}>
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-90">Rechnungsvorlage Modern</p>
-                        </div>
-                      )}
-                      <div className={`flex justify-between items-start mb-8 print:mb-12 ${activeTemplateId === 1 ? "pb-6 border-b border-slate-200" : ""} ${activeTemplateId === 3 ? "pl-3" : ""}`}>
-                        <div>
-                          {invoiceSettings.logo_url && <img src={invoiceSettings.logo_url} alt="Logo" className="h-12 mb-4" />}
-                          <p className="font-black text-xl italic uppercase text-slate-900">{invoiceData.expert?.display_name || userName}</p>
-                          <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-line">{invoiceData.expert?.adresse || ""}</p>
-                          {invoiceSettings.tel && <p className="text-xs text-slate-500">Tel: {invoiceSettings.tel}</p>}
-                          {invoiceSettings.steuernummer && <p className="text-xs text-slate-500">St.-Nr.: {invoiceSettings.steuernummer}</p>}
-                          {invoiceSettings.ust_idnr && <p className="text-xs text-slate-500">USt-IdNr.: {invoiceSettings.ust_idnr}</p>}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rechnung · {activeTemplateName}</p>
-                          <p className="text-2xl font-black italic uppercase mt-1" style={{ color: activeTemplateId === 1 ? "#0f172a" : activeBrandColor }}>
-                            {invoiceSettings.invoice_prefix || "R"}-{String(invoiceData.invoiceNumber || "001").padStart(4, "0")}
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1">{new Date().toLocaleDateString("de-DE")}</p>
-                        </div>
-                      </div>
-
-                      <div className={`mb-8 ${activeTemplateId === 2 ? "rounded-xl bg-slate-50 p-4" : ""} ${activeTemplateId === 3 ? "border-l-2 pl-4" : ""}`} style={activeTemplateId === 3 ? { borderLeftColor: activeBrandColor } : undefined}>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rechnungsempfänger</p>
-                        <p className="font-black text-slate-800 mt-1">{invoiceData.student?.billing_name || invoiceData.student?.display_name || "–"}</p>
-                        <p className="text-sm text-slate-500">{invoiceData.student?.billing_email || invoiceData.student?.email || ""}</p>
-                        <p className="text-sm text-slate-500 whitespace-pre-line">{invoiceData.student?.billing_strasse ? `${invoiceData.student.billing_strasse}\n${invoiceData.student.billing_plz || ""} ${invoiceData.student.billing_city || ""}` : ""}</p>
-                      </div>
-
-                      <div
-                        className={`mb-2 grid grid-cols-[1fr_80px_100px_100px] gap-2 text-[9px] font-black uppercase tracking-widest border-b pb-2 px-2 py-1 rounded-t-lg ${activeTemplateId === 2 ? "text-white border-transparent" : "text-slate-400 border-slate-100"} ${activeTemplateId === 3 ? "text-[8px] border-slate-200" : ""}`}
-                        style={activeTemplateId === 2 ? { backgroundColor: activeBrandColor } : undefined}
+                    <section className="rounded-[2rem] border border-slate-200 bg-slate-100/70 p-4 md:p-6 print:bg-white print:border-0 print:p-0">
+                      <article
+                        className={`mx-auto w-full max-w-[210mm] min-h-[297mm] overflow-hidden bg-white border shadow-[0_16px_50px_rgba(15,23,42,0.12)] print:shadow-none print:border-0 ${activeTemplateId === 1 ? "font-serif border-slate-300" : "border-slate-200"} ${activeTemplateId === 3 ? "relative" : ""}`}
+                        style={activeTemplateId === 2 ? { borderColor: activeBrandColor } : undefined}
                       >
-                        <span>Leistung</span><span className="text-right">Menge</span><span className="text-right">Einzel</span><span className="text-right">Gesamt</span>
-                      </div>
-                      {(invoiceData.bookings || []).map((b: Booking) => (
-                        <div key={b.id} className={`grid grid-cols-[1fr_80px_100px_100px] gap-2 py-2 text-sm ${activeTemplateId === 3 ? "border-b border-dashed border-slate-200" : "border-b border-slate-50"}`}>
-                          <div>
-                            <p className="font-bold text-slate-800">{b.service_title}</p>
-                            <p className="text-[10px] text-slate-400">{formatDate(b.booking_date)}{b.duration_minutes ? ` · ${b.duration_minutes} Min.` : ""}</p>
+                        {activeTemplateId === 3 && <div className="absolute inset-y-0 left-0 w-3" style={{ backgroundColor: activeBrandColor }} />}
+
+                        <header
+                          className={`px-8 pt-8 pb-6 ${activeTemplateId === 2 ? "text-white" : "text-slate-900"} ${activeTemplateId === 1 ? "border-b-2 border-slate-800" : "border-b border-slate-200"}`}
+                          style={activeTemplateId === 2 ? { background: `linear-gradient(120deg, ${activeBrandColor} 0%, #0f172a 100%)` } : undefined}
+                        >
+                          <div className={`flex justify-between items-start gap-6 ${activeTemplateId === 3 ? "pl-3" : ""}`}>
+                            <div>
+                              {invoiceSettings.logo_url && <img src={invoiceSettings.logo_url} alt="Logo" className="h-12 mb-4" />}
+                              <p className="font-black text-xl italic uppercase">{invoiceData.expert?.display_name || userName}</p>
+                              <p className={`text-xs mt-0.5 whitespace-pre-line ${activeTemplateId === 2 ? "text-white/90" : "text-slate-500"}`}>{invoiceData.expert?.adresse || ""}</p>
+                              {invoiceSettings.tel && <p className={`text-xs ${activeTemplateId === 2 ? "text-white/90" : "text-slate-500"}`}>Tel: {invoiceSettings.tel}</p>}
+                              {invoiceSettings.steuernummer && <p className={`text-xs ${activeTemplateId === 2 ? "text-white/90" : "text-slate-500"}`}>St.-Nr.: {invoiceSettings.steuernummer}</p>}
+                              {invoiceSettings.ust_idnr && <p className={`text-xs ${activeTemplateId === 2 ? "text-white/90" : "text-slate-500"}`}>USt-IdNr.: {invoiceSettings.ust_idnr}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-[10px] font-black uppercase tracking-widest ${activeTemplateId === 2 ? "text-white/80" : "text-slate-400"}`}>Rechnung · {activeTemplateName}</p>
+                              <p className="text-2xl font-black italic uppercase mt-1" style={{ color: activeTemplateId === 1 ? "#0f172a" : activeTemplateId === 2 ? "#ffffff" : activeBrandColor }}>
+                                {invoiceSettings.invoice_prefix || "R"}-{String(invoiceData.invoiceNumber || "001").padStart(4, "0")}
+                              </p>
+                              <p className={`text-xs mt-1 ${activeTemplateId === 2 ? "text-white/80" : "text-slate-400"}`}>{new Date().toLocaleDateString("de-DE")}</p>
+                            </div>
                           </div>
-                          <p className="text-right font-bold text-slate-600">{b.quantity ?? 1}</p>
-                          <p className="text-right font-bold text-slate-600">{b.unit_price_euro != null ? `${Number(b.unit_price_euro).toFixed(2).replace(".", ",")} €` : "–"}</p>
-                          <p className="text-right font-black text-slate-800">{b.total_euro != null ? `${Number(b.total_euro).toFixed(2).replace(".", ",")} €` : "–"}</p>
-                        </div>
-                      ))}
+                        </header>
 
-                      {/* Totals */}
-                      <div className={`mt-4 space-y-1.5 ${activeTemplateId === 2 ? "rounded-xl border p-4" : ""}`} style={activeTemplateId === 2 ? { borderColor: activeBrandColor } : undefined}>
-                        {(() => {
-                          const totalEuro = (invoiceData.bookings || []).reduce((sum: number, b: Booking) => sum + (Number(b.total_euro) || Number(b.unit_price_euro) || 0), 0);
-                          const isKlein = invoiceSettings.is_kleinunternehmer;
-                          const mwst = !isKlein && invoiceSettings.mwst_satz ? invoiceSettings.mwst_satz : 0;
-                          const mwstEuro = totalEuro * mwst / 100;
-                          return (
-                            <>
-                              <div className="flex justify-end gap-6 text-sm">
-                                <span className="font-bold text-slate-500">Nettobetrag</span>
-                                <span className="font-black text-slate-800 w-24 text-right">{totalEuro.toFixed(2).replace(".", ",")} €</span>
-                              </div>
-                              {invoiceData.totals?.protection_fee_cents > 0 && (
-                                <div className="flex justify-end gap-6 text-sm">
-                                  <span className="font-bold text-slate-500">Kaeufer- & Anbieterschutz</span>
-                                  <span className="font-black text-slate-800 w-24 text-right">{(Number(invoiceData.totals.protection_fee_cents || 0) / 100).toFixed(2).replace(".", ",")} €</span>
-                                </div>
-                              )}
-                              {!isKlein && mwst > 0 && (
-                                <div className="flex justify-end gap-6 text-sm">
-                                  <span className="font-bold text-slate-500">MwSt. {mwst}%</span>
-                                  <span className="font-black text-slate-800 w-24 text-right">{mwstEuro.toFixed(2).replace(".", ",")} €</span>
-                                </div>
-                              )}
-                              <div className="flex justify-end gap-6 text-base border-t border-slate-200 pt-2 mt-2">
-                                <span className="font-black uppercase text-slate-800">Gesamtbetrag</span>
-                                <span className="font-black w-24 text-right" style={{ color: activeTemplateId === 1 ? "#0f172a" : activeBrandColor }}>{(((Number(invoiceData.totals?.customer_total_cents || 0) / 100) || totalEuro) + mwstEuro).toFixed(2).replace(".", ",")} €</span>
-                              </div>
-                              {invoiceData.totals?.expert_payout_cents > 0 && (
-                                <div className="flex justify-end gap-6 text-sm">
-                                  <span className="font-bold text-slate-500">Auszahlung an Experten</span>
-                                  <span className="font-black text-slate-800 w-24 text-right">{(Number(invoiceData.totals.expert_payout_cents || 0) / 100).toFixed(2).replace(".", ",")} €</span>
-                                </div>
-                              )}
-                              {isKlein && (
-                                <p className="text-xs text-slate-400 mt-4">Gemäß §19 UStG wird keine Umsatzsteuer berechnet.</p>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
+                        <main className={`px-8 py-6 ${activeTemplateId === 3 ? "pl-11" : ""}`}>
+                          <div className={`mb-8 ${activeTemplateId === 2 ? "rounded-xl bg-slate-50 p-4 border border-slate-200" : ""} ${activeTemplateId === 3 ? "border border-slate-300 p-4 bg-slate-50/60" : ""}`}>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rechnungsempfänger</p>
+                            <p className="font-black text-slate-800 mt-1">{invoiceData.student?.billing_name || invoiceData.student?.display_name || "–"}</p>
+                            <p className="text-sm text-slate-500">{invoiceData.student?.billing_email || invoiceData.student?.email || ""}</p>
+                            <p className="text-sm text-slate-500 whitespace-pre-line">{invoiceData.student?.billing_strasse ? `${invoiceData.student.billing_strasse}\n${invoiceData.student.billing_plz || ""} ${invoiceData.student.billing_city || ""}` : ""}</p>
+                          </div>
 
-                      {/* Bank details */}
-                      {(invoiceSettings.iban || invoiceSettings.kontoname) && (
-                        <div className={`mt-8 p-4 rounded-xl text-xs text-slate-500 space-y-0.5 ${activeTemplateId === 1 ? "bg-slate-50" : "bg-white border"}`} style={activeTemplateId !== 1 ? { borderColor: activeBrandColor } : undefined}>
-                          <p className="font-black uppercase text-[10px] tracking-widest text-slate-400 mb-1">Bankverbindung</p>
-                          {invoiceSettings.kontoname && <p>Kontoinhaber: <span className="font-bold text-slate-700">{invoiceSettings.kontoname}</span></p>}
-                          {invoiceSettings.iban && <p>IBAN: <span className="font-bold text-slate-700">{invoiceSettings.iban}</span></p>}
-                          {invoiceSettings.bic && <p>BIC: <span className="font-bold text-slate-700">{invoiceSettings.bic}</span></p>}
-                          {invoiceSettings.bankname && <p>Bank: <span className="font-bold text-slate-700">{invoiceSettings.bankname}</span></p>}
-                        </div>
-                      )}
+                          <div
+                            className={`mb-2 grid grid-cols-[1fr_80px_100px_100px] gap-2 text-[9px] font-black uppercase tracking-widest pb-2 px-2 py-1 rounded-t-lg ${activeTemplateId === 2 ? "text-white border-transparent" : "text-slate-500 border-b border-slate-200"} ${activeTemplateId === 3 ? "bg-slate-900 text-slate-100" : ""}`}
+                            style={activeTemplateId === 2 ? { backgroundColor: activeBrandColor } : undefined}
+                          >
+                            <span>Leistung</span><span className="text-right">Menge</span><span className="text-right">Einzel</span><span className="text-right">Gesamt</span>
+                          </div>
+                          {(invoiceData.bookings || []).map((b: Booking) => (
+                            <div key={b.id} className={`grid grid-cols-[1fr_80px_100px_100px] gap-2 py-2 text-sm ${activeTemplateId === 1 ? "border-b border-slate-200" : activeTemplateId === 2 ? "border-b border-slate-100" : "border-b border-dashed border-slate-300"}`}>
+                              <div>
+                                <p className="font-bold text-slate-800">{b.service_title}</p>
+                                <p className="text-[10px] text-slate-400">{formatDate(b.booking_date)}{b.duration_minutes ? ` · ${b.duration_minutes} Min.` : ""}</p>
+                              </div>
+                              <p className="text-right font-bold text-slate-600">{b.quantity ?? 1}</p>
+                              <p className="text-right font-bold text-slate-600">{b.unit_price_euro != null ? `${Number(b.unit_price_euro).toFixed(2).replace(".", ",")} €` : "–"}</p>
+                              <p className="text-right font-black text-slate-800">{b.total_euro != null ? `${Number(b.total_euro).toFixed(2).replace(".", ",")} €` : "–"}</p>
+                            </div>
+                          ))}
+
+                          <div className={`mt-4 space-y-1.5 ${activeTemplateId === 2 ? "rounded-xl border p-4" : ""} ${activeTemplateId === 3 ? "rounded-none border border-slate-900 p-4" : ""}`} style={activeTemplateId === 2 ? { borderColor: activeBrandColor } : undefined}>
+                            {(() => {
+                              const totalEuro = (invoiceData.bookings || []).reduce((sum: number, b: Booking) => sum + (Number(b.total_euro) || Number(b.unit_price_euro) || 0), 0);
+                              const isKlein = invoiceSettings.is_kleinunternehmer;
+                              const mwst = !isKlein && invoiceSettings.mwst_satz ? invoiceSettings.mwst_satz : 0;
+                              const mwstEuro = totalEuro * mwst / 100;
+                              return (
+                                <>
+                                  <div className="flex justify-end gap-6 text-sm">
+                                    <span className="font-bold text-slate-500">Nettobetrag</span>
+                                    <span className="font-black text-slate-800 w-24 text-right">{totalEuro.toFixed(2).replace(".", ",")} €</span>
+                                  </div>
+                                  {invoiceData.totals?.protection_fee_cents > 0 && (
+                                    <div className="flex justify-end gap-6 text-sm">
+                                      <span className="font-bold text-slate-500">Kaeufer- & Anbieterschutz</span>
+                                      <span className="font-black text-slate-800 w-24 text-right">{(Number(invoiceData.totals.protection_fee_cents || 0) / 100).toFixed(2).replace(".", ",")} €</span>
+                                    </div>
+                                  )}
+                                  {!isKlein && mwst > 0 && (
+                                    <div className="flex justify-end gap-6 text-sm">
+                                      <span className="font-bold text-slate-500">MwSt. {mwst}%</span>
+                                      <span className="font-black text-slate-800 w-24 text-right">{mwstEuro.toFixed(2).replace(".", ",")} €</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-end gap-6 text-base border-t border-slate-200 pt-2 mt-2">
+                                    <span className="font-black uppercase text-slate-800">Gesamtbetrag</span>
+                                    <span className="font-black w-24 text-right" style={{ color: activeTemplateId === 1 ? "#0f172a" : activeBrandColor }}>{(((Number(invoiceData.totals?.customer_total_cents || 0) / 100) || totalEuro) + mwstEuro).toFixed(2).replace(".", ",")} €</span>
+                                  </div>
+                                  {invoiceData.totals?.expert_payout_cents > 0 && (
+                                    <div className="flex justify-end gap-6 text-sm">
+                                      <span className="font-bold text-slate-500">Auszahlung an Experten</span>
+                                      <span className="font-black text-slate-800 w-24 text-right">{(Number(invoiceData.totals.expert_payout_cents || 0) / 100).toFixed(2).replace(".", ",")} €</span>
+                                    </div>
+                                  )}
+                                  {isKlein && (
+                                    <p className="text-xs text-slate-400 mt-4">Gemäß §19 UStG wird keine Umsatzsteuer berechnet.</p>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+
+                          {(invoiceSettings.iban || invoiceSettings.kontoname) && (
+                            <div className={`mt-8 p-4 rounded-xl text-xs text-slate-500 space-y-0.5 ${activeTemplateId === 1 ? "bg-slate-50" : "bg-white border"} ${activeTemplateId === 3 ? "rounded-none border-slate-900" : ""}`} style={activeTemplateId === 2 ? { borderColor: activeBrandColor } : undefined}>
+                              <p className="font-black uppercase text-[10px] tracking-widest text-slate-400 mb-1">Bankverbindung</p>
+                              {invoiceSettings.kontoname && <p>Kontoinhaber: <span className="font-bold text-slate-700">{invoiceSettings.kontoname}</span></p>}
+                              {invoiceSettings.iban && <p>IBAN: <span className="font-bold text-slate-700">{invoiceSettings.iban}</span></p>}
+                              {invoiceSettings.bic && <p>BIC: <span className="font-bold text-slate-700">{invoiceSettings.bic}</span></p>}
+                              {invoiceSettings.bankname && <p>Bank: <span className="font-bold text-slate-700">{invoiceSettings.bankname}</span></p>}
+                            </div>
+                          )}
+                        </main>
+
+                        <footer
+                          className={`px-8 py-5 text-xs border-t ${activeTemplateId === 2 ? "text-white border-white/20" : "text-slate-500 border-slate-200"} ${activeTemplateId === 3 ? "pl-11" : ""}`}
+                          style={activeTemplateId === 2 ? { backgroundColor: "#0f172a" } : undefined}
+                        >
+                          <div className="flex items-center justify-between gap-4">
+                            <span>Vielen Dank für dein Vertrauen.</span>
+                            <span>Seite 1/1</span>
+                          </div>
+                          <div className={`mt-1 ${activeTemplateId === 2 ? "text-white/70" : "text-slate-400"}`}>
+                            {invoiceSettings.invoice_prefix || "R"}-{String(invoiceData.invoiceNumber || "001").padStart(4, "0")} · {new Date().toLocaleDateString("de-DE")}
+                          </div>
+                        </footer>
+                      </article>
 
                       <div className="mt-8 flex gap-3 print:hidden">
                         <button type="button" onClick={doPrintInvoice} className={btnPrimary}>Drucken / als PDF</button>
@@ -1697,7 +1736,6 @@ export default function SchuelerPage() {
                             type="button"
                             onClick={() => {
                               setInvoiceSettings((s) => ({ ...s, template_id: tpl.id }));
-                              openTemplatePdfPreview(tpl.id);
                             }}
                             className={`rounded-2xl border p-4 text-left transition-all ${active ? "border-2 bg-white shadow-sm" : "border-slate-200 bg-slate-50 hover:border-slate-300"}`}
                             style={active ? { borderColor: activeBrandColor } : undefined}
@@ -1735,6 +1773,43 @@ export default function SchuelerPage() {
                           </button>
                         );
                       })}
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 md:p-6">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Rechnungsvorschau in der Website</p>
+                      <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-5 md:p-6">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">PDF Vorschau</p>
+                        <h3 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">{templatePreviewHeadline}</h3>
+                        <p className="mt-1 text-sm text-slate-500">Die Vorschau zeigt jetzt die komplette Seite mit Kopf, Inhalt und Fuß.</p>
+
+                        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-100 p-3">
+                          <div className={`mx-auto aspect-[210/297] w-full max-w-[340px] overflow-hidden bg-white border shadow-sm ${activeTemplateId === 1 ? "font-serif border-slate-300" : "border-slate-200"} ${activeTemplateId === 3 ? "relative" : ""}`} style={activeTemplateId === 2 ? { borderColor: activeBrandColor } : undefined}>
+                            {activeTemplateId === 3 && <div className="absolute inset-y-0 left-0 w-1.5" style={{ backgroundColor: activeBrandColor }} />}
+
+                            <div className={`px-4 py-3 border-b ${activeTemplateId === 2 ? "text-white" : "text-slate-900"} ${activeTemplateId === 1 ? "border-slate-800" : "border-slate-200"}`} style={activeTemplateId === 2 ? { background: `linear-gradient(120deg, ${activeBrandColor} 0%, #0f172a 100%)` } : undefined}>
+                              <div className="flex items-center justify-between">
+                                <div className="text-[8px] font-black uppercase tracking-widest">Equily</div>
+                                <div className="text-[8px] font-black uppercase tracking-widest">Rechnung</div>
+                              </div>
+                            </div>
+
+                            <div className={`px-4 py-3 text-[8px] text-slate-500 ${activeTemplateId === 3 ? "pl-7" : ""}`}>
+                              <div className={`mb-3 rounded ${activeTemplateId === 2 ? "border border-slate-200 bg-slate-50" : activeTemplateId === 3 ? "border border-slate-300 bg-slate-50/60" : ""} p-2`}>
+                                <div className="h-1.5 w-24 rounded bg-slate-300" />
+                                <div className="mt-1 h-1.5 w-16 rounded bg-slate-200" />
+                              </div>
+                              <div className={`grid grid-cols-[1fr_32px_42px_42px] gap-1 rounded-t px-1 py-1 text-[7px] font-black uppercase ${activeTemplateId === 2 ? "text-white" : activeTemplateId === 3 ? "bg-slate-900 text-slate-100" : "bg-slate-100 text-slate-500"}`} style={activeTemplateId === 2 ? { backgroundColor: activeBrandColor } : undefined}>
+                                <span>Leistung</span><span className="text-right">Menge</span><span className="text-right">Einzel</span><span className="text-right">Gesamt</span>
+                              </div>
+                              <div className={`h-5 border-x border-b ${activeTemplateId === 3 ? "border-dashed border-slate-300" : "border-slate-200"}`} />
+                              <div className={`mt-3 h-7 rounded ${activeTemplateId === 2 ? "border" : "border border-slate-200"} ${activeTemplateId === 3 ? "rounded-none border-slate-900" : ""}`} style={activeTemplateId === 2 ? { borderColor: activeBrandColor } : undefined} />
+                            </div>
+
+                            <div className={`mt-auto px-4 py-2 text-[7px] border-t ${activeTemplateId === 2 ? "text-white border-white/20" : "text-slate-400 border-slate-200"}`} style={activeTemplateId === 2 ? { backgroundColor: "#0f172a" } : undefined}>
+                              <div className="flex justify-between"><span>Vielen Dank</span><span>Seite 1/1</span></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <p className="text-xs text-slate-500">Die Auswahl wird direkt in der Rechnungs-Vorschau übernommen.</p>
                   </div>
