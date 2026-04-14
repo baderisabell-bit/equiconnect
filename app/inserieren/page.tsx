@@ -26,6 +26,12 @@ type AdItem = {
   titleImageUrl: string;
   mediaItems: Array<{ url: string; mediaType: 'image' | 'video' }>;
   preise: PriceRow[];
+  billingType: 'einmal' | 'abo';
+  sessionsPerAbo: string;
+  singleSessionCancellationAllowed: boolean;
+  maxCancellationsPerAbo: string;
+  cancellationWindowHours: string;
+  billingNotes: string;
   visibility: 'public' | 'draft';
   viewsCount: number;
   wishlistCount: number;
@@ -70,7 +76,13 @@ export default function InserierenPage() {
     modus: 'vor_ort' as 'mobil' | 'vor_ort',
     mobilRadiusKm: '',
     beschreibung: '',
-    titleImageUrl: ''
+    titleImageUrl: '',
+    billingType: 'einmal' as 'einmal' | 'abo',
+    sessionsPerAbo: '',
+    singleSessionCancellationAllowed: false,
+    maxCancellationsPerAbo: '',
+    cancellationWindowHours: '',
+    billingNotes: ''
   });
   const [mediaItems, setMediaItems] = useState<Array<{ url: string; mediaType: 'image' | 'video' }>>([]);
   const [preisRows, setPreisRows] = useState<PriceRow[]>([EMPTY_PRICE_ROW()]);
@@ -136,6 +148,12 @@ export default function InserierenPage() {
                   anzahlLeistungen: String(preis?.anzahlLeistungen || '').trim()
                 }))
               : [],
+            billingType: String(item?.billingType || '').trim().toLowerCase() === 'abo' ? 'abo' : 'einmal',
+            sessionsPerAbo: String(item?.sessionsPerAbo || '').trim(),
+            singleSessionCancellationAllowed: Boolean(item?.singleSessionCancellationAllowed),
+            maxCancellationsPerAbo: String(item?.maxCancellationsPerAbo || '').trim(),
+            cancellationWindowHours: String(item?.cancellationWindowHours || '').trim(),
+            billingNotes: String(item?.billingNotes || '').trim(),
             visibility: item?.visibility === 'draft' ? 'draft' : 'public',
             viewsCount: Math.max(0, Number(item?.viewsCount || 0)),
             wishlistCount: Math.max(0, Number(item?.wishlistCount || 0)),
@@ -258,6 +276,14 @@ export default function InserierenPage() {
       setError('Bei Gruppenpreis bitte Anzahl an Leistungen angeben.');
       return;
     }
+    if (formData.billingType === 'abo' && !String(formData.sessionsPerAbo || '').trim()) {
+      setError('Bitte Anzahl der Leistungen im Abo angeben.');
+      return;
+    }
+    if (formData.billingType === 'abo' && formData.singleSessionCancellationAllowed && !String(formData.maxCancellationsPerAbo || '').trim()) {
+      setError('Bitte max. Rücktritte im Abo angeben.');
+      return;
+    }
 
     const now = new Date().toISOString();
     const nextAd: AdItem = {
@@ -270,6 +296,12 @@ export default function InserierenPage() {
       titleImageUrl: formData.titleImageUrl.trim(),
       mediaItems,
       preise: validPreisRows,
+      billingType: formData.billingType,
+      sessionsPerAbo: formData.billingType === 'abo' ? String(formData.sessionsPerAbo || '').trim() : '',
+      singleSessionCancellationAllowed: formData.billingType === 'abo' ? Boolean(formData.singleSessionCancellationAllowed) : false,
+      maxCancellationsPerAbo: formData.billingType === 'abo' && formData.singleSessionCancellationAllowed ? String(formData.maxCancellationsPerAbo || '').trim() : '',
+      cancellationWindowHours: formData.billingType === 'abo' ? String(formData.cancellationWindowHours || '').trim() : '',
+      billingNotes: String(formData.billingNotes || '').trim(),
       visibility,
       viewsCount: 0,
       wishlistCount: 0,
@@ -281,7 +313,7 @@ export default function InserierenPage() {
     if (!ok) return;
 
     setMessage(visibility === 'public' ? 'Anzeige wurde online geschaltet.' : 'Anzeige als Entwurf gespeichert.');
-    setFormData({ titel: '', kategorie: verfuegbareKategorien[0] || '', modus: 'vor_ort', mobilRadiusKm: '', beschreibung: '', titleImageUrl: '' });
+    setFormData({ titel: '', kategorie: verfuegbareKategorien[0] || '', modus: 'vor_ort', mobilRadiusKm: '', beschreibung: '', titleImageUrl: '', billingType: 'einmal', sessionsPerAbo: '', singleSessionCancellationAllowed: false, maxCancellationsPerAbo: '', cancellationWindowHours: '', billingNotes: '' });
     setMediaItems([]);
     setPreisRows([EMPTY_PRICE_ROW()]);
     setVisibilityFilter(visibility);
@@ -295,7 +327,13 @@ export default function InserierenPage() {
       modus: ad.modus,
       mobilRadiusKm: ad.mobilRadiusKm || '',
       beschreibung: ad.beschreibung || '',
-      titleImageUrl: ad.titleImageUrl || ''
+      titleImageUrl: ad.titleImageUrl || '',
+      billingType: ad.billingType || 'einmal',
+      sessionsPerAbo: ad.sessionsPerAbo || '',
+      singleSessionCancellationAllowed: Boolean(ad.singleSessionCancellationAllowed),
+      maxCancellationsPerAbo: ad.maxCancellationsPerAbo || '',
+      cancellationWindowHours: ad.cancellationWindowHours || '',
+      billingNotes: ad.billingNotes || ''
     });
     setMediaItems(Array.isArray(ad.mediaItems) ? ad.mediaItems : []);
     setPreisRows(Array.isArray(ad.preise) && ad.preise.length > 0 ? ad.preise : [EMPTY_PRICE_ROW()]);
@@ -306,7 +344,7 @@ export default function InserierenPage() {
 
   const cancelEditingAd = () => {
     setEditingAdId(null);
-    setFormData({ titel: '', kategorie: verfuegbareKategorien[0] || '', modus: 'vor_ort', mobilRadiusKm: '', beschreibung: '', titleImageUrl: '' });
+    setFormData({ titel: '', kategorie: verfuegbareKategorien[0] || '', modus: 'vor_ort', mobilRadiusKm: '', beschreibung: '', titleImageUrl: '', billingType: 'einmal', sessionsPerAbo: '', singleSessionCancellationAllowed: false, maxCancellationsPerAbo: '', cancellationWindowHours: '', billingNotes: '' });
     setMediaItems([]);
     setPreisRows([EMPTY_PRICE_ROW()]);
     setMessage('Bearbeitung abgebrochen.');
@@ -341,6 +379,14 @@ export default function InserierenPage() {
       setError('Bei Gruppenpreis bitte Anzahl an Leistungen angeben.');
       return;
     }
+    if (formData.billingType === 'abo' && !String(formData.sessionsPerAbo || '').trim()) {
+      setError('Bitte Anzahl der Leistungen im Abo angeben.');
+      return;
+    }
+    if (formData.billingType === 'abo' && formData.singleSessionCancellationAllowed && !String(formData.maxCancellationsPerAbo || '').trim()) {
+      setError('Bitte max. Rücktritte im Abo angeben.');
+      return;
+    }
 
     const nextAds = ads.map((ad) => {
       if (ad.id !== editingAdId) return ad;
@@ -354,6 +400,12 @@ export default function InserierenPage() {
         titleImageUrl: formData.titleImageUrl.trim(),
         mediaItems,
         preise: validPreisRows,
+        billingType: formData.billingType,
+        sessionsPerAbo: formData.billingType === 'abo' ? String(formData.sessionsPerAbo || '').trim() : '',
+        singleSessionCancellationAllowed: formData.billingType === 'abo' ? Boolean(formData.singleSessionCancellationAllowed) : false,
+        maxCancellationsPerAbo: formData.billingType === 'abo' && formData.singleSessionCancellationAllowed ? String(formData.maxCancellationsPerAbo || '').trim() : '',
+        cancellationWindowHours: formData.billingType === 'abo' ? String(formData.cancellationWindowHours || '').trim() : '',
+        billingNotes: String(formData.billingNotes || '').trim(),
         updatedAt: new Date().toISOString()
       };
     });
@@ -362,7 +414,7 @@ export default function InserierenPage() {
     if (!ok) return;
     setMessage('Anzeige aktualisiert.');
     setEditingAdId(null);
-    setFormData({ titel: '', kategorie: verfuegbareKategorien[0] || '', modus: 'vor_ort', mobilRadiusKm: '', beschreibung: '', titleImageUrl: '' });
+    setFormData({ titel: '', kategorie: verfuegbareKategorien[0] || '', modus: 'vor_ort', mobilRadiusKm: '', beschreibung: '', titleImageUrl: '', billingType: 'einmal', sessionsPerAbo: '', singleSessionCancellationAllowed: false, maxCancellationsPerAbo: '', cancellationWindowHours: '', billingNotes: '' });
     setMediaItems([]);
     setPreisRows([EMPTY_PRICE_ROW()]);
   };
@@ -387,7 +439,7 @@ export default function InserierenPage() {
     const safeAdId = String(adId || '').trim();
     if (!safeAdId) return;
 
-    const url = `${window.location.origin}/profil/${userId}#angebot-${encodeURIComponent(safeAdId)}`;
+    const url = `${window.location.origin}/anzeige/${userId}/${encodeURIComponent(safeAdId)}`;
     try {
       await navigator.clipboard.writeText(url);
       await trackInteractionShare({
@@ -594,6 +646,88 @@ export default function InserierenPage() {
             ))}
           </div>
 
+          <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Konditionen für Rechnung</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Abrechnungsmodell</label>
+                <select
+                  value={formData.billingType}
+                  onChange={(e) => setFormData((prev) => ({
+                    ...prev,
+                    billingType: e.target.value === 'abo' ? 'abo' : 'einmal',
+                    sessionsPerAbo: e.target.value === 'abo' ? prev.sessionsPerAbo : '',
+                    singleSessionCancellationAllowed: e.target.value === 'abo' ? prev.singleSessionCancellationAllowed : false,
+                    maxCancellationsPerAbo: e.target.value === 'abo' ? prev.maxCancellationsPerAbo : '',
+                    cancellationWindowHours: e.target.value === 'abo' ? prev.cancellationWindowHours : '',
+                  }))}
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+                >
+                  <option value="einmal">Einmalzahlung</option>
+                  <option value="abo">Abo</option>
+                </select>
+              </div>
+              {formData.billingType === 'abo' && (
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Leistungen im Abo</label>
+                  <input
+                    value={formData.sessionsPerAbo}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, sessionsPerAbo: e.target.value }))}
+                    placeholder="z.B. 4"
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+
+            {formData.billingType === 'abo' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rücktritt einzelner Leistung</label>
+                  <select
+                    value={formData.singleSessionCancellationAllowed ? 'ja' : 'nein'}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, singleSessionCancellationAllowed: e.target.value === 'ja' }))}
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+                  >
+                    <option value="nein">Nein</option>
+                    <option value="ja">Ja</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rücktrittsfrist (Stunden)</label>
+                  <input
+                    value={formData.cancellationWindowHours}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, cancellationWindowHours: e.target.value }))}
+                    placeholder="z.B. 24"
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+                  />
+                </div>
+                {formData.singleSessionCancellationAllowed && (
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Max. Rücktritte im Abo</label>
+                    <input
+                      value={formData.maxCancellationsPerAbo}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, maxCancellationsPerAbo: e.target.value }))}
+                      placeholder="z.B. 1"
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Konditionshinweis (optional)</label>
+              <textarea
+                value={formData.billingNotes}
+                onChange={(e) => setFormData((prev) => ({ ...prev, billingNotes: e.target.value }))}
+                rows={2}
+                placeholder="z.B. Monatsabo wird anteilig bei Rücktritt angepasst"
+                className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-3">
             {editingAdId ? (
               <>
@@ -636,12 +770,23 @@ export default function InserierenPage() {
                     <p className="text-xs text-slate-600 inline-flex items-center gap-2"><MapPin size={14} /> Vor Ort: {profilMeta.plz} {profilMeta.ort || 'nicht hinterlegt'}</p>
                   )}
                   <p className="text-sm text-slate-600 line-clamp-3">{ad.beschreibung || 'Keine Beschreibung.'}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-slate-200 text-slate-700">
+                      {ad.billingType === 'abo' ? 'Abo' : 'Einmalzahlung'}
+                    </span>
+                    {ad.billingType === 'abo' && ad.singleSessionCancellationAllowed && (
+                      <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-emerald-100 text-emerald-700">
+                        Rücktritt möglich
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-500">
                     <span className="inline-flex items-center gap-1"><Eye size={13} /> {ad.viewsCount}</span>
                     <span className="inline-flex items-center gap-1"><Heart size={13} /> {ad.wishlistCount}</span>
                   </div>
                   <div className="flex gap-2 pt-1">
                     <button type="button" onClick={() => startEditingAd(ad)} disabled={saving} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white text-slate-700 disabled:opacity-60">Bearbeiten</button>
+                    {userId && <Link href={`/anzeige/${userId}/${ad.id}`} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white text-slate-700">Vorschau</Link>}
                     <button type="button" onClick={() => shareAdLink(ad.id)} disabled={saving} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white text-slate-700 inline-flex items-center gap-1 disabled:opacity-60"><Share2 size={12} /> Link teilen</button>
                     {ad.visibility === 'public' ? (
                       <button type="button" onClick={() => updateAdVisibility(ad.id, 'draft')} disabled={saving} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white text-slate-700 disabled:opacity-60">In Entwürfe</button>

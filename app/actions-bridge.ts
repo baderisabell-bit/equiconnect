@@ -6,17 +6,42 @@ import { Pool } from "pg";
 const databaseUrl =
   String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || '').trim();
 
+function resolveDbSslConfig(connectionString: string) {
+  const sslFlag = String(process.env.DB_SSL || process.env.PGSSLMODE || '').trim().toLowerCase();
+  const sslDisabled = sslFlag === 'disable' || sslFlag === 'false' || sslFlag === '0' || sslFlag === 'off';
+  if (sslDisabled) return undefined;
+
+  const sslEnabledByEnv = sslFlag === 'require' || sslFlag === 'true' || sslFlag === '1' || sslFlag === 'on';
+
+  let sslEnabledByUrl = false;
+  if (connectionString) {
+    try {
+      const parsed = new URL(connectionString);
+      const sslMode = String(parsed.searchParams.get('sslmode') || '').trim().toLowerCase();
+      sslEnabledByUrl = sslMode === 'require' || sslMode === 'verify-ca' || sslMode === 'verify-full';
+    } catch {
+      sslEnabledByUrl = false;
+    }
+  }
+
+  const useSsl = sslEnabledByEnv || sslEnabledByUrl || process.env.NODE_ENV === 'production';
+  return useSsl ? { rejectUnauthorized: false } : undefined;
+}
+
+const localDbPort = Number(process.env.DB_PORT || process.env.PGPORT || 5432);
+
 const pool = databaseUrl
   ? new Pool({
       connectionString: databaseUrl,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+      ssl: resolveDbSslConfig(databaseUrl),
     })
   : new Pool({
-      user: "postgres",
-      host: "localhost",
-      database: "equipro",
-      password: String(process.env.DB_PASSWORD || ""),
-      port: 5432,
+      user: String(process.env.DB_USER || process.env.PGUSER || "postgres"),
+      host: String(process.env.DB_HOST || process.env.PGHOST || "127.0.0.1"),
+      database: String(process.env.DB_NAME || process.env.PGDATABASE || "equipro"),
+      password: String(process.env.DB_PASSWORD || process.env.PGPASSWORD || ""),
+      port: Number.isFinite(localDbPort) ? localDbPort : 5432,
+      ssl: resolveDbSslConfig(''),
     });
 
 function getPublicAppUrl() {

@@ -9,18 +9,43 @@ import { cookies } from 'next/headers';
 const databaseUrl =
   String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || '').trim();
 
+function resolveDbSslConfig(connectionString: string) {
+  const sslFlag = String(process.env.DB_SSL || process.env.PGSSLMODE || '').trim().toLowerCase();
+  const sslDisabled = sslFlag === 'disable' || sslFlag === 'false' || sslFlag === '0' || sslFlag === 'off';
+  if (sslDisabled) return undefined;
+
+  const sslEnabledByEnv = sslFlag === 'require' || sslFlag === 'true' || sslFlag === '1' || sslFlag === 'on';
+
+  let sslEnabledByUrl = false;
+  if (connectionString) {
+    try {
+      const parsed = new URL(connectionString);
+      const sslMode = String(parsed.searchParams.get('sslmode') || '').trim().toLowerCase();
+      sslEnabledByUrl = sslMode === 'require' || sslMode === 'verify-ca' || sslMode === 'verify-full';
+    } catch {
+      sslEnabledByUrl = false;
+    }
+  }
+
+  const useSsl = sslEnabledByEnv || sslEnabledByUrl || process.env.NODE_ENV === 'production';
+  return useSsl ? { rejectUnauthorized: false } : undefined;
+}
+
+const localDbPort = Number(process.env.DB_PORT || process.env.PGPORT || 5432);
+
 // Datenbank-Verbindung
 const pool = databaseUrl
   ? new Pool({
       connectionString: databaseUrl,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+      ssl: resolveDbSslConfig(databaseUrl),
     })
   : new Pool({
-      user: "postgres",
-      host: "localhost",
-      database: "equipro",
-      password: String(process.env.DB_PASSWORD || ""),
-      port: 5432,
+      user: String(process.env.DB_USER || process.env.PGUSER || "postgres"),
+      host: String(process.env.DB_HOST || process.env.PGHOST || "127.0.0.1"),
+      database: String(process.env.DB_NAME || process.env.PGDATABASE || "equipro"),
+      password: String(process.env.DB_PASSWORD || process.env.PGPASSWORD || ""),
+      port: Number.isFinite(localDbPort) ? localDbPort : 5432,
+      ssl: resolveDbSslConfig(''),
     });
 
 let extraSchemaReady = false;
@@ -882,6 +907,16 @@ async function ensureExtraSchema() {
   `);
 
   await pool.query(`
+    ALTER TABLE expert_student_bookings
+    ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
+  `);
+
+  await pool.query(`
+    ALTER TABLE expert_student_bookings
+    ADD COLUMN IF NOT EXISTS paid_method TEXT;
+  `);
+
+  await pool.query(`
     ALTER TABLE user_bookings
     ADD COLUMN IF NOT EXISTS waitlist_entry_id INTEGER;
   `);
@@ -1484,6 +1519,21 @@ async function ensureExtraSchema() {
   `);
 
   await pool.query(`
+    ALTER TABLE student_service_plans
+    ADD COLUMN IF NOT EXISTS cancellation_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE student_service_plans
+    ADD COLUMN IF NOT EXISTS max_cancellations_per_month INTEGER NOT NULL DEFAULT 0;
+  `);
+
+  await pool.query(`
+    ALTER TABLE student_service_plans
+    ADD COLUMN IF NOT EXISTS require_confirmation_each_booking BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS student_abo_cancellations (
       id SERIAL PRIMARY KEY,
       expert_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1589,6 +1639,51 @@ async function ensureExtraSchema() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status
     ON user_subscriptions(status, updated_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_subscription_invoices (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      plan_key TEXT NOT NULL,
+      payment_method TEXT NOT NULL,
+      invoice_month TEXT NOT NULL,
+      invoice_number TEXT NOT NULL,
+      period_start DATE NOT NULL,
+      period_end DATE NOT NULL,
+      due_at TIMESTAMP NOT NULL,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'EUR',
+      status TEXT NOT NULL DEFAULT 'offen',
+      source TEXT NOT NULL DEFAULT 'subscription-cycle',
+      notes TEXT,
+      emailed_at TIMESTAMP,
+      paid_notified_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (user_id, invoice_month)
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscription_invoices
+    ADD COLUMN IF NOT EXISTS emailed_at TIMESTAMP;
+  `);
+
+  await pool.query(`
+    ALTER TABLE user_subscription_invoices
+    ADD COLUMN IF NOT EXISTS paid_notified_at TIMESTAMP;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_user_subscription_invoices_user_due
+    ON user_subscription_invoices(user_id, due_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_user_subscription_invoices_month
+    ON user_subscription_invoices(invoice_month DESC, due_at DESC);
   `);
 
   try {
@@ -2021,7 +2116,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     calendarBookingEnabled: false,
     offerPreviewHours: 0,
     benefits: [
-      'Buchen über Equily Connect (Kaufschutz und automatisierte Rechnungen auch für bereits bestehende Kunden)',
+      'Buchen über Equily (Kaufschutz und automatisierte Rechnungen auch für bereits bestehende Kunden)',
       'Reduzierter Schutzaufschlag auf Buchungen',
       'Im ersten Monat Marketing auf der Startseite',
       '1x Anzeige hochschieben inklusive, danach 0,50 Euro',
@@ -2055,7 +2150,7 @@ const SUBSCRIPTION_PLAN_CATALOG: Record<SubscriptionPlanKey, SubscriptionPlanDef
     offerPreviewHours: 0,
     benefits: [
       'Alle Leistungen aus dem Experten Abo',
-      'Buchen über Equi Connect (Kaufschutz und automatisierte Rechnungen)',
+      'Buchen über Equily (Kaufschutz und automatisierte Rechnungen)',
       'Persönliche Werbung schalten',
       'Eigene Werbung für 2,99 Euro pro Woche'
     ]
@@ -2538,6 +2633,231 @@ function getAvailableSubscriptionPlans(role: SubscriptionRole) {
     }));
 }
 
+function pad2(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function toInvoiceMonth(value: Date) {
+  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}`;
+}
+
+function addMonthsWithCalendarDay(date: Date, months: number) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const targetMonthDate = new Date(year, month + months, 1, date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+  const daysInTargetMonth = new Date(targetMonthDate.getFullYear(), targetMonthDate.getMonth() + 1, 0).getDate();
+  targetMonthDate.setDate(Math.min(day, daysInTargetMonth));
+  return targetMonthDate;
+}
+
+function buildSubscriptionInvoiceNumber(userId: number, dueDate: Date, planKey: string) {
+  const planCode = String(planKey || '').trim().toUpperCase() || 'PLAN';
+  return `ABO-${dueDate.getFullYear()}${pad2(dueDate.getMonth() + 1)}-${String(userId).padStart(6, '0')}-${planCode}`;
+}
+
+function escapePdfText(value: string) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/\r?\n/g, ' ');
+}
+
+function formatMoneyCentsForInvoice(cents: number) {
+  const value = Number(cents || 0) / 100;
+  return `${value.toFixed(2).replace('.', ',')} EUR`;
+}
+
+function getSubscriptionInvoicePaymentText(status: string) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'bezahlt') {
+    return 'Diese Rechnung wurde bereits beglichen.';
+  }
+  return 'Diese Rechnung ist noch zu begleichen.';
+}
+
+function buildSimplePdfBuffer(lines: string[]) {
+  const contentRows = lines.slice(0, 52).map((line) => `(${escapePdfText(line)}) Tj`).join(' T*\n');
+  const stream = `BT\n/F1 11 Tf\n50 780 Td\n14 TL\n${contentRows}\nET`;
+
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
+    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+    `5 0 obj\n<< /Length ${Buffer.byteLength(stream, 'utf8')} >>\nstream\n${stream}\nendstream\nendobj\n`,
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [0];
+  for (const obj of objects) {
+    offsets.push(Buffer.byteLength(pdf, 'utf8'));
+    pdf += obj;
+  }
+
+  const xrefOffset = Buffer.byteLength(pdf, 'utf8');
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let i = 1; i <= objects.length; i += 1) {
+    pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, 'utf8');
+}
+
+function buildSubscriptionInvoicePdf(invoice: {
+  invoice_number: string;
+  invoice_month: string;
+  due_at: string;
+  period_start: string;
+  period_end: string;
+  amount_cents: number;
+  status: string;
+  payment_method: string;
+  plan_label: string;
+  email: string;
+  name: string;
+}) {
+  const lines = [
+    'Equily - Abo Rechnung',
+    '',
+    `Rechnungsnummer: ${invoice.invoice_number}`,
+    `Rechnungsmonat: ${invoice.invoice_month}`,
+    `Leistungszeitraum: ${invoice.period_start} bis ${invoice.period_end}`,
+    `Faellig am: ${new Date(invoice.due_at).toLocaleDateString('de-DE')}`,
+    `Status: ${invoice.status}`,
+    getSubscriptionInvoicePaymentText(invoice.status),
+    '',
+    `Kunde: ${invoice.name}`,
+    `E-Mail: ${invoice.email}`,
+    '',
+    `Plan: ${invoice.plan_label}`,
+    `Zahlungsart: ${invoice.payment_method === 'paypal' ? 'PayPal' : 'SEPA'}`,
+    `Betrag: ${formatMoneyCentsForInvoice(invoice.amount_cents)}`,
+    '',
+    'Vielen Dank fuer dein Vertrauen in Equily.',
+    `Erstellt am: ${new Date().toLocaleDateString('de-DE')}`,
+  ];
+
+  return buildSimplePdfBuffer(lines);
+}
+
+async function sendSubscriptionInvoiceCreatedEmail(payload: {
+  toEmail: string;
+  firstName: string;
+  invoiceNumber: string;
+  invoiceMonth: string;
+  dueAtIso: string;
+  planLabel: string;
+  amountCents: number;
+  paymentMethod: 'sepa' | 'paypal';
+  pdfBuffer: Buffer;
+}) {
+  const recipient = String(payload.toEmail || '').trim().toLowerCase();
+  if (!recipient || !recipient.includes('@')) return;
+
+  const { transporter, from } = createMailTransport();
+  const safeFirstName = String(payload.firstName || '').trim() || 'du';
+
+  const subject = `Deine Equily Abo-Rechnung ${payload.invoiceNumber}`;
+  const text = [
+    `Hallo ${safeFirstName},`,
+    '',
+    'deine neue Abo-Rechnung wurde automatisch erstellt.',
+    `Rechnungsnummer: ${payload.invoiceNumber}`,
+    `Monat: ${payload.invoiceMonth}`,
+    `Plan: ${payload.planLabel}`,
+    `Betrag: ${formatMoneyCentsForInvoice(payload.amountCents)}`,
+    `Faellig am: ${new Date(payload.dueAtIso).toLocaleDateString('de-DE')}`,
+    `Zahlungsart: ${payload.paymentMethod === 'paypal' ? 'PayPal' : 'SEPA'}`,
+    '',
+    'Die Rechnung findest du im Anhang als PDF und in deinem Profilbereich unter Rechnungen.',
+    '',
+    'Viele Gruesse',
+    'Dein Equily Team',
+  ].join('\n');
+
+  const html = `
+    <p>Hallo ${safeFirstName},</p>
+    <p>deine neue <strong>Abo-Rechnung</strong> wurde automatisch erstellt.</p>
+    <p>
+      <strong>Rechnungsnummer:</strong> ${payload.invoiceNumber}<br/>
+      <strong>Monat:</strong> ${payload.invoiceMonth}<br/>
+      <strong>Plan:</strong> ${payload.planLabel}<br/>
+      <strong>Betrag:</strong> ${formatMoneyCentsForInvoice(payload.amountCents)}<br/>
+      <strong>Faellig am:</strong> ${new Date(payload.dueAtIso).toLocaleDateString('de-DE')}<br/>
+      <strong>Zahlungsart:</strong> ${payload.paymentMethod === 'paypal' ? 'PayPal' : 'SEPA'}
+    </p>
+    <p>Die Rechnung findest du im Anhang als PDF und in deinem Profilbereich unter Rechnungen.</p>
+    <p>Viele Gruesse<br/>Dein Equily Team</p>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to: recipient,
+    subject,
+    text,
+    html,
+    attachments: [
+      {
+        filename: `${payload.invoiceNumber}.pdf`,
+        content: payload.pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+}
+
+async function sendSubscriptionInvoicePaidEmail(payload: {
+  toEmail: string;
+  firstName: string;
+  invoiceNumber: string;
+  invoiceMonth: string;
+  planLabel: string;
+  amountCents: number;
+}) {
+  const recipient = String(payload.toEmail || '').trim().toLowerCase();
+  if (!recipient || !recipient.includes('@')) return;
+
+  const { transporter, from } = createMailTransport();
+  const safeFirstName = String(payload.firstName || '').trim() || 'du';
+
+  const subject = `Zahlung bestätigt: ${payload.invoiceNumber}`;
+  const text = [
+    `Hallo ${safeFirstName},`,
+    '',
+    'deine Zahlung wurde erfolgreich verbucht.',
+    `Rechnungsnummer: ${payload.invoiceNumber}`,
+    `Monat: ${payload.invoiceMonth}`,
+    `Plan: ${payload.planLabel}`,
+    `Betrag: ${formatMoneyCentsForInvoice(payload.amountCents)}`,
+    '',
+    'Vielen Dank!',
+    'Dein Equily Team',
+  ].join('\n');
+
+  const html = `
+    <p>Hallo ${safeFirstName},</p>
+    <p>deine Zahlung wurde erfolgreich verbucht.</p>
+    <p>
+      <strong>Rechnungsnummer:</strong> ${payload.invoiceNumber}<br/>
+      <strong>Monat:</strong> ${payload.invoiceMonth}<br/>
+      <strong>Plan:</strong> ${payload.planLabel}<br/>
+      <strong>Betrag:</strong> ${formatMoneyCentsForInvoice(payload.amountCents)}
+    </p>
+    <p>Vielen Dank!<br/>Dein Equily Team</p>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to: recipient,
+    subject,
+    text,
+    html,
+  });
+}
+
 function getVisibilityPromotionLabel(scope: VisibilityPromotionScope) {
   if (scope === 'angebote') return 'Angebot hochschieben';
   if (scope === 'suchen') return 'Suche hochschieben';
@@ -2978,6 +3298,592 @@ export async function upsertUserSubscriptionSettings(payload: {
     };
   } catch (error: any) {
     return { success: false, error: error.message || 'Abo konnte nicht gespeichert werden.' };
+  }
+}
+
+async function ensureSubscriptionInvoicesForUserInternal(userId: number, throughDateInput?: Date) {
+  await ensureExtraSchema();
+  await ensureUserSubscriptionRow(userId);
+
+  const safeUserId = Number(userId);
+  if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+    return { success: false, error: 'Ungueltige Nutzer-ID.', createdCount: 0 };
+  }
+
+  const subRes = await pool.query(
+    `SELECT user_id,
+            role,
+            plan_key,
+            payment_method,
+            status,
+            monthly_price_cents,
+            custom_monthly_price_cents,
+            started_at,
+            created_at,
+            updated_at,
+            cancel_effective_at
+     FROM user_subscriptions
+     WHERE user_id = $1
+     LIMIT 1`,
+    [safeUserId]
+  );
+
+  const row = subRes.rows[0];
+  if (!row) return { success: true, createdCount: 0 };
+
+  const profileRes = await pool.query(
+    `SELECT email, vorname, nachname
+     FROM users
+     WHERE id = $1
+     LIMIT 1`,
+    [safeUserId]
+  );
+  const profile = profileRes.rows[0] || {};
+  const recipientEmail = String(profile.email || '').trim().toLowerCase();
+  const recipientName = String(profile.vorname || '').trim() || String(profile.nachname || '').trim() || 'du';
+
+  const role = normalizeSubscriptionRole(String(row.role || 'nutzer'));
+  const plan = getSubscriptionPlanDefinition(role, String(row.plan_key || ''));
+  const status = String(row.status || '').trim().toLowerCase();
+  const effectiveMonthlyCents =
+    row.custom_monthly_price_cents !== null && row.custom_monthly_price_cents !== undefined
+      ? Number(row.custom_monthly_price_cents)
+      : Number(row.monthly_price_cents || 0);
+
+  if (effectiveMonthlyCents <= 0) return { success: true, createdCount: 0 };
+  if (status !== 'active' && status !== 'cancel_pending') return { success: true, createdCount: 0 };
+
+  const startedAt = new Date(row.started_at || row.created_at || row.updated_at || Date.now());
+  if (!Number.isFinite(startedAt.getTime())) return { success: true, createdCount: 0 };
+
+  const firstDueAt = addMonthsWithCalendarDay(startedAt, 2);
+  let throughDate = throughDateInput && Number.isFinite(throughDateInput.getTime()) ? new Date(throughDateInput) : new Date();
+
+  const cancelEffectiveAt = row.cancel_effective_at ? new Date(row.cancel_effective_at) : null;
+  if (cancelEffectiveAt && Number.isFinite(cancelEffectiveAt.getTime()) && cancelEffectiveAt.getTime() <= throughDate.getTime()) {
+    throughDate = new Date(cancelEffectiveAt.getTime() - 1);
+  }
+
+  if (firstDueAt.getTime() > throughDate.getTime()) {
+    return { success: true, createdCount: 0 };
+  }
+
+  let cursor = new Date(firstDueAt);
+  let createdCount = 0;
+  let safety = 0;
+
+  while (cursor.getTime() <= throughDate.getTime() && safety < 72) {
+    safety += 1;
+
+    const invoiceMonth = toInvoiceMonth(cursor);
+    const periodStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const periodEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const invoiceNumber = buildSubscriptionInvoiceNumber(safeUserId, cursor, plan.key);
+
+    const insertRes = await pool.query(
+      `INSERT INTO user_subscription_invoices
+        (user_id, role, plan_key, payment_method, invoice_month, invoice_number, period_start, period_end, due_at, amount_cents, currency, status, source, notes)
+       VALUES
+        ($1, $2, $3, $4, $5, $6, $7::date, $8::date, $9::timestamp, $10, 'EUR', 'offen', 'subscription-cycle', $11)
+       ON CONFLICT (user_id, invoice_month) DO NOTHING
+       RETURNING id`,
+      [
+        safeUserId,
+        role,
+        plan.key,
+        String(row.payment_method || 'sepa').trim().toLowerCase() === 'paypal' ? 'paypal' : 'sepa',
+        invoiceMonth,
+        invoiceNumber,
+        `${periodStart.getFullYear()}-${pad2(periodStart.getMonth() + 1)}-${pad2(periodStart.getDate())}`,
+        `${periodEnd.getFullYear()}-${pad2(periodEnd.getMonth() + 1)}-${pad2(periodEnd.getDate())}`,
+        cursor.toISOString(),
+        effectiveMonthlyCents,
+        `Automatisch erzeugt für ${plan.label}`,
+      ]
+    );
+
+    if (insertRes.rows[0]) createdCount += 1;
+
+    if (insertRes.rows[0] && recipientEmail.includes('@')) {
+      try {
+        const createdInvoiceId = Number(insertRes.rows[0]?.id || 0);
+        const invoiceDataForPdf = {
+          invoice_number: invoiceNumber,
+          invoice_month: invoiceMonth,
+          due_at: cursor.toISOString(),
+          period_start: `${periodStart.getFullYear()}-${pad2(periodStart.getMonth() + 1)}-${pad2(periodStart.getDate())}`,
+          period_end: `${periodEnd.getFullYear()}-${pad2(periodEnd.getMonth() + 1)}-${pad2(periodEnd.getDate())}`,
+          amount_cents: effectiveMonthlyCents,
+          status: 'offen',
+          payment_method: String(row.payment_method || 'sepa').trim().toLowerCase() === 'paypal' ? 'paypal' : 'sepa',
+          plan_label: plan.label,
+          email: recipientEmail,
+          name: recipientName,
+        };
+
+        const pdfBuffer = buildSubscriptionInvoicePdf(invoiceDataForPdf);
+        await sendSubscriptionInvoiceCreatedEmail({
+          toEmail: recipientEmail,
+          firstName: recipientName,
+          invoiceNumber,
+          invoiceMonth,
+          dueAtIso: cursor.toISOString(),
+          planLabel: plan.label,
+          amountCents: effectiveMonthlyCents,
+          paymentMethod: invoiceDataForPdf.payment_method as 'sepa' | 'paypal',
+          pdfBuffer,
+        });
+
+        if (Number.isInteger(createdInvoiceId) && createdInvoiceId > 0) {
+          await pool.query(
+            `UPDATE user_subscription_invoices
+             SET emailed_at = COALESCE(emailed_at, NOW()),
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [createdInvoiceId]
+          );
+        }
+      } catch {
+        // Mail errors must not block invoice generation.
+      }
+    }
+
+    cursor = addMonthsWithCalendarDay(cursor, 1);
+  }
+
+  return { success: true, createdCount };
+}
+
+export async function getOwnSubscriptionInvoices(userId: number, limit = 24) {
+  try {
+    await ensureExtraSchema();
+    const safeUserId = Number(userId);
+    const safeLimit = Math.max(1, Math.min(120, Number(limit) || 24));
+    if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+      return { success: false, error: 'Ungueltige Nutzer-ID.', items: [] };
+    }
+
+    await ensureSubscriptionInvoicesForUserInternal(safeUserId);
+
+    const result = await pool.query(
+      `SELECT id,
+              user_id,
+              role,
+              plan_key,
+              payment_method,
+              invoice_month,
+              invoice_number,
+              period_start,
+              period_end,
+              due_at,
+              amount_cents,
+              currency,
+              status,
+              source,
+              notes,
+              created_at,
+              updated_at
+       FROM user_subscription_invoices
+       WHERE user_id = $1
+       ORDER BY due_at DESC, id DESC
+       LIMIT $2`,
+      [safeUserId, safeLimit]
+    );
+
+    const items = (result.rows || []).map((row: any) => {
+      const role = normalizeSubscriptionRole(String(row.role || 'nutzer'));
+      const plan = getSubscriptionPlanDefinition(role, String(row.plan_key || ''));
+      return {
+        ...row,
+        plan_label: plan.label,
+      };
+    });
+
+    return { success: true, items };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Abo-Rechnungen konnten nicht geladen werden.', items: [] };
+  }
+}
+
+export async function adminGenerateSubscriptionInvoices(payload: {
+  adminCode: string;
+  userId?: number;
+  throughMonth?: string;
+  limitUsers?: number;
+}) {
+  try {
+    await ensureExtraSchema();
+
+    const authorized = await isAdminAuthorizedWithCookie(payload.adminCode);
+    if (!authorized) return { success: false, error: 'Nicht autorisiert.' };
+
+    const throughMonth = String(payload.throughMonth || '').trim();
+    let throughDate: Date | undefined;
+    if (throughMonth) {
+      if (!/^\d{4}-\d{2}$/.test(throughMonth)) {
+        return { success: false, error: 'Ungueltiges Monatsformat fuer throughMonth (YYYY-MM).' };
+      }
+      const [year, month] = throughMonth.split('-').map((value) => Number(value));
+      throughDate = new Date(year, month, 0, 23, 59, 59, 999);
+    }
+
+    const singleUserId = Number(payload.userId);
+    if (Number.isInteger(singleUserId) && singleUserId > 0) {
+      const singleRes = await ensureSubscriptionInvoicesForUserInternal(singleUserId, throughDate);
+      if (!singleRes.success) return { success: false, error: singleRes.error || 'Rechnungserstellung fehlgeschlagen.' };
+      return { success: true, processedUsers: 1, createdInvoices: singleRes.createdCount || 0 };
+    }
+
+    const safeLimitUsers = Math.max(1, Math.min(5000, Number(payload.limitUsers) || 1200));
+    const usersRes = await pool.query(
+      `SELECT user_id
+       FROM user_subscriptions
+       WHERE status IN ('active', 'cancel_pending')
+         AND COALESCE(custom_monthly_price_cents, monthly_price_cents, 0) > 0
+       ORDER BY updated_at DESC
+       LIMIT $1`,
+      [safeLimitUsers]
+    );
+
+    let createdInvoices = 0;
+    for (const row of usersRes.rows || []) {
+      const userId = Number(row.user_id);
+      if (!Number.isInteger(userId) || userId <= 0) continue;
+      const res = await ensureSubscriptionInvoicesForUserInternal(userId, throughDate);
+      if (res.success) createdInvoices += Number(res.createdCount || 0);
+    }
+
+    return {
+      success: true,
+      processedUsers: (usersRes.rows || []).length,
+      createdInvoices,
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Abo-Rechnungen konnten nicht erstellt werden.' };
+  }
+}
+
+export async function runSubscriptionInvoiceAutomation(payload: {
+  token: string;
+  throughMonth?: string;
+  userId?: number;
+  limitUsers?: number;
+}) {
+  try {
+    await ensureExtraSchema();
+
+    const expectedToken = String(process.env.SUBSCRIPTION_INVOICE_CRON_TOKEN || process.env.CRON_SECRET || '').trim();
+    const providedToken = String(payload.token || '').trim();
+    if (!expectedToken) {
+      return { success: false, error: 'Cron token ist nicht konfiguriert.' };
+    }
+    if (!providedToken || providedToken !== expectedToken) {
+      return { success: false, error: 'Cron token ungültig.' };
+    }
+
+    const throughMonth = String(payload.throughMonth || '').trim();
+    let throughDate: Date | undefined;
+    if (throughMonth) {
+      if (!/^\d{4}-\d{2}$/.test(throughMonth)) {
+        return { success: false, error: 'Ungueltiges Monatsformat fuer throughMonth (YYYY-MM).' };
+      }
+      const [year, month] = throughMonth.split('-').map((value) => Number(value));
+      throughDate = new Date(year, month, 0, 23, 59, 59, 999);
+    }
+
+    const singleUserId = Number(payload.userId);
+    if (Number.isInteger(singleUserId) && singleUserId > 0) {
+      const singleRes = await ensureSubscriptionInvoicesForUserInternal(singleUserId, throughDate);
+      if (!singleRes.success) {
+        return { success: false, error: singleRes.error || 'Rechnungserstellung fehlgeschlagen.' };
+      }
+      return { success: true, processedUsers: 1, createdInvoices: singleRes.createdCount || 0 };
+    }
+
+    const safeLimitUsers = Math.max(1, Math.min(10000, Number(payload.limitUsers) || 3000));
+    const usersRes = await pool.query(
+      `SELECT user_id
+       FROM user_subscriptions
+       WHERE status IN ('active', 'cancel_pending')
+         AND COALESCE(custom_monthly_price_cents, monthly_price_cents, 0) > 0
+       ORDER BY updated_at DESC
+       LIMIT $1`,
+      [safeLimitUsers]
+    );
+
+    let createdInvoices = 0;
+    for (const row of usersRes.rows || []) {
+      const userId = Number(row.user_id);
+      if (!Number.isInteger(userId) || userId <= 0) continue;
+      const res = await ensureSubscriptionInvoicesForUserInternal(userId, throughDate);
+      if (res.success) createdInvoices += Number(res.createdCount || 0);
+    }
+
+    return {
+      success: true,
+      processedUsers: (usersRes.rows || []).length,
+      createdInvoices,
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Abo-Automation fehlgeschlagen.' };
+  }
+}
+
+export async function adminGetSubscriptionInvoices(payload: {
+  adminCode: string;
+  search?: string;
+  limit?: number;
+}) {
+  try {
+    await ensureExtraSchema();
+
+    const authorized = await isAdminAuthorizedWithCookie(payload.adminCode);
+    if (!authorized) return { success: false, error: 'Nicht autorisiert.', items: [] };
+
+    const search = String(payload.search || '').trim().toLowerCase();
+    const safeLimit = Math.max(1, Math.min(400, Number(payload.limit) || 120));
+
+    const result = await pool.query(
+      `SELECT usi.id,
+              usi.user_id,
+              usi.role,
+              usi.plan_key,
+              usi.payment_method,
+              usi.invoice_month,
+              usi.invoice_number,
+              usi.period_start,
+              usi.period_end,
+              usi.due_at,
+              usi.amount_cents,
+              usi.currency,
+              usi.status,
+              usi.source,
+              usi.notes,
+              usi.created_at,
+              usi.updated_at,
+              u.email,
+              u.vorname,
+              u.nachname,
+              up.display_name
+       FROM user_subscription_invoices usi
+       JOIN users u ON u.id = usi.user_id
+       LEFT JOIN user_profiles up ON up.user_id = usi.user_id
+       WHERE ($1 = ''
+              OR LOWER(u.email) LIKE $2
+              OR LOWER(COALESCE(up.display_name, '')) LIKE $2
+              OR LOWER(COALESCE(u.vorname, '') || ' ' || COALESCE(u.nachname, '')) LIKE $2
+              OR LOWER(usi.invoice_number) LIKE $2
+              OR LOWER(usi.invoice_month) LIKE $2)
+       ORDER BY usi.due_at DESC, usi.id DESC
+       LIMIT $3`,
+      [search, `%${search}%`, safeLimit]
+    );
+
+    const items = (result.rows || []).map((row: any) => {
+      const role = normalizeSubscriptionRole(String(row.role || 'nutzer'));
+      const plan = getSubscriptionPlanDefinition(role, String(row.plan_key || ''));
+      return {
+        ...row,
+        plan_label: plan.label,
+      };
+    });
+
+    return { success: true, items };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Abo-Rechnungen konnten nicht geladen werden.', items: [] };
+  }
+}
+
+async function getSubscriptionInvoiceById(invoiceId: number) {
+  const safeInvoiceId = Number(invoiceId);
+  if (!Number.isInteger(safeInvoiceId) || safeInvoiceId <= 0) return null;
+
+  const result = await pool.query(
+    `SELECT usi.id,
+            usi.user_id,
+            usi.role,
+            usi.plan_key,
+            usi.payment_method,
+            usi.invoice_month,
+            usi.invoice_number,
+            usi.period_start,
+            usi.period_end,
+            usi.due_at,
+            usi.amount_cents,
+            usi.status,
+            usi.paid_notified_at,
+            u.email,
+            u.vorname,
+            u.nachname,
+            up.display_name
+     FROM user_subscription_invoices usi
+     JOIN users u ON u.id = usi.user_id
+     LEFT JOIN user_profiles up ON up.user_id = usi.user_id
+     WHERE usi.id = $1
+     LIMIT 1`,
+    [safeInvoiceId]
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+  const role = normalizeSubscriptionRole(String(row.role || 'nutzer'));
+  const plan = getSubscriptionPlanDefinition(role, String(row.plan_key || ''));
+
+  return {
+    ...row,
+    plan_label: plan.label,
+    name: String(row.display_name || '').trim() || `${String(row.vorname || '').trim()} ${String(row.nachname || '').trim()}`.trim() || `User #${row.user_id}`,
+  };
+}
+
+export async function getOwnSubscriptionInvoicePdf(payload: { userId: number; invoiceId: number }) {
+  try {
+    await ensureExtraSchema();
+    const safeUserId = Number(payload.userId);
+    const safeInvoiceId = Number(payload.invoiceId);
+    if (!Number.isInteger(safeUserId) || safeUserId <= 0) {
+      return { success: false, error: 'Ungueltige Nutzer-ID.' };
+    }
+    if (!Number.isInteger(safeInvoiceId) || safeInvoiceId <= 0) {
+      return { success: false, error: 'Ungueltige Rechnungs-ID.' };
+    }
+
+    const invoice = await getSubscriptionInvoiceById(safeInvoiceId);
+    if (!invoice || Number(invoice.user_id) !== safeUserId) {
+      return { success: false, error: 'Rechnung nicht gefunden.' };
+    }
+
+    const pdfBuffer = buildSubscriptionInvoicePdf({
+      invoice_number: String(invoice.invoice_number || ''),
+      invoice_month: String(invoice.invoice_month || ''),
+      due_at: String(invoice.due_at || ''),
+      period_start: String(invoice.period_start || ''),
+      period_end: String(invoice.period_end || ''),
+      amount_cents: Number(invoice.amount_cents || 0),
+      status: String(invoice.status || 'offen'),
+      payment_method: String(invoice.payment_method || 'sepa'),
+      plan_label: String(invoice.plan_label || ''),
+      email: String(invoice.email || ''),
+      name: String(invoice.name || ''),
+    });
+
+    return {
+      success: true,
+      fileName: `${String(invoice.invoice_number || 'abo-rechnung')}.pdf`,
+      mimeType: 'application/pdf',
+      base64: pdfBuffer.toString('base64'),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'PDF konnte nicht erstellt werden.' };
+  }
+}
+
+export async function adminGetSubscriptionInvoicePdf(payload: { adminCode: string; invoiceId: number }) {
+  try {
+    await ensureExtraSchema();
+    const authorized = await isAdminAuthorizedWithCookie(payload.adminCode);
+    if (!authorized) return { success: false, error: 'Nicht autorisiert.' };
+
+    const safeInvoiceId = Number(payload.invoiceId);
+    if (!Number.isInteger(safeInvoiceId) || safeInvoiceId <= 0) {
+      return { success: false, error: 'Ungueltige Rechnungs-ID.' };
+    }
+
+    const invoice = await getSubscriptionInvoiceById(safeInvoiceId);
+    if (!invoice) return { success: false, error: 'Rechnung nicht gefunden.' };
+
+    const pdfBuffer = buildSubscriptionInvoicePdf({
+      invoice_number: String(invoice.invoice_number || ''),
+      invoice_month: String(invoice.invoice_month || ''),
+      due_at: String(invoice.due_at || ''),
+      period_start: String(invoice.period_start || ''),
+      period_end: String(invoice.period_end || ''),
+      amount_cents: Number(invoice.amount_cents || 0),
+      status: String(invoice.status || 'offen'),
+      payment_method: String(invoice.payment_method || 'sepa'),
+      plan_label: String(invoice.plan_label || ''),
+      email: String(invoice.email || ''),
+      name: String(invoice.name || ''),
+    });
+
+    return {
+      success: true,
+      fileName: `${String(invoice.invoice_number || 'abo-rechnung')}.pdf`,
+      mimeType: 'application/pdf',
+      base64: pdfBuffer.toString('base64'),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'PDF konnte nicht erstellt werden.' };
+  }
+}
+
+export async function adminUpdateSubscriptionInvoiceStatus(payload: {
+  adminCode: string;
+  invoiceId: number;
+  status: 'offen' | 'bezahlt';
+  note?: string;
+}) {
+  try {
+    await ensureExtraSchema();
+    const authorized = await isAdminAuthorizedWithCookie(payload.adminCode);
+    if (!authorized) return { success: false, error: 'Nicht autorisiert.' };
+
+    const safeInvoiceId = Number(payload.invoiceId);
+    if (!Number.isInteger(safeInvoiceId) || safeInvoiceId <= 0) {
+      return { success: false, error: 'Ungueltige Rechnungs-ID.' };
+    }
+
+    const nextStatus = String(payload.status || '').trim().toLowerCase();
+    if (nextStatus !== 'offen' && nextStatus !== 'bezahlt') {
+      return { success: false, error: 'Ungueltiger Status.' };
+    }
+
+    const before = await getSubscriptionInvoiceById(safeInvoiceId);
+    if (!before) {
+      return { success: false, error: 'Rechnung nicht gefunden.' };
+    }
+
+    const note = String(payload.note || '').trim();
+    await pool.query(
+      `UPDATE user_subscription_invoices
+       SET status = $2,
+           paid_notified_at = CASE
+             WHEN $2 = 'offen' THEN NULL
+             WHEN $2 = 'bezahlt' THEN COALESCE(paid_notified_at, NOW())
+             ELSE paid_notified_at
+           END,
+           notes = CASE
+             WHEN $3 = '' THEN notes
+             WHEN notes IS NULL OR notes = '' THEN $3
+             ELSE CONCAT(notes, E'\n', $3)
+           END,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [safeInvoiceId, nextStatus, note]
+    );
+
+    if (
+      nextStatus === 'bezahlt' &&
+      String(before.status || '').trim().toLowerCase() !== 'bezahlt' &&
+      !before.paid_notified_at
+    ) {
+      try {
+        await sendSubscriptionInvoicePaidEmail({
+          toEmail: String(before.email || '').trim().toLowerCase(),
+          firstName: String(before.vorname || '').trim() || String(before.name || '').trim() || 'du',
+          invoiceNumber: String(before.invoice_number || ''),
+          invoiceMonth: String(before.invoice_month || ''),
+          planLabel: String(before.plan_label || ''),
+          amountCents: Number(before.amount_cents || 0),
+        });
+      } catch {
+        // Do not block status update on mail errors.
+      }
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Rechnungsstatus konnte nicht aktualisiert werden.' };
   }
 }
 
@@ -5048,6 +5954,22 @@ export async function getPublicOfferDetails(payload: { profileUserId: number; of
           .filter((item: { url: string; mediaType: 'image' | 'video' }) => item.url)
       : [];
 
+    const billingType = String(matchedOffer?.billingType || '').trim().toLowerCase() === 'abo' ? 'abo' : 'einmal';
+    const sessionsPerAboRaw = Number(matchedOffer?.sessionsPerAbo || 0);
+    const sessionsPerAbo = Number.isFinite(sessionsPerAboRaw) && sessionsPerAboRaw > 0
+      ? Math.round(sessionsPerAboRaw)
+      : null;
+    const cancellationAllowed = Boolean(matchedOffer?.singleSessionCancellationAllowed);
+    const cancellationMaxRaw = Number(matchedOffer?.maxCancellationsPerAbo || 0);
+    const maxCancellationsPerAbo = Number.isFinite(cancellationMaxRaw) && cancellationMaxRaw >= 0
+      ? Math.round(cancellationMaxRaw)
+      : 0;
+    const cancellationWindowHoursRaw = Number(matchedOffer?.cancellationWindowHours || 0);
+    const cancellationWindowHours = Number.isFinite(cancellationWindowHoursRaw) && cancellationWindowHoursRaw >= 0
+      ? Math.round(cancellationWindowHoursRaw)
+      : 0;
+    const billingNotes = String(matchedOffer?.billingNotes || '').trim();
+
     return {
       success: true,
       data: {
@@ -5065,6 +5987,14 @@ export async function getPublicOfferDetails(payload: { profileUserId: number; of
           mediaItems,
           visibility,
           prices,
+          conditions: {
+            billingType,
+            sessionsPerAbo,
+            singleSessionCancellationAllowed: billingType === 'abo' ? cancellationAllowed : false,
+            maxCancellationsPerAbo: billingType === 'abo' && cancellationAllowed ? maxCancellationsPerAbo : 0,
+            cancellationWindowHours: billingType === 'abo' ? cancellationWindowHours : 0,
+            billingNotes,
+          },
         },
         ratings: ratingsRes.rows,
         ratingAvg: Number(ratingStatsRes.rows[0]?.avg_rating || 0),
@@ -9777,6 +10707,8 @@ export async function getStudentBookings(expertId: number, studentId: number, li
                   total_cents,
                   currency,
                   status,
+                  paid_at,
+                  paid_method,
                   notes,
                   billed_month,
                   created_at,
@@ -9801,6 +10733,8 @@ export async function getStudentBookings(expertId: number, studentId: number, li
                   total_cents,
                   currency,
                   status,
+                  paid_at,
+                  paid_method,
                   notes,
                   billed_month,
                   created_at,
@@ -10084,6 +11018,69 @@ export async function updateStudentBookingStatus(payload: {
   }
 }
 
+export async function updateStudentBookingPayment(payload: {
+  expertId: number;
+  studentId: number;
+  bookingId: number;
+  paid: boolean;
+  paymentMethod?: 'bar' | 'ueberweisung' | 'paypal';
+}) {
+  try {
+    await ensureExtraSchema();
+
+    const expertId = Number(payload.expertId);
+    const studentId = Number(payload.studentId);
+    const bookingId = Number(payload.bookingId);
+    const paid = payload.paid === true;
+    const paymentMethod = String(payload.paymentMethod || '').trim().toLowerCase();
+
+    if (!Number.isInteger(expertId) || expertId <= 0) {
+      return { success: false, error: 'Ungültige Experten-ID.' };
+    }
+    if (!Number.isInteger(studentId) || studentId <= 0) {
+      return { success: false, error: 'Ungültige Schüler-ID.' };
+    }
+    if (!Number.isInteger(bookingId) || bookingId <= 0) {
+      return { success: false, error: 'Ungültige Buchungs-ID.' };
+    }
+
+    const allowedMethods = ['', 'bar', 'ueberweisung', 'paypal'];
+    if (!allowedMethods.includes(paymentMethod)) {
+      return { success: false, error: 'Zahlungsart ist ungültig.' };
+    }
+
+    const result = await pool.query(
+      `UPDATE expert_student_bookings
+       SET paid_at = CASE WHEN $1::boolean THEN NOW() ELSE NULL END,
+           paid_method = CASE WHEN $1::boolean THEN NULLIF($2, '') ELSE NULL END,
+           status = CASE
+             WHEN $1::boolean AND status != 'storniert' THEN 'abgerechnet'
+             WHEN NOT $1::boolean AND status = 'abgerechnet' THEN 'offen'
+             ELSE status
+           END,
+           billed_month = CASE
+             WHEN $1::boolean AND status != 'storniert' THEN date_trunc('month', booking_date)::date
+             WHEN NOT $1::boolean THEN NULL
+             ELSE billed_month
+           END,
+           updated_at = NOW()
+       WHERE id = $3
+         AND expert_id = $4
+         AND student_id = $5
+       RETURNING id, status, paid_at, paid_method`,
+      [paid, paymentMethod, bookingId, expertId, studentId]
+    );
+
+    if (!result.rows[0]) {
+      return { success: false, error: 'Buchung nicht gefunden.' };
+    }
+
+    return { success: true, booking: result.rows[0] };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Zahlungsstatus konnte nicht aktualisiert werden.' };
+  }
+}
+
 export async function getMonthlyOverviewForExpert(expertId: number, month: string) {
   try {
     await ensureExtraSchema();
@@ -10227,11 +11224,18 @@ export async function getInvoiceData(expertId: number, studentId: number, month:
     if (!Number.isInteger(sId) || sId <= 0) return { success: false, error: 'Ungültige Schüler-ID.' };
     if (!month || !/^\d{4}-\d{2}$/.test(month)) return { success: false, error: 'Ungültiges Monatsformat.' };
 
+    try {
+      await createMonthlyAboBookingFromPlan(eId, sId, month);
+    } catch {
+      // Invoice preview must continue even if recurring generation fails.
+    }
+
     const [expertRes, studentRes, bookingsRes] = await Promise.all([
       pool.query(
         `SELECT u.vorname, u.nachname, u.email,
                 u.stall_name, u.stall_strasse,
                 up.plz AS stall_plz, up.ort AS stall_ort,
+                up.profil_data,
                 eis.steuernummer, eis.ust_idnr, eis.kontoname,
                 eis.iban, eis.bic, eis.bankname, eis.tel, eis.logo_url,
                 eis.is_kleinunternehmer, eis.mwst_satz,
@@ -10277,6 +11281,15 @@ export async function getInvoiceData(expertId: number, studentId: number, month:
     if (!studentRes.rows[0]) return { success: false, error: 'Schüler nicht gefunden.' };
 
     const expert = expertRes.rows[0];
+    const rawOffers = Array.isArray((expert?.profil_data as any)?.angeboteAnzeigen)
+      ? (expert.profil_data as any).angeboteAnzeigen
+      : [];
+    const offerById = new Map<string, any>(
+      rawOffers
+        .map((item: any) => [String(item?.id || '').trim(), item] as const)
+        .filter(([id]) => id.length > 0)
+    );
+
     const prefix = ((expert.invoice_prefix as string) || 'RE').trim().toUpperCase();
     const counter = Number(expert.invoice_counter || 1);
     const year = month.slice(0, 4);
@@ -10286,6 +11299,33 @@ export async function getInvoiceData(expertId: number, studentId: number, month:
       unit_price_euro: Number(booking.unit_price_cents || 0) / 100,
       total_euro: Number(booking.total_cents || 0) / 100,
       source_offer_id: booking.source_offer_id || null,
+      offer_conditions_text: (() => {
+        const sourceOfferId = String(booking.source_offer_id || '').trim();
+        if (!sourceOfferId) return null;
+        const offer = offerById.get(sourceOfferId);
+        if (!offer) return null;
+
+        const billingType = String(offer?.billingType || '').trim().toLowerCase() === 'abo' ? 'Abo' : 'Einmalzahlung';
+        const sessionsPerAbo = String(offer?.sessionsPerAbo || '').trim();
+        const cancellationAllowed = Boolean(offer?.singleSessionCancellationAllowed);
+        const maxCancellations = String(offer?.maxCancellationsPerAbo || '').trim();
+        const cancellationWindowHours = String(offer?.cancellationWindowHours || '').trim();
+
+        const parts: string[] = [`Abrechnung: ${billingType}`];
+        if (billingType === 'Abo' && sessionsPerAbo) {
+          parts.push(`Leistungen im Abo: ${sessionsPerAbo}`);
+        }
+        if (billingType === 'Abo') {
+          parts.push(`Ruecktritt einzelner Leistung: ${cancellationAllowed ? 'Ja' : 'Nein'}`);
+          if (cancellationAllowed && maxCancellations) {
+            parts.push(`Max. Ruecktritte: ${maxCancellations}`);
+          }
+          if (cancellationWindowHours) {
+            parts.push(`Ruecktrittsfrist: ${cancellationWindowHours}h`);
+          }
+        }
+        return parts.join(' | ');
+      })(),
     }));
     const subtotalCents = bookings.reduce((sum: number, booking: any) => sum + Number(booking.total_cents || 0), 0);
     const protectionFeeCents = bookings.reduce((sum: number, booking: any) => sum + Number(booking.protection_fee_cents || 0), 0);
@@ -10420,6 +11460,9 @@ export async function saveStudentServicePlan(
     monthly_price_cents: number | null;
     sessions_per_month: number;
     cancellation_hours: number;
+    cancellation_enabled?: boolean;
+    max_cancellations_per_month?: number;
+    require_confirmation_each_booking?: boolean;
   }
 ) {
   try {
@@ -10447,11 +11490,23 @@ export async function saveStudentServicePlan(
         : Math.max(0, Math.round(Number(plan.monthly_price_cents) || 0));
     const safeSessions = Math.max(1, Math.round(Number(plan.sessions_per_month) || 1));
     const safeCancelHours = Math.max(0, Math.round(Number(plan.cancellation_hours) || 0));
+    const safeCancellationEnabled = safePlanType === 'abo' ? plan.cancellation_enabled !== false : false;
+    const requestedMaxCancellationRaw = plan.max_cancellations_per_month;
+    const safeMaxCancellations =
+      safePlanType === 'abo' && safeCancellationEnabled
+        ? Math.min(
+            safeSessions,
+            requestedMaxCancellationRaw === null || requestedMaxCancellationRaw === undefined
+              ? safeSessions
+              : Math.max(0, Math.round(Number(requestedMaxCancellationRaw) || 0))
+          )
+        : 0;
+    const safeRequireBookingConfirmation = plan.require_confirmation_each_booking === true;
 
     await pool.query(
       `INSERT INTO student_service_plans
-        (expert_id, student_id, plan_type, service_title, duration_minutes, unit_price_cents, monthly_price_cents, sessions_per_month, cancellation_hours, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE)
+        (expert_id, student_id, plan_type, service_title, duration_minutes, unit_price_cents, monthly_price_cents, sessions_per_month, cancellation_hours, cancellation_enabled, max_cancellations_per_month, require_confirmation_each_booking, active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, TRUE)
        ON CONFLICT (expert_id, student_id) DO UPDATE SET
          plan_type = EXCLUDED.plan_type,
          service_title = EXCLUDED.service_title,
@@ -10460,6 +11515,9 @@ export async function saveStudentServicePlan(
          monthly_price_cents = EXCLUDED.monthly_price_cents,
          sessions_per_month = EXCLUDED.sessions_per_month,
          cancellation_hours = EXCLUDED.cancellation_hours,
+         cancellation_enabled = EXCLUDED.cancellation_enabled,
+         max_cancellations_per_month = EXCLUDED.max_cancellations_per_month,
+         require_confirmation_each_booking = EXCLUDED.require_confirmation_each_booking,
          active = TRUE,
          updated_at = NOW()`,
       [
@@ -10472,6 +11530,9 @@ export async function saveStudentServicePlan(
         safeMonthlyCents,
         safeSessions,
         safeCancelHours,
+        safeCancellationEnabled,
+        safeMaxCancellations,
+        safeRequireBookingConfirmation,
       ]
     );
 
@@ -10559,6 +11620,104 @@ export async function removeAboCancellation(expertId: number, cancellationId: nu
   }
 }
 
+export async function setAboCancellationCountForMonth(payload: {
+  expertId: number;
+  studentId: number;
+  month: string;
+  count: number;
+}) {
+  const client = await pool.connect();
+  try {
+    await ensureExtraSchema();
+
+    const eId = Number(payload.expertId);
+    const sId = Number(payload.studentId);
+    const safeMonth = String(payload.month || '').trim();
+    const requestedCount = Math.max(0, Math.round(Number(payload.count) || 0));
+
+    if (!Number.isInteger(eId) || eId <= 0) return { success: false, error: 'Ungueltige Experten-ID.' };
+    if (!Number.isInteger(sId) || sId <= 0) return { success: false, error: 'Ungueltige Schueler-ID.' };
+    if (!safeMonth || !/^\d{4}-\d{2}$/.test(safeMonth)) return { success: false, error: 'Ungueltiges Monatsformat.' };
+
+    const planRes = await client.query(
+      `SELECT plan_type, sessions_per_month, cancellation_enabled, max_cancellations_per_month
+       FROM student_service_plans
+       WHERE expert_id = $1 AND student_id = $2 AND active = TRUE
+       LIMIT 1`,
+      [eId, sId]
+    );
+
+    const plan = planRes.rows[0];
+    if (!plan || String(plan.plan_type) !== 'abo') {
+      return { success: false, error: 'Kein aktiver Abo-Plan gefunden.' };
+    }
+    if (plan.cancellation_enabled === false) {
+      return { success: false, error: 'Ruecktritte sind fuer diesen Plan deaktiviert.' };
+    }
+
+    const sessionsPerMonth = Math.max(1, Number(plan.sessions_per_month) || 1);
+    const configuredLimit = Math.max(0, Number(plan.max_cancellations_per_month) || 0);
+    const effectiveLimit = configuredLimit > 0 ? configuredLimit : sessionsPerMonth;
+    const maxAllowed = Math.min(sessionsPerMonth, effectiveLimit);
+    const targetCount = Math.min(requestedCount, maxAllowed);
+
+    await client.query('BEGIN');
+
+    const existingRes = await client.query(
+      `SELECT id, cancelled_date
+       FROM student_abo_cancellations
+       WHERE expert_id = $1
+         AND student_id = $2
+         AND cancelled_month = $3
+         AND is_within_window = TRUE
+       ORDER BY cancelled_date ASC, id ASC`,
+      [eId, sId, safeMonth]
+    );
+
+    const existing = existingRes.rows || [];
+    if (existing.length > targetCount) {
+      const idsToDelete = existing.slice(targetCount).map((row: any) => Number(row.id)).filter((id: number) => Number.isInteger(id) && id > 0);
+      if (idsToDelete.length > 0) {
+        await client.query(
+          `DELETE FROM student_abo_cancellations
+           WHERE expert_id = $1
+             AND student_id = $2
+             AND id = ANY($3::int[])`,
+          [eId, sId, idsToDelete]
+        );
+      }
+    } else if (existing.length < targetCount) {
+      const [yearRaw, monthRaw] = safeMonth.split('-').map((part) => Number(part));
+      const year = Number.isFinite(yearRaw) ? yearRaw : new Date().getFullYear();
+      const monthNumber = Number.isFinite(monthRaw) ? monthRaw : 1;
+      const daysInMonth = new Date(year, monthNumber, 0).getDate();
+
+      for (let idx = existing.length; idx < targetCount; idx += 1) {
+        const day = Math.min(daysInMonth, idx + 1);
+        const cancelledDate = `${safeMonth}-${String(day).padStart(2, '0')}`;
+        await client.query(
+          `INSERT INTO student_abo_cancellations
+            (expert_id, student_id, cancelled_month, cancelled_date, reason, is_within_window)
+           VALUES ($1, $2, $3, $4::date, $5, TRUE)`,
+          [eId, sId, safeMonth, cancelledDate, 'Ruecktritt laut Planvorgabe']
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return { success: true, count: targetCount };
+  } catch (error: any) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // noop
+    }
+    return { success: false, error: error.message || 'Ruecktrittsanzahl konnte nicht gespeichert werden.' };
+  } finally {
+    client.release();
+  }
+}
+
 export async function createMonthlyAboBookingFromPlan(expertId: number, studentId: number, month: string) {
   try {
     await ensureExtraSchema();
@@ -10585,8 +11744,12 @@ export async function createMonthlyAboBookingFromPlan(expertId: number, studentI
       [eId, sId, safeMonth]
     );
 
-    const freeCancellations = Number(cancelRes.rows[0]?.free_count || 0);
+    const rawCancellations = Number(cancelRes.rows[0]?.free_count || 0);
     const sessionsPerMonth = Number(plan.sessions_per_month) || 4;
+    const cancellationsEnabled = plan.cancellation_enabled !== false;
+    const maxCancellationsPerMonth = Math.max(0, Number(plan.max_cancellations_per_month) || 0);
+    const effectiveMaxCancellations = maxCancellationsPerMonth > 0 ? maxCancellationsPerMonth : sessionsPerMonth;
+    const freeCancellations = cancellationsEnabled ? Math.min(rawCancellations, effectiveMaxCancellations, sessionsPerMonth) : 0;
     const billableSessions = Math.max(0, sessionsPerMonth - freeCancellations);
 
     let unitPriceEuro: number;

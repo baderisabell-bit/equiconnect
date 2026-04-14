@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
-import { getInvoiceData, getMyStudents, getUserBookings } from "../../actions";
+import { getInvoiceData, getMyStudents, getOwnSubscriptionInvoicePdf, getOwnSubscriptionInvoices, getUserBookings } from "../../actions";
 
 type BookingItem = {
   id: number;
@@ -37,8 +37,20 @@ type InvoiceBooking = {
   status: string | null;
   notes: string | null;
   source_offer_id?: string | null;
+  offer_conditions_text?: string | null;
   unit_price_euro?: number;
   total_euro?: number;
+};
+
+type SubscriptionInvoiceItem = {
+  id: number;
+  invoice_month: string;
+  invoice_number: string;
+  due_at: string;
+  amount_cents: number;
+  status: string;
+  payment_method: string;
+  plan_label: string;
 };
 
 const currentMonth = () => {
@@ -102,6 +114,8 @@ export default function RechnungenPage() {
   const [invoiceMonthPart, setInvoiceMonthPart] = useState(currentMonthParts().month);
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [userBookings, setUserBookings] = useState<BookingItem[]>([]);
+  const [subscriptionInvoices, setSubscriptionInvoices] = useState<SubscriptionInvoiceItem[]>([]);
+  const [downloadingSubscriptionInvoiceId, setDownloadingSubscriptionInvoiceId] = useState<number | null>(null);
   const [activeCategory, setActiveCategory] = useState<"all" | "equi" | "other">("all");
 
   const invoiceYearOptions = useMemo(() => {
@@ -142,6 +156,13 @@ export default function RechnungenPage() {
       if (!userId) return;
       setLoading(true);
       setMessage("");
+
+      const subInvoicesRes = await getOwnSubscriptionInvoices(userId, 36);
+      if (subInvoicesRes.success) {
+        setSubscriptionInvoices(((subInvoicesRes as any).items || []) as SubscriptionInvoiceItem[]);
+      } else {
+        setSubscriptionInvoices([]);
+      }
 
       if (role === "experte") {
         const studentsRes = await getMyStudents(userId);
@@ -221,6 +242,7 @@ export default function RechnungenPage() {
     const bookings = ((invoiceData?.bookings || []) as InvoiceBooking[]).map((booking) => ({
       ...booking,
       source_offer_id: booking.source_offer_id || null,
+      offer_conditions_text: booking.offer_conditions_text || null,
       unit_price_euro: Number(booking.unit_price_cents || 0) / 100,
       total_euro: Number(booking.total_cents || 0) / 100,
     }));
@@ -254,7 +276,7 @@ export default function RechnungenPage() {
     <article key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">{booking.isEquiConnect ? "Equily Connect" : "Weitere Buchungen"}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">{booking.isEquiConnect ? "Equily" : "Weitere Buchungen"}</p>
           <h3 className="mt-2 text-lg font-black uppercase italic text-slate-900">{formatTitle(booking.booking_type)}</h3>
           <p className="mt-1 text-sm text-slate-600">{booking.provider_name || "–"}</p>
         </div>
@@ -272,11 +294,68 @@ export default function RechnungenPage() {
     </article>
   );
 
+  const renderSubscriptionInvoiceCard = (invoice: SubscriptionInvoiceItem) => (
+    <article key={`sub-invoice-${invoice.id}`} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Abo-Rechnung</p>
+          <h3 className="mt-2 text-lg font-black uppercase italic text-slate-900">{invoice.plan_label || "Abonnement"}</h3>
+          <p className="mt-1 text-sm text-slate-600">{invoice.invoice_number || invoice.invoice_month}</p>
+        </div>
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <button
+            type="button"
+            onClick={async () => {
+              if (!userId) return;
+              setDownloadingSubscriptionInvoiceId(invoice.id);
+              const res = await getOwnSubscriptionInvoicePdf({ userId, invoiceId: invoice.id });
+              setDownloadingSubscriptionInvoiceId(null);
+              if (!res.success || !(res as any).base64) {
+                setMessage((res as any).error || "PDF konnte nicht geladen werden.");
+                return;
+              }
+              const byteChars = atob(String((res as any).base64));
+              const bytes = new Uint8Array(byteChars.length);
+              for (let i = 0; i < byteChars.length; i += 1) bytes[i] = byteChars.charCodeAt(i);
+              const blob = new Blob([bytes], { type: String((res as any).mimeType || "application/pdf") });
+              const url = URL.createObjectURL(blob);
+              const anchor = document.createElement("a");
+              anchor.href = url;
+              anchor.download = String((res as any).fileName || `abo-rechnung-${invoice.id}.pdf`);
+              document.body.appendChild(anchor);
+              anchor.click();
+              document.body.removeChild(anchor);
+              URL.revokeObjectURL(url);
+            }}
+            disabled={downloadingSubscriptionInvoiceId === invoice.id}
+            className="rounded-xl bg-emerald-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-60"
+          >
+            {downloadingSubscriptionInvoiceId === invoice.id ? "Lade PDF..." : "PDF herunterladen"}
+          </button>
+          <button type="button" onClick={printCurrentView} className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white">
+            Drucken
+          </button>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
+        <p>Monat: <span className="font-black text-slate-900">{invoice.invoice_month}</span></p>
+        <p>Betrag: <span className="font-black text-slate-900">{formatMoney(invoice.amount_cents)}</span></p>
+        <p>Fällig am: <span className="font-black text-slate-900">{formatDate(invoice.due_at)}</span></p>
+        <p>Status: <span className="font-black text-slate-900">{formatTitle(invoice.status)}</span></p>
+      </div>
+      <p className="mt-3 text-sm text-slate-700 font-bold">
+        {String(invoice.status || "").toLowerCase() === "bezahlt"
+          ? "Diese Rechnung wurde schon beglichen."
+          : "Diese Rechnung ist noch zu begleichen."}
+      </p>
+    </article>
+  );
+
   const renderInvoiceBookingCard = (booking: InvoiceBooking) => (
     <article key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">{booking.source_offer_id ? "Equi Connect" : "Weitere Buchungen"}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">{booking.source_offer_id ? "Equily" : "Weitere Buchungen"}</p>
           <h3 className="mt-2 text-lg font-black uppercase italic text-slate-900">{formatTitle(booking.service_title)}</h3>
           <p className="mt-1 text-sm text-slate-600">{formatDate(booking.booking_date)}</p>
         </div>
@@ -290,6 +369,7 @@ export default function RechnungenPage() {
         <p>Einzelpreis: <span className="font-black text-slate-900">{formatMoney(booking.unit_price_cents)}</span></p>
         <p>Gesamt: <span className="font-black text-slate-900">{formatMoney(booking.total_cents)}</span></p>
       </div>
+      {booking.offer_conditions_text && <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-pre-line">{booking.offer_conditions_text}</p>}
       {booking.notes && <p className="mt-4 text-sm text-slate-500 whitespace-pre-line">{booking.notes}</p>}
     </article>
   );
@@ -305,12 +385,25 @@ export default function RechnungenPage() {
     return (
       <section className="space-y-6">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Abo-Abrechnung</p>
+          <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Deine Abo-Rechnungen</h2>
+          <p className="mt-2 text-sm text-slate-600">Automatisch erzeugte Monatsrechnungen aus deinem aktiven Abo.</p>
+          {subscriptionInvoices.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">Noch keine Abo-Rechnungen vorhanden.</p>
+          ) : (
+            <div className="mt-4 grid gap-4">
+              {subscriptionInvoices.slice(0, 12).map((invoice) => renderSubscriptionInvoiceCard(invoice))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Deine Buchungen</p>
           <h1 className="mt-2 text-3xl font-black italic uppercase tracking-tight text-slate-900">Rechnungen & Buchungen</h1>
           <p className="mt-2 text-sm text-slate-600">Hier findest du deine Equi-Connect-Buchungen und weitere Buchungen getrennt nach Kategorie. Über den Druck-Button kannst du die aktuelle Ansicht als PDF speichern.</p>
           <div className="mt-5 flex flex-wrap gap-3">
             {categoryButton("all", "Alle", groups.equiConnect.length + groups.other.length)}
-            {categoryButton("equi", "Equily Connect", groups.equiConnect.length)}
+            {categoryButton("equi", "Equily", groups.equiConnect.length)}
             {categoryButton("other", "Weitere Buchungen", groups.other.length)}
           </div>
         </div>
@@ -337,6 +430,19 @@ export default function RechnungenPage() {
 
     return (
       <section className="space-y-6">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Eigene Abo-Abrechnung</p>
+          <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Rechnungen</h2>
+          <p className="mt-2 text-sm text-slate-600">Auch dein eigenes Plattform-Abo wird hier automatisch aufgeführt.</p>
+          {subscriptionInvoices.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-500">Noch keine Abo-Rechnungen vorhanden.</p>
+          ) : (
+            <div className="mt-4 grid gap-4">
+              {subscriptionInvoices.slice(0, 8).map((invoice) => renderSubscriptionInvoiceCard(invoice))}
+            </div>
+          )}
+        </div>
+
         <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Experten-Rechnungen</p>
           <h1 className="mt-2 text-3xl font-black italic uppercase tracking-tight text-slate-900">Rechnungen für Kunden</h1>
@@ -383,7 +489,7 @@ export default function RechnungenPage() {
 
             <div className="flex flex-wrap gap-3">
               {categoryButton("all", "Alle Positionen", groups.equiConnect.length + groups.other.length)}
-              {categoryButton("equi", "Equily Connect", groups.equiConnect.length)}
+              {categoryButton("equi", "Equily", groups.equiConnect.length)}
               {categoryButton("other", "Weitere Buchungen", groups.other.length)}
             </div>
 

@@ -3,8 +3,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  adminGetSubscriptionInvoicePdf,
+  adminUpdateSubscriptionInvoiceStatus,
   adminGetSubscriptionPriceHistory,
   adminSearchSubscriptionUsers,
+  adminGenerateSubscriptionInvoices,
+  adminGetSubscriptionInvoices,
   adminGetNewsletterRecipients,
   adminGetNewsletterSegmentsOverview,
   adminUpdateUserSubscriptionCustomPrice,
@@ -84,6 +88,20 @@ type SubscriptionPriceHistoryEntry = {
   display_name: string;
 };
 
+type SubscriptionInvoiceAdminRow = {
+  id: number;
+  user_id: number;
+  invoice_month: string;
+  invoice_number: string;
+  due_at: string;
+  amount_cents: number;
+  status: string;
+  payment_method: string;
+  plan_label: string;
+  email: string;
+  display_name: string;
+};
+
 export default function AdminAboPage() {
   const [adminCode, setAdminCode] = useState("");
   const [authorized, setAuthorized] = useState(false);
@@ -114,6 +132,12 @@ export default function AdminAboPage() {
   const [finalizeBusyUserId, setFinalizeBusyUserId] = useState<number | null>(null);
   const [historyEntries, setHistoryEntries] = useState<SubscriptionPriceHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [subscriptionInvoices, setSubscriptionInvoices] = useState<SubscriptionInvoiceAdminRow[]>([]);
+  const [subscriptionInvoiceSearch, setSubscriptionInvoiceSearch] = useState("");
+  const [subscriptionInvoiceMessage, setSubscriptionInvoiceMessage] = useState("");
+  const [subscriptionInvoiceLoading, setSubscriptionInvoiceLoading] = useState(false);
+  const [subscriptionInvoiceGenBusy, setSubscriptionInvoiceGenBusy] = useState(false);
+  const [subscriptionInvoiceActionBusyId, setSubscriptionInvoiceActionBusyId] = useState<number | null>(null);
 
   const loadSegments = async (code: string) => {
     setLoading(true);
@@ -194,6 +218,25 @@ export default function AdminAboPage() {
     setHistoryLoading(false);
   };
 
+  const loadSubscriptionInvoices = async (code: string, searchValue?: string) => {
+    setSubscriptionInvoiceLoading(true);
+    const res = await adminGetSubscriptionInvoices({
+      adminCode: code,
+      search: searchValue ?? subscriptionInvoiceSearch,
+      limit: 120,
+    });
+
+    if (!res.success) {
+      setSubscriptionInvoices([]);
+      setSubscriptionInvoiceMessage((res as any).error || "Abo-Rechnungen konnten nicht geladen werden.");
+      setSubscriptionInvoiceLoading(false);
+      return;
+    }
+
+    setSubscriptionInvoices(Array.isArray((res as any).items) ? ((res as any).items as SubscriptionInvoiceAdminRow[]) : []);
+    setSubscriptionInvoiceLoading(false);
+  };
+
   useEffect(() => {
     const storedCode = sessionStorage.getItem("adminPanelCode") || "";
     if (!storedCode) return;
@@ -210,7 +253,72 @@ export default function AdminAboPage() {
     if (!authorized) return;
     loadSubscriptionUsers(adminCode);
     loadPriceHistory(adminCode);
+    loadSubscriptionInvoices(adminCode);
   }, [authorized]);
+
+  const generateSubscriptionInvoices = async () => {
+    const proceed = window.confirm("Abo-Rechnungen jetzt für alle aktiven Abonnenten automatisch erzeugen?");
+    if (!proceed) return;
+
+    setSubscriptionInvoiceGenBusy(true);
+    const res = await adminGenerateSubscriptionInvoices({
+      adminCode,
+      limitUsers: 2000,
+    });
+    setSubscriptionInvoiceGenBusy(false);
+
+    if (!res.success) {
+      setSubscriptionInvoiceMessage((res as any).error || "Abo-Rechnungserstellung fehlgeschlagen.");
+      return;
+    }
+
+    const processedUsers = Number((res as any).processedUsers || 0);
+    const createdInvoices = Number((res as any).createdInvoices || 0);
+    setSubscriptionInvoiceMessage(`Automatiklauf abgeschlossen: ${createdInvoices} neue Abo-Rechnungen bei ${processedUsers} Abonnenten.`);
+    await loadSubscriptionInvoices(adminCode);
+  };
+
+  const downloadSubscriptionInvoicePdf = async (invoiceId: number) => {
+    setSubscriptionInvoiceActionBusyId(invoiceId);
+    const res = await adminGetSubscriptionInvoicePdf({ adminCode, invoiceId });
+    setSubscriptionInvoiceActionBusyId(null);
+    if (!res.success || !(res as any).base64) {
+      setSubscriptionInvoiceMessage((res as any).error || 'PDF konnte nicht geladen werden.');
+      return;
+    }
+
+    const byteChars = atob(String((res as any).base64));
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i += 1) bytes[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([bytes], { type: String((res as any).mimeType || 'application/pdf') });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = String((res as any).fileName || `abo-rechnung-${invoiceId}.pdf`);
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
+
+  const setSubscriptionInvoiceStatus = async (invoiceId: number, status: 'offen' | 'bezahlt') => {
+    setSubscriptionInvoiceActionBusyId(invoiceId);
+    const res = await adminUpdateSubscriptionInvoiceStatus({
+      adminCode,
+      invoiceId,
+      status,
+      note: `Status per Admin gesetzt: ${status}`,
+    });
+    setSubscriptionInvoiceActionBusyId(null);
+
+    if (!res.success) {
+      setSubscriptionInvoiceMessage((res as any).error || 'Status konnte nicht gespeichert werden.');
+      return;
+    }
+
+    setSubscriptionInvoiceMessage(`Rechnungsstatus auf ${status} gesetzt.`);
+    await loadSubscriptionInvoices(adminCode);
+  };
 
   const authorize = async () => {
     setAuthError("");
@@ -1021,6 +1129,110 @@ export default function AdminAboPage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-700">Abo-Rechnungsautomatik</h3>
+                <p className="text-xs text-slate-500">Erzeugt Rechnungen automatisch für alle aktiven Abonnenten und macht sie in Profilen abrufbar.</p>
+              </div>
+              <button
+                type="button"
+                onClick={generateSubscriptionInvoices}
+                disabled={subscriptionInvoiceGenBusy}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+              >
+                {subscriptionInvoiceGenBusy ? "Erzeuge..." : "Abo-Rechnungen erzeugen"}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                value={subscriptionInvoiceSearch}
+                onChange={(e) => setSubscriptionInvoiceSearch(e.target.value)}
+                placeholder="Suche nach Nutzer, E-Mail, Rechnung oder Monat"
+                className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm min-w-[240px]"
+              />
+              <button
+                type="button"
+                onClick={() => loadSubscriptionInvoices(adminCode)}
+                className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest"
+              >
+                Liste aktualisieren
+              </button>
+            </div>
+
+            {subscriptionInvoiceMessage ? <p className="text-sm font-bold text-slate-700">{subscriptionInvoiceMessage}</p> : null}
+            {subscriptionInvoiceLoading ? <p className="text-sm text-slate-500">Lade Abo-Rechnungen...</p> : null}
+
+            <div className="overflow-auto border border-slate-200 rounded-xl bg-white">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Nutzer</th>
+                    <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Rechnung</th>
+                    <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Plan / Monat</th>
+                    <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Fällig</th>
+                    <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Betrag</th>
+                    <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Status</th>
+                    <th className="text-left p-3 text-[10px] font-black uppercase tracking-widest text-slate-500">Aktion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptionInvoices.map((item) => (
+                    <tr key={`sub-invoice-${item.id}`} className="border-t border-slate-100">
+                      <td className="p-3 text-slate-700">
+                        <p className="font-bold">{item.display_name || `User #${item.user_id}`}</p>
+                        <p className="text-xs text-slate-500">{item.email}</p>
+                      </td>
+                      <td className="p-3 text-slate-700">{item.invoice_number}</td>
+                      <td className="p-3 text-slate-700">{item.plan_label} · {item.invoice_month}</td>
+                      <td className="p-3 text-slate-600">{formatDateTime(item.due_at)}</td>
+                      <td className="p-3 text-slate-700">{(Number(item.amount_cents || 0) / 100).toFixed(2).replace('.', ',')} EUR</td>
+                      <td className="p-3 text-slate-700 uppercase">{item.status}</td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => downloadSubscriptionInvoicePdf(item.id)}
+                            disabled={subscriptionInvoiceActionBusyId === item.id}
+                            className="px-2 py-1 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+                          >
+                            PDF
+                          </button>
+                          {item.status !== 'bezahlt' ? (
+                            <button
+                              type="button"
+                              onClick={() => setSubscriptionInvoiceStatus(item.id, 'bezahlt')}
+                              disabled={subscriptionInvoiceActionBusyId === item.id}
+                              className="px-2 py-1 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+                            >
+                              Als bezahlt
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSubscriptionInvoiceStatus(item.id, 'offen')}
+                              disabled={subscriptionInvoiceActionBusyId === item.id}
+                              className="px-2 py-1 rounded-lg border border-slate-300 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+                            >
+                              Als offen
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {subscriptionInvoices.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-6 text-center text-slate-500">Noch keine Abo-Rechnungen gefunden.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div className="space-y-2">

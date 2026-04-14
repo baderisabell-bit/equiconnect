@@ -23,6 +23,10 @@ import {
   getUserSubscriptionSettings,
   getStudentServicePlan,
   saveStudentServicePlan,
+  getAboCancellations,
+  setAboCancellationCountForMonth,
+  createBookingSwipeConfirmation,
+  updateStudentBookingPayment,
   getExpertCalendarSlotsForExpert,
   releaseExpertCalendarSlot,
   cancelExpertCalendarSlot,
@@ -56,7 +60,11 @@ type Booking = {
   protection_fee_cents?: number | null;
   customer_total_cents?: number | null;
   expert_payout_cents?: number | null;
+  source_offer_id?: string | null;
+  offer_conditions_text?: string | null;
   status: string;
+  paid_at?: string | null;
+  paid_method?: string | null;
   notes: string | null;
 };
 
@@ -114,6 +122,9 @@ type ServicePlan = {
   monthly_price_cents: number | null;
   sessions_per_month: number;
   cancellation_hours: number;
+  cancellation_enabled: boolean;
+  max_cancellations_per_month: number;
+  require_confirmation_each_booking: boolean;
 };
 
 type ExpertCalendarSlot = {
@@ -258,6 +269,8 @@ export default function SchuelerPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [calendarSaving, setCalendarSaving] = useState(false);
   const [showPremiumDetails, setShowPremiumDetails] = useState(false);
+  const [invoiceCancellationCount, setInvoiceCancellationCount] = useState(0);
+  const [bookingPaymentMethod, setBookingPaymentMethod] = useState<Record<number, "bar" | "ueberweisung" | "paypal">>({});
 
   // ═══════════════════════════ Init ═════════════════════════════════════════
   useEffect(() => {
@@ -317,6 +330,26 @@ export default function SchuelerPage() {
     setTimeout(() => setMsg(null), 4000);
   };
 
+  const refreshInvoiceCancellationCount = useCallback(async (
+    expertId: number,
+    studentId: number,
+    monthValue: string,
+    plan: Partial<ServicePlan> | null | undefined
+  ) => {
+    if (!plan || plan.plan_type !== "abo" || plan.cancellation_enabled === false) {
+      setInvoiceCancellationCount(0);
+      return;
+    }
+    const res = await getAboCancellations(expertId, studentId, monthValue);
+    if (!res.success) {
+      setInvoiceCancellationCount(0);
+      return;
+    }
+    const cancellations = Array.isArray((res as any).cancellations) ? (res as any).cancellations : [];
+    const withinWindowCount = cancellations.filter((item: any) => item?.is_within_window !== false).length;
+    setInvoiceCancellationCount(withinWindowCount);
+  }, []);
+
   const reloadStudents = useCallback(async () => {
     if (!userId) return;
     const res = await getMyStudents(userId);
@@ -328,6 +361,11 @@ export default function SchuelerPage() {
       }
     }
   }, [userId, quickInvoiceStudentId]);
+
+  useEffect(() => {
+    if (!userId || !selectedStudent) return;
+    refreshInvoiceCancellationCount(userId, selectedStudent.student_id, invoiceMonth, servicePlan);
+  }, [userId, selectedStudent, invoiceMonth, servicePlan, refreshInvoiceCancellationCount]);
 
   useEffect(() => {
     if (mainTab !== "rechnungseinstellungen" || !userId) return;
@@ -419,9 +457,19 @@ export default function SchuelerPage() {
         "Kundenvorschau laden"
       );
       const nextPlan = (plRes as any).plan || {};
-      setBookings((bkRes as any).bookings || []);
+      const nextBookings = (bkRes as any).bookings || [];
+      setBookings(nextBookings);
       setBilling((blRes as any).billing || null);
       setServicePlan(nextPlan);
+      setBookingPaymentMethod(
+        nextBookings.reduce((acc: Record<number, "bar" | "ueberweisung" | "paypal">, booking: any) => {
+          const method = String(booking?.paid_method || '').toLowerCase();
+          if (method === 'bar' || method === 'ueberweisung' || method === 'paypal') {
+            acc[Number(booking.id)] = method;
+          }
+          return acc;
+        }, {})
+      );
       setCalendarSlots((calRes as any).items || []);
       setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
       setCalendarPlanLabel(String((calRes as any).planLabel || ""));
@@ -431,6 +479,7 @@ export default function SchuelerPage() {
         durationMinutes: prev.durationMinutes || String(nextPlan.duration_minutes || 60),
         unitPriceEuro: prev.unitPriceEuro || (nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : ""),
       }));
+      await refreshInvoiceCancellationCount(userId, s.student_id, invoiceMonth, nextPlan);
     } catch {
       notify("err", "Kundendaten konnten nicht geladen werden.");
     } finally {
@@ -546,9 +595,36 @@ export default function SchuelerPage() {
       monthly_price_cents: servicePlan.monthly_price_cents ?? null,
       sessions_per_month: servicePlan.sessions_per_month || 1,
       cancellation_hours: servicePlan.cancellation_hours || 24,
+      cancellation_enabled: servicePlan.cancellation_enabled !== false,
+      max_cancellations_per_month: servicePlan.max_cancellations_per_month,
+      require_confirmation_each_booking: servicePlan.require_confirmation_each_booking === true,
     });
     if (res.success) notify("ok", "Plan gespeichert.");
     else notify("err", (res as any).error || "Fehler");
+    setSaving(false);
+  };
+
+  const doSaveMonthlyCancellationCount = async () => {
+    if (!userId || !selectedStudent) return;
+    if (servicePlan.plan_type !== "abo") {
+      notify("err", "Ruecktrittsanzahl ist nur bei Abo moeglich.");
+      return;
+    }
+    setSaving(true);
+    const res = await setAboCancellationCountForMonth({
+      expertId: userId,
+      studentId: selectedStudent.student_id,
+      month: invoiceMonth,
+      count: invoiceCancellationCount,
+    });
+    if (!res.success) {
+      notify("err", (res as any).error || "Ruecktrittsanzahl konnte nicht gespeichert werden.");
+      setSaving(false);
+      return;
+    }
+    setInvoiceCancellationCount(Number((res as any).count || 0));
+    await doLoadInvoice();
+    notify("ok", "Ruecktritte gespeichert und Rechnung aktualisiert.");
     setSaving(false);
   };
 
@@ -580,8 +656,52 @@ export default function SchuelerPage() {
     const res = await updateStudentBookingStatus({ expertId: userId, studentId: selectedStudent.student_id, bookingId, status: newStatus });
     if (res.success) {
       const bkRes = await getStudentBookings(userId, selectedStudent.student_id, 50);
-      setBookings((bkRes as any).bookings || []);
+      const nextBookings = (bkRes as any).bookings || [];
+      setBookings(nextBookings);
     } else notify("err", (res as any).error || "Fehler");
+  };
+
+  const doSetBookingPaid = async (bookingId: number, paid: boolean) => {
+    if (!userId || !selectedStudent) return;
+    const method = bookingPaymentMethod[bookingId] || "bar";
+    const res = await updateStudentBookingPayment({
+      expertId: userId,
+      studentId: selectedStudent.student_id,
+      bookingId,
+      paid,
+      paymentMethod: method,
+    });
+    if (!res.success) {
+      notify("err", (res as any).error || "Zahlungsstatus konnte nicht gespeichert werden.");
+      return;
+    }
+    const bkRes = await getStudentBookings(userId, selectedStudent.student_id, 50);
+    const nextBookings = (bkRes as any).bookings || [];
+    setBookings(nextBookings);
+    notify("ok", paid ? "Als bezahlt markiert." : "Zahlung als offen markiert.");
+  };
+
+  const doRequestBookingConfirmation = async (bookingId: number) => {
+    if (!userId || !selectedStudent) return;
+    const res = await createBookingSwipeConfirmation({
+      expertId: userId,
+      studentId: selectedStudent.student_id,
+      bookingId,
+      expiresHours: 72,
+    });
+    if (!res.success) {
+      notify("err", (res as any).error || "Bestaetigungsanfrage konnte nicht erstellt werden.");
+      return;
+    }
+    const url = String((res as any).confirmUrl || "");
+    if (url && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // noop
+      }
+    }
+    notify("ok", "Bestaetigungsanfrage erstellt. Link wurde in die Zwischenablage kopiert.");
   };
 
   const doLoadInvoice = async () => {
@@ -601,6 +721,7 @@ export default function SchuelerPage() {
       setCalendarSlots((calRes as any).items || []);
       setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
       setCalendarPlanLabel(String((calRes as any).planLabel || ""));
+      await refreshInvoiceCancellationCount(userId, selectedStudent.student_id, invoiceMonth, servicePlan);
     } catch {
       notify("err", "Rechnungsdaten konnten nicht geladen werden.");
     } finally {
@@ -706,6 +827,7 @@ export default function SchuelerPage() {
       setInvoiceMonth(quickInvoiceMonth);
       setInvoiceData(res as any);
       setServicePlan(nextPlan);
+      setBookingPaymentMethod({});
       setCalendarSlots((calRes as any).items || []);
       setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
       setCalendarPlanLabel(String((calRes as any).planLabel || ""));
@@ -715,6 +837,7 @@ export default function SchuelerPage() {
         durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
         unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
       }));
+      await refreshInvoiceCancellationCount(userId, quickInvoiceStudentId, quickInvoiceMonth, nextPlan);
     } catch {
       notify("err", "Rechnungsdaten konnten nicht geladen werden.");
     } finally {
@@ -755,6 +878,7 @@ export default function SchuelerPage() {
       const nextPlan = (plRes as any).plan || {};
       setInvoiceData(res as any);
       setServicePlan(nextPlan);
+      setBookingPaymentMethod({});
       setCalendarSlots((calRes as any).items || []);
       setCalendarEnabled(Boolean((calRes as any).calendarEnabled));
       setCalendarPlanLabel(String((calRes as any).planLabel || ""));
@@ -764,6 +888,7 @@ export default function SchuelerPage() {
         durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
         unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
       }));
+      await refreshInvoiceCancellationCount(userId, archiveItem.student_id, archiveItem.invoice_month, nextPlan);
     } catch {
       notify("err", "Rechnungsdaten konnten nicht geladen werden.");
     } finally {
@@ -1136,6 +1261,38 @@ export default function SchuelerPage() {
                                 <option value="storniert">Storniert</option>
                               </select>
                             </div>
+                            <div className="mt-3 flex flex-wrap gap-2 items-center">
+                              <select
+                                value={bookingPaymentMethod[b.id] || (b.paid_method as "bar" | "ueberweisung" | "paypal" | undefined) || "bar"}
+                                onChange={(e) => setBookingPaymentMethod((prev) => ({ ...prev, [b.id]: e.target.value as "bar" | "ueberweisung" | "paypal" }))}
+                                className="text-[10px] font-black uppercase rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 outline-none cursor-pointer"
+                              >
+                                <option value="bar">Bar</option>
+                                <option value="ueberweisung">Ueberweisung</option>
+                                <option value="paypal">PayPal</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => doSetBookingPaid(b.id, !(b.paid_at || b.status === 'abgerechnet'))}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase tracking-widest bg-white hover:bg-slate-50"
+                              >
+                                {b.paid_at || b.status === 'abgerechnet' ? "Als offen markieren" : "Als bezahlt markieren"}
+                              </button>
+                              {!selectedStudent?.is_manual_customer && servicePlan.require_confirmation_each_booking === true && (
+                                <button
+                                  type="button"
+                                  onClick={() => doRequestBookingConfirmation(b.id)}
+                                  className="px-3 py-1.5 rounded-lg border border-emerald-200 text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                >
+                                  Bestaetigung anfragen
+                                </button>
+                              )}
+                              {b.paid_at && (
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+                                  Bezahlt am {formatDate(b.paid_at)} {b.paid_method ? `(${b.paid_method})` : ""}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1230,8 +1387,44 @@ export default function SchuelerPage() {
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Stornofrist (Stunden)</label>
                           <input type="number" min="0" placeholder="24" value={servicePlan.cancellation_hours || ""} onChange={(e) => setServicePlan(p => ({ ...p, cancellation_hours: parseInt(e.target.value, 10) || 0 }))} className={inputCls} />
                         </div>
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Ruecktritt moeglich?</label>
+                          <select
+                            value={servicePlan.cancellation_enabled === false ? "nein" : "ja"}
+                            onChange={(e) => setServicePlan((p) => ({ ...p, cancellation_enabled: e.target.value === "ja" }))}
+                            className={inputCls}
+                          >
+                            <option value="ja">Ja</option>
+                            <option value="nein">Nein</option>
+                          </select>
+                        </div>
+                        {servicePlan.cancellation_enabled !== false && (
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Freie Ruecktritte / Monat</label>
+                            <select
+                              value={servicePlan.max_cancellations_per_month ?? Number(servicePlan.sessions_per_month || 0)}
+                              onChange={(e) => setServicePlan((p) => ({ ...p, max_cancellations_per_month: parseInt(e.target.value, 10) || 0 }))}
+                              className={inputCls}
+                            >
+                              {Array.from({ length: Math.max(0, Number(servicePlan.sessions_per_month || 0)) + 1 }, (_, i) => i).map((value) => (
+                                <option key={`max-cancel-${value}`} value={value}>{value}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </>
                     )}
+                    <div>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Bestaetigung bei jeder Leistung</label>
+                      <select
+                        value={servicePlan.require_confirmation_each_booking === true ? "ja" : "nein"}
+                        onChange={(e) => setServicePlan((p) => ({ ...p, require_confirmation_each_booking: e.target.value === "ja" }))}
+                        className={inputCls}
+                      >
+                        <option value="nein">Nein</option>
+                        <option value="ja">Ja, Kunde bestaetigt mobil</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 font-medium">
                     <p className="font-black uppercase text-[10px] tracking-widest text-slate-400 mb-1">Preisübersicht</p>
@@ -1254,6 +1447,31 @@ export default function SchuelerPage() {
                       </div>
                       <button type="button" onClick={doLoadInvoice} className={btnPrimary}>Vorschau laden</button>
                     </div>
+                    {servicePlan.plan_type === "abo" && servicePlan.cancellation_enabled !== false && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Ruecktritte im Monat</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Waehle, wie viele Leistungen in {invoiceMonth} kostenfrei zurueckgetreten wurden. Die Rechnung wird danach neu berechnet.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-3 items-end">
+                          <div>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1.5">Anzahl Ruecktritte</label>
+                            <select
+                              value={invoiceCancellationCount}
+                              onChange={(e) => setInvoiceCancellationCount(parseInt(e.target.value, 10) || 0)}
+                              className={inputCls}
+                            >
+                              {Array.from({ length: Math.max(0, Number((servicePlan.max_cancellations_per_month || 0) > 0 ? servicePlan.max_cancellations_per_month : servicePlan.sessions_per_month || 0)) + 1 }, (_, i) => i).map((value) => (
+                                <option key={`invoice-cancel-${value}`} value={value}>{value}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <button type="button" onClick={doSaveMonthlyCancellationCount} disabled={saving} className={btnSecondary}>
+                            Ruecktritte uebernehmen
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </section>
 
                   <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-5">
@@ -1384,6 +1602,9 @@ export default function SchuelerPage() {
                               <div>
                                 <p className="font-bold text-slate-800">{b.service_title}</p>
                                 <p className="text-[10px] text-slate-400">{formatDate(b.booking_date)}{b.duration_minutes ? ` · ${b.duration_minutes} Min.` : ""}</p>
+                                {b.offer_conditions_text && (
+                                  <p className="text-[10px] text-slate-500 mt-1 whitespace-pre-wrap">{b.offer_conditions_text}</p>
+                                )}
                               </div>
                               <p className="text-right font-bold text-slate-600">{b.quantity ?? 1}</p>
                               <p className="text-right font-bold text-slate-600">{b.unit_price_euro != null ? `${Number(b.unit_price_euro).toFixed(2).replace(".", ",")} €` : "–"}</p>
@@ -1457,6 +1678,25 @@ export default function SchuelerPage() {
                           </div>
                         </footer>
                       </article>
+
+                      {!selectedStudent?.is_manual_customer && servicePlan.require_confirmation_each_booking === true && Array.isArray(invoiceData.bookings) && invoiceData.bookings.length > 0 && (
+                        <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 print:hidden">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Rechtsschutz: mobile Bestaetigung</p>
+                          <p className="mt-1 text-xs text-emerald-800">Fordere je Leistung eine Handy-Bestaetigung an. Der Link wird nach Erstellung in die Zwischenablage kopiert.</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {(invoiceData.bookings as Booking[]).map((b) => (
+                              <button
+                                key={`invoice-confirm-${b.id}`}
+                                type="button"
+                                onClick={() => doRequestBookingConfirmation(b.id)}
+                                className="px-3 py-1.5 rounded-lg border border-emerald-200 text-[10px] font-black uppercase tracking-widest bg-white text-emerald-700 hover:bg-emerald-100"
+                              >
+                                Bestaetigung anfragen: {b.service_title || `Leistung #${b.id}`}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="mt-8 flex gap-3 print:hidden">
                         <button type="button" onClick={doPrintInvoice} className={btnPrimary}>Drucken / als PDF</button>

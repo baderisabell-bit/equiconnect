@@ -443,6 +443,7 @@ export default function PublicProfilePage() {
       kategorie: string;
       beschreibung: string;
       preview: string;
+      conditionsText: string;
       visibility: 'public' | 'draft';
       viewsCount: number;
       wishlistCount: number;
@@ -466,6 +467,27 @@ export default function PublicProfilePage() {
         const previewIndex = Number.isInteger(item?.previewPreisIndex) ? Number(item.previewPreisIndex) : 0;
         const preview = preise[Math.max(0, Math.min(previewIndex, Math.max(preise.length - 1, 0)))];
         const previewText = preview ? `${preview.label || 'Preis'}: ${preview.preis || '-'} ${preview.einheit || ''}`.trim() : '';
+        const billingType = String(item?.billingType || '').trim().toLowerCase() === 'abo' ? 'abo' : 'einmal';
+        const sessionsPerAbo = String(item?.sessionsPerAbo || '').trim();
+        const cancellationAllowed = Boolean(item?.singleSessionCancellationAllowed);
+        const maxCancellations = String(item?.maxCancellationsPerAbo || '').trim();
+        const cancellationWindowHours = String(item?.cancellationWindowHours || '').trim();
+
+        const conditionsParts: string[] = [
+          billingType === 'abo' ? 'Abrechnung: Abo' : 'Abrechnung: Einmalzahlung',
+        ];
+        if (billingType === 'abo' && sessionsPerAbo) {
+          conditionsParts.push(`Leistungen im Abo: ${sessionsPerAbo}`);
+        }
+        if (billingType === 'abo') {
+          conditionsParts.push(`Ruecktritt einzelner Leistung: ${cancellationAllowed ? 'Ja' : 'Nein'}`);
+          if (cancellationAllowed && maxCancellations) {
+            conditionsParts.push(`Max. Ruecktritte: ${maxCancellations}`);
+          }
+          if (cancellationWindowHours) {
+            conditionsParts.push(`Ruecktrittsfrist: ${cancellationWindowHours}h`);
+          }
+        }
 
         return {
           id: String(item?.id || `angebot-${idx}`),
@@ -473,6 +495,7 @@ export default function PublicProfilePage() {
           kategorie: String(item?.kategorie || '').trim(),
           beschreibung: String(item?.beschreibung || '').trim(),
           preview: previewText,
+          conditionsText: conditionsParts.join(' · '),
           visibility: item?.visibility === 'draft' ? 'draft' : 'public',
           viewsCount: Math.max(0, Number(item?.viewsCount || 0)),
           wishlistCount: Math.max(0, Number(item?.wishlistCount || 0)),
@@ -480,7 +503,7 @@ export default function PublicProfilePage() {
           boostedUntil: item?.boostedUntil ? String(item.boostedUntil) : null
         };
       })
-      .filter((item: { id: string; titel: string; kategorie: string; beschreibung: string; preview: string }) => item.titel || item.kategorie || item.beschreibung || item.preview);
+      .filter((item: { id: string; titel: string; kategorie: string; beschreibung: string; preview: string; conditionsText: string }) => item.titel || item.kategorie || item.beschreibung || item.preview || item.conditionsText);
   }, [profile]);
 
   const searchCards = useMemo(() => {
@@ -2774,6 +2797,7 @@ export default function PublicProfilePage() {
                         {has(angebot.titel) && <h3 className="text-base font-black uppercase italic text-slate-900">{angebot.titel}</h3>}
                         {has(angebot.beschreibung) && <p className="text-sm text-slate-600 whitespace-pre-wrap">{angebot.beschreibung}</p>}
                         {has(angebot.preview) && <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{angebot.preview}</p>}
+                        {has(angebot.conditionsText) && <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{angebot.conditionsText}</p>}
                         <div className="flex items-center gap-4 pt-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
                           <span className="inline-flex items-center gap-1"><Eye size={13} /> {angebot.viewsCount}</span>
                           <span className="inline-flex items-center gap-1"><Heart size={13} /> {angebot.wishlistCount}</span>

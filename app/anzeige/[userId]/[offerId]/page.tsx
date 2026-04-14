@@ -36,6 +36,14 @@ type OfferDetails = {
     mediaItems: Array<{ url: string; mediaType: 'image' | 'video' }>;
     visibility: "public" | "draft";
     prices: OfferPrice[];
+    conditions?: {
+      billingType: 'einmal' | 'abo';
+      sessionsPerAbo: number | null;
+      singleSessionCancellationAllowed: boolean;
+      maxCancellationsPerAbo: number;
+      cancellationWindowHours: number;
+      billingNotes: string;
+    };
   };
   ratings: OfferRating[];
   ratingAvg: number;
@@ -210,6 +218,41 @@ export default function OfferDetailPage() {
               </div>
             </div>
           )}
+
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Konditionen &amp; Rechnung</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+              <p className="text-sm text-slate-700">
+                Abrechnungsmodell: <span className="font-black text-slate-900">{details.offer.conditions?.billingType === 'abo' ? 'Abo' : 'Einmalzahlung'}</span>
+              </p>
+              {details.offer.conditions?.billingType === 'abo' && (
+                <>
+                  <p className="text-sm text-slate-700">
+                    Leistungen pro Abo: <span className="font-black text-slate-900">{details.offer.conditions?.sessionsPerAbo || '-'}</span>
+                  </p>
+                  <p className="text-sm text-slate-700">
+                    Rücktritt von einzelner Leistung: <span className="font-black text-slate-900">{details.offer.conditions?.singleSessionCancellationAllowed ? 'Ja' : 'Nein'}</span>
+                  </p>
+                  {details.offer.conditions?.singleSessionCancellationAllowed && (
+                    <p className="text-sm text-slate-700">
+                      Max. Rücktritte im Abo: <span className="font-black text-slate-900">{details.offer.conditions?.maxCancellationsPerAbo}</span>
+                    </p>
+                  )}
+                  {Number(details.offer.conditions?.cancellationWindowHours || 0) > 0 && (
+                    <p className="text-sm text-slate-700">
+                      Rücktrittsfrist: <span className="font-black text-slate-900">{details.offer.conditions?.cancellationWindowHours} Stunden</span>
+                    </p>
+                  )}
+                </>
+              )}
+              {details.offer.conditions?.billingNotes && (
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{details.offer.conditions.billingNotes}</p>
+              )}
+              <p className="text-xs text-slate-500">
+                Diese Konditionen sind die Grundlage für die Abrechnung/Rechnung dieser Leistung.
+              </p>
+            </div>
+          </div>
         </section>
 
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4">

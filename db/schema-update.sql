@@ -112,11 +112,19 @@ CREATE TABLE IF NOT EXISTS expert_student_bookings (
   customer_plan_key TEXT,
   currency TEXT NOT NULL DEFAULT 'EUR',
   status TEXT NOT NULL DEFAULT 'offen',
+  paid_at TIMESTAMP,
+  paid_method TEXT,
   notes TEXT,
   billed_month DATE,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE expert_student_bookings
+  ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP;
+
+ALTER TABLE expert_student_bookings
+  ADD COLUMN IF NOT EXISTS paid_method TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_expert_student_bookings_expert_date
   ON expert_student_bookings(expert_id, booking_date DESC);
@@ -167,6 +175,32 @@ CREATE TABLE IF NOT EXISTS expert_invoice_settings (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS student_service_plans (
+  id SERIAL PRIMARY KEY,
+  expert_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_type TEXT NOT NULL DEFAULT 'einzelstunde',
+  service_title TEXT NOT NULL DEFAULT 'Reitstunde',
+  duration_minutes INTEGER NOT NULL DEFAULT 60,
+  unit_price_cents INTEGER NOT NULL DEFAULT 0,
+  monthly_price_cents INTEGER,
+  sessions_per_month INTEGER NOT NULL DEFAULT 4,
+  cancellation_hours INTEGER NOT NULL DEFAULT 24,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (expert_id, student_id)
+);
+
+ALTER TABLE student_service_plans
+  ADD COLUMN IF NOT EXISTS cancellation_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE student_service_plans
+  ADD COLUMN IF NOT EXISTS max_cancellations_per_month INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE student_service_plans
+  ADD COLUMN IF NOT EXISTS require_confirmation_each_booking BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- Plattform-Abomodell (Nutzer/Experte)
 CREATE TABLE IF NOT EXISTS user_subscriptions (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -188,6 +222,35 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status
   ON user_subscriptions(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS user_subscription_invoices (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  plan_key TEXT NOT NULL,
+  payment_method TEXT NOT NULL,
+  invoice_month TEXT NOT NULL,
+  invoice_number TEXT NOT NULL,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  due_at TIMESTAMP NOT NULL,
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'EUR',
+  status TEXT NOT NULL DEFAULT 'offen',
+  source TEXT NOT NULL DEFAULT 'subscription-cycle',
+  notes TEXT,
+  emailed_at TIMESTAMP,
+  paid_notified_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (user_id, invoice_month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_subscription_invoices_user_due
+  ON user_subscription_invoices(user_id, due_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_user_subscription_invoices_month
+  ON user_subscription_invoices(invoice_month DESC, due_at DESC);
 
 CREATE TABLE IF NOT EXISTS visibility_promotions (
   id SERIAL PRIMARY KEY,
