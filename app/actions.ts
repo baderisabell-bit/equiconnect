@@ -122,7 +122,9 @@ export async function adminLogout() {
 }
 
 function getPublicAppUrl() {
-  return String(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  const configuredUrl = String(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  if (configuredUrl) return configuredUrl;
+  return process.env.NODE_ENV !== 'production' ? 'http://localhost:3000' : '';
 }
 
 function getGoCardlessApiBase() {
@@ -658,6 +660,31 @@ async function ensureExtraSchema() {
   await pool.query(`
     ALTER TABLE users
     ADD COLUMN IF NOT EXISTS birth_date DATE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS email TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS vorname TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS nachname TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS password TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'nutzer';
   `);
 
   await pool.query(`
@@ -4458,6 +4485,14 @@ export async function requestPasswordReset(email: string) {
       return { success: false, error: 'E-Mail konnte nicht versendet werden.' };
     }
 
+    if (process.env.NODE_ENV !== 'production') {
+      return {
+        success: true,
+        message: 'Wenn ein Konto existiert, wurde ein Link erstellt.',
+        devResetUrl: resetUrl
+      };
+    }
+
     return {
       success: true,
       message: 'Wenn ein Konto existiert, wurde ein Link erstellt.'
@@ -4636,6 +4671,8 @@ export async function registerUser(formData: any) {
 // --- LOGIN ---
 export async function loginUser(credentials: any) { 
   try {
+    await ensureExtraSchema();
+
     const email = String(credentials?.email || '').trim().toLowerCase();
     const password = String(credentials?.password || '');
     if (!email || !password) return { success: false, error: "Bitte Daten eingeben." };
@@ -4646,7 +4683,12 @@ export async function loginUser(credentials: any) {
     if (result.rows.length === 0) return { success: false, error: "Nutzer nicht gefunden" };
 
     const user = result.rows[0];
-    const isMatch = await bcrypt.compare(password, user.password);
+    const storedPassword = String(user.password || '');
+    if (!storedPassword) {
+      return { success: false, error: "Für dieses Konto ist kein Passwort hinterlegt." };
+    }
+
+    const isMatch = await bcrypt.compare(password, storedPassword);
     
     if (isMatch) {
       return { 
