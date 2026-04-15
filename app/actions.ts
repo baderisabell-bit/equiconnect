@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { put } from '@vercel/blob';
 import { cookies } from 'next/headers';
 
 const databaseUrl =
@@ -32,6 +33,57 @@ function resolveDbSslConfig(connectionString: string) {
 }
 
 const localDbPort = Number(process.env.DB_PORT || process.env.PGPORT || 5432);
+
+function sanitizeUploadFileName(name: string) {
+  const safe = String(name || '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]/g, '');
+  return safe || 'upload.bin';
+}
+
+async function persistUploadedFile(params: {
+  file: File;
+  userId: number;
+  folder: string;
+  prefix?: string;
+}) {
+  const file = params.file;
+  const userId = Number(params.userId);
+  const folder = String(params.folder || '').replace(/^\/+|\/+$/g, '');
+  const prefix = String(params.prefix || '').trim();
+
+  if (!folder) throw new Error('Upload-Ordner fehlt.');
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error('Ungueltige Nutzer-ID.');
+
+  const safeName = sanitizeUploadFileName(file.name);
+  const now = Date.now();
+  const fileName = prefix
+    ? `${prefix}-${userId}-${now}-${safeName}`
+    : `${userId}-${now}-${safeName}`;
+
+  const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
+  if (blobToken) {
+    const blob = await put(`${folder}/${fileName}`, file, {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: String(file.type || '').trim() || undefined,
+    });
+    return blob.url;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('BLOB_READ_WRITE_TOKEN fehlt. Upload in Production nicht moeglich.');
+  }
+
+  // Dev fallback: keeps local development workflow unchanged.
+  const bytes = await file.arrayBuffer();
+  const buffer = Buffer.from(bytes);
+  const uploadDir = path.join(process.cwd(), 'public', ...folder.split('/'));
+  await mkdir(uploadDir, { recursive: true });
+  const filePath = path.join(uploadDir, fileName);
+  await writeFile(filePath, buffer);
+  return `/${folder}/${fileName}`;
+}
 
 // Datenbank-Verbindung
 const pool = databaseUrl
@@ -179,10 +231,14 @@ function createMailTransport() {
 
 function resolveBrevoTemplateConfig() {
   const apiKey = String(process.env.BREVO_API_KEY || process.env.BREVO_SMTP_KEY || process.env.BREVO_KEY || '').trim();
-  const userTemplateId = Number(process.env.BREVO_WELCOME_USER_TEMPLATE_ID || process.env.BREVO_WELCOME_TEMPLATE_ID || 0);
-  const expertTemplateId = Number(process.env.BREVO_WELCOME_EXPERT_TEMPLATE_ID || process.env.BREVO_WELCOME_TEMPLATE_ID || 0);
-  const resetTemplateId = Number(process.env.BREVO_PASSWORD_RESET_TEMPLATE_ID || 0);
-  const contactTemplateId = Number(process.env.BREVO_CONTACT_CONFIRMATION_TEMPLATE_ID || 0);
+  const userTemplateId = Number(process.env.BREVO_WELCOME_USER_TEMPLATE_ID || process.env.BREVO_WELCOME_TEMPLATE_ID || 5);
+  const expertTemplateId = Number(process.env.BREVO_WELCOME_EXPERT_TEMPLATE_ID || process.env.BREVO_WELCOME_TEMPLATE_ID || 6);
+  const resetTemplateId = Number(process.env.BREVO_PASSWORD_RESET_TEMPLATE_ID || 9);
+  const contactTemplateId = Number(
+    process.env.BREVO_CONTACT_CONFIRMATION_TEMPLATE_ID ||
+    process.env.BREVO_CONTACT_FORM_TEMPLATE_ID ||
+    10
+  );
 
   return {
     apiKey,
@@ -5178,23 +5234,11 @@ export async function uploadUrkunde(userId: number, formData: FormData) {
     const file = formData.get('file') as File;
     if (!file) return { success: false, error: "Keine Datei gefunden" };
 
-    // 1. Datei in Daten umwandeln
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    // 2. Speicherort festlegen (public/uploads)
-    const uploadDir = path.join(process.cwd(), 'public/uploads');
-    
-    // Ordner erstellen, falls er nicht existiert
-    await mkdir(uploadDir, { recursive: true });
-
-    // Dateiname sicher machen (User-ID + Originalname)
-    const fileName = `${userId}-${file.name.replace(/\s+/g, '_')}`;
-    const filePath = path.join(uploadDir, fileName);
-
-    // 3. Datei schreiben
-    await writeFile(filePath, buffer);
-    const publicUrl = `/uploads/${fileName}`;
+    const publicUrl = await persistUploadedFile({
+      file,
+      userId,
+      folder: 'uploads',
+    });
 
     // 4. Pfad in der Datenbank speichern
     await pool.query(
@@ -7507,20 +7551,15 @@ export async function uploadNetworkMedia(userId: number, formData: FormData) {
     const file = formData.get('file') as File;
     if (!file) return { success: false, error: 'Keine Datei gefunden.' };
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadDir = path.join(process.cwd(), 'public/uploads/network');
-    await mkdir(uploadDir, { recursive: true });
-
-    const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
-    const fileName = `${validUserId}-${Date.now()}-${safeName}`;
-    const filePath = path.join(uploadDir, fileName);
-    await writeFile(filePath, buffer);
+    const publicUrl = await persistUploadedFile({
+      file,
+      userId: validUserId,
+      folder: 'uploads/network',
+    });
 
     const mime = String(file.type || '').toLowerCase();
     const mediaType = mime.startsWith('video/') ? 'video' : 'image';
-    return { success: true, url: `/uploads/network/${fileName}`, mediaType };
+    return { success: true, url: publicUrl, mediaType };
   } catch (error: any) {
     return { success: false, error: error.message || 'Upload fehlgeschlagen.' };
   }
@@ -9659,18 +9698,13 @@ export async function uploadProfileHorseImage(userId: number, role: 'nutzer' | '
       return { success: false, error: 'Datei zu groß (max. 8MB).' };
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'horse-profiles');
-    await mkdir(uploadDir, { recursive: true });
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fileName = `${role}-${userId}-${Date.now()}-${safeName}`;
-    const filePath = path.join(uploadDir, fileName);
-
-    await writeFile(filePath, buffer);
-    return { success: true, url: `/uploads/horse-profiles/${fileName}` };
+    const publicUrl = await persistUploadedFile({
+      file,
+      userId,
+      folder: 'uploads/horse-profiles',
+      prefix: role,
+    });
+    return { success: true, url: publicUrl };
   } catch (error: any) {
     return { success: false, error: error.message || 'Bild konnte nicht hochgeladen werden.' };
   }
@@ -9689,18 +9723,12 @@ export async function uploadProfilbild(userId: number, formData: FormData) {
       return { success: false, error: 'Datei zu groß (max. 5MB).' };
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'profilbilder');
-    await mkdir(uploadDir, { recursive: true });
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fileName = `profilbild-${userId}-${Date.now()}-${safeName}`;
-    const filePath = path.join(uploadDir, fileName);
-
-    await writeFile(filePath, buffer);
-    const publicUrl = `/uploads/profilbilder/${fileName}`;
+    const publicUrl = await persistUploadedFile({
+      file,
+      userId,
+      folder: 'uploads/profilbilder',
+      prefix: 'profilbild',
+    });
 
     // Direkt ins profil_data schreiben
     await pool.query(
@@ -12410,19 +12438,14 @@ export async function uploadGalerieMedia(userId: number, formData: FormData) {
       return { success: false, error: 'Video ist zu gross (max. 80 MB).' };
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadDir = path.join(process.cwd(), 'public/uploads/galerie');
-    await mkdir(uploadDir, { recursive: true });
-
-    const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
-    const fileName = `${validUserId}-${Date.now()}-${safeName}`;
-    const filePath = path.join(uploadDir, fileName);
-    await writeFile(filePath, buffer);
+    const publicUrl = await persistUploadedFile({
+      file,
+      userId: validUserId,
+      folder: 'uploads/galerie',
+    });
 
     const mediaType = isVideo ? 'video' : 'image';
-    return { success: true, url: `/uploads/galerie/${fileName}`, mediaType };
+    return { success: true, url: publicUrl, mediaType };
   } catch (error: any) {
     return { success: false, error: error.message || 'Upload fehlgeschlagen.' };
   }
@@ -13064,18 +13087,14 @@ export async function uploadProfileImage(userId: number, formData: FormData) {
       return { success: false, error: 'Bild ist zu gross (max. 10 MB).' };
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const publicUrl = await persistUploadedFile({
+      file,
+      userId: validUserId,
+      folder: 'uploads/profile',
+      prefix: 'profileimage',
+    });
 
-    const uploadDir = path.join(process.cwd(), 'public/uploads/profile');
-    await mkdir(uploadDir, { recursive: true });
-
-    const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
-    const fileName = `${validUserId}-profileimage-${Date.now()}-${safeName}`;
-    const filePath = path.join(uploadDir, fileName);
-    await writeFile(filePath, buffer);
-
-    return { success: true, url: `/uploads/profile/${fileName}` };
+    return { success: true, url: publicUrl };
   } catch (error: any) {
     return { success: false, error: error.message || 'Upload fehlgeschlagen.' };
   }
@@ -13136,17 +13155,13 @@ export async function uploadOwnAdvertisingMedia(userId: number, formData: FormDa
       return { success: false, error: 'Bild ist zu gross (max. 12 MB).' };
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'ads');
-    await mkdir(uploadDir, { recursive: true });
+    const publicUrl = await persistUploadedFile({
+      file,
+      userId: validUserId,
+      folder: 'uploads/ads',
+    });
 
-    const safeName = file.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
-    const fileName = `${validUserId}-${Date.now()}-${safeName}`;
-    const filePath = path.join(uploadDir, fileName);
-    await writeFile(filePath, buffer);
-
-    return { success: true, url: `/uploads/ads/${fileName}` };
+    return { success: true, url: publicUrl };
   } catch (error: any) {
     return { success: false, error: error.message || 'Werbebild konnte nicht hochgeladen werden.' };
   }
