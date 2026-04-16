@@ -100,6 +100,34 @@ const pool = databaseUrl
       ssl: resolveDbSslConfig(''),
     });
 
+function isLikelyDatabaseConnectionError(error: any) {
+  const code = String(error?.code || '').trim().toUpperCase();
+  const message = String(error?.message || '').toLowerCase();
+  const knownConnectionCodes = new Set([
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'ETIMEDOUT',
+    'ECONNRESET',
+    'EAI_AGAIN',
+    '57P01',
+    '57P02',
+    '57P03',
+    '08001',
+    '08006',
+  ]);
+
+  if (knownConnectionCodes.has(code)) return true;
+
+  return (
+    message.includes('connection terminated') ||
+    message.includes('could not connect') ||
+    message.includes('connect econnrefused') ||
+    message.includes('getaddrinfo enotfound') ||
+    message.includes('server closed the connection unexpectedly') ||
+    message.includes('database') && message.includes('unreachable')
+  );
+}
+
 let extraSchemaReady = false;
 const PASSWORD_RESET_WINDOW_MINUTES = 15;
 const PASSWORD_RESET_MAX_ATTEMPTS = 5;
@@ -4456,9 +4484,40 @@ export async function purchaseVisibilityPromotion(payload: { userId: number; sco
   }
 }
 
+async function ensurePasswordResetSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMP NOT NULL,
+      used_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id
+    ON password_reset_tokens(user_id);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_attempts (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_password_reset_attempts_email_created
+    ON password_reset_attempts(email, created_at DESC);
+  `);
+}
+
 export async function requestPasswordReset(email: string) {
   try {
-    await ensureExtraSchema();
+    await ensurePasswordResetSchema();
 
     const normalizedEmail = (email || '').trim().toLowerCase();
     if (!normalizedEmail) {
@@ -4559,13 +4618,16 @@ export async function requestPasswordReset(email: string) {
       message: error?.message,
       stack: error?.stack,
     });
+    if (isLikelyDatabaseConnectionError(error)) {
+      return { success: false, error: 'Server-Fehler: Datenbankverbindung fehlgeschlagen.' };
+    }
     return { success: false, error: 'Passwort-Reset ist derzeit nicht verfügbar. Bitte versuche es in wenigen Minuten erneut.' };
   }
 }
 
 export async function validatePasswordResetToken(token: string) {
   try {
-    await ensureExtraSchema();
+    await ensurePasswordResetSchema();
     const rawToken = (token || '').trim();
     if (!rawToken) return { success: true, valid: false };
 
@@ -4602,7 +4664,7 @@ export async function resetPasswordWithToken(payload: { token: string; password:
 
   const client = await pool.connect();
   try {
-    await ensureExtraSchema();
+    await ensurePasswordResetSchema();
 
     const tokenHash = hashResetToken(rawToken);
     await client.query('BEGIN');
@@ -4727,8 +4789,6 @@ export async function registerUser(formData: any) {
 // --- LOGIN ---
 export async function loginUser(credentials: any) { 
   try {
-    await ensureExtraSchema();
-
     const email = String(credentials?.email || '').trim().toLowerCase();
     const password = String(credentials?.password || '');
     if (!email || !password) return { success: false, error: "Bitte Daten eingeben." };
@@ -4759,8 +4819,7 @@ export async function loginUser(credentials: any) {
       message: error?.message,
       stack: error?.stack,
     });
-    const code = String(error?.code || '');
-    if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
+    if (isLikelyDatabaseConnectionError(error)) {
       return { success: false, error: 'Server-Fehler: Datenbankverbindung fehlgeschlagen.' };
     }
     return { success: false, error: "Server-Fehler" };
@@ -11357,7 +11416,7 @@ export async function getInvoiceData(expertId: number, studentId: number, month:
     const offerById = new Map<string, any>(
       rawOffers
         .map((item: any) => [String(item?.id || '').trim(), item] as const)
-        .filter(([id]) => id.length > 0)
+        .filter((entry: readonly [string, any]) => entry[0].length > 0)
     );
 
     const prefix = ((expert.invoice_prefix as string) || 'RE').trim().toUpperCase();

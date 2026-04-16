@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runSubscriptionInvoiceAutomation } from "../../../../actions";
+import { runSubscriptionInvoiceAutomation } from "../../../actions";
 
 export const dynamic = "force-dynamic";
 
