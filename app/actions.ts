@@ -7,8 +7,14 @@ import path from 'path';
 import { put } from '@vercel/blob';
 import { cookies } from 'next/headers';
 
-const databaseUrl =
-  String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.POSTGRES_PRISMA_URL || '').trim();
+const databaseUrl = String(
+  process.env.POSTGRES_URL_NON_POOLING ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL_NO_SSL ||
+  ''
+).trim();
 
 function resolveDbSslConfig(connectionString: string) {
   const sslFlag = String(process.env.DB_SSL || process.env.PGSSLMODE || '').trim().toLowerCase();
