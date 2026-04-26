@@ -6,7 +6,8 @@
     "dev": "next dev --webpack -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:backup": "bash scripts/db-backup.sh"
   },
   "dependencies": {
     "@vercel/blob": "^2.3.3",
