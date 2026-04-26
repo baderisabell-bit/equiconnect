@@ -67,6 +67,7 @@ export default function Suchseite() {
   const [waitlistCounts, setWaitlistCounts] = useState<Record<string, number>>({});
   const [waitlistJoined, setWaitlistJoined] = useState<Record<string, boolean>>({});
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [mobileMapOpen, setMobileMapOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(true);
   const [openFilterBereich, setOpenFilterBereich] = useState<string | null>(null);
   const [openPanels, setOpenPanels] = useState({
@@ -78,6 +79,7 @@ export default function Suchseite() {
   const [viewerHasEarlyAccess, setViewerHasEarlyAccess] = useState(false);
     const [feedError, setFeedError] = useState('');
   const [mapCoordsByLocation, setMapCoordsByLocation] = useState<Record<string, { x: number; y: number; exact: boolean }>>({});
+  const [activeMapPinKey, setActiveMapPinKey] = useState<string | null>(null);
   const normalizedRole = String(role || '').trim().toLowerCase();
   const isExpertRole = Boolean(normalizedRole) && !['nutzer', 'user', 'kunde'].includes(normalizedRole);
 
@@ -376,8 +378,9 @@ export default function Suchseite() {
       key: string;
       locationKey: string;
       title: string;
-      subtitle: string;
-      href: string;
+      profileHref: string;
+      offerHref: string;
+      hasOffer: boolean;
       count: number;
     }>();
 
@@ -391,7 +394,6 @@ export default function Suchseite() {
         const offerHref = eintrag.primaryOfferId
           ? `/anzeige/${eintrag.userId}/${encodeURIComponent(eintrag.primaryOfferId)}`
           : profileHref;
-        const href = inhaltFilter === 'angebote' ? offerHref : profileHref;
 
         const existing = grouped.get(locationKey);
         if (!existing) {
@@ -399,14 +401,16 @@ export default function Suchseite() {
             key: `ort-${locationKey}`,
             locationKey,
             title: `${eintrag.plz ? `${eintrag.plz} ` : ''}${eintrag.ort}`.trim() || eintrag.name,
-            subtitle: 'Experten',
-            href,
+            profileHref,
+            offerHref,
+            hasOffer: Boolean(eintrag.primaryOfferId),
             count: 1,
           });
         } else {
           grouped.set(locationKey, {
             ...existing,
             count: existing.count + 1,
+            hasOffer: existing.hasOffer || Boolean(eintrag.primaryOfferId),
           });
         }
       });
@@ -1048,6 +1052,13 @@ export default function Suchseite() {
               {mapOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
               Karte
             </button>
+            <button
+              type="button"
+              onClick={() => setMobileMapOpen(true)}
+              className="lg:hidden bg-white border border-slate-200 px-3 py-3 rounded-xl font-black uppercase text-[10px] flex items-center gap-2 text-slate-700"
+            >
+              <MapPin size={14} /> Karte
+            </button>
 
             {role ? (
               <>
@@ -1320,28 +1331,191 @@ export default function Suchseite() {
                   const fallback = hashToCoord(pin.locationKey);
                   return { x: fallback.x, y: fallback.y, exact: false };
                 })();
+                const isActive = activeMapPinKey === pin.key;
+                const defaultHref = inhaltFilter === 'angebote' ? pin.offerHref : pin.profileHref;
 
                 return (
                   <div key={pin.key} style={{ left: `${coords.x}%`, top: `${coords.y}%` }} className="absolute -translate-x-1/2 -translate-y-full">
                     <button
                       type="button"
-                      onClick={() => router.push(pin.href)}
+                      onClick={() => setActiveMapPinKey((prev) => (prev === pin.key ? null : pin.key))}
                       title={`${pin.title} (${pin.count})`}
-                      className="pointer-events-auto h-9 min-w-9 px-2 rounded-full border-2 shadow-lg flex items-center justify-center transition-all bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-500"
+                      className={`pointer-events-auto h-9 min-w-9 px-2 rounded-full border-2 shadow-lg flex items-center justify-center transition-all ${isActive ? 'bg-emerald-500 border-emerald-700 text-white' : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-500'}`}
                     >
                       <MapPin size={14} />
                       {pin.count > 1 ? <span className="ml-1 text-[9px] font-black">{pin.count}</span> : null}
                     </button>
+
+                    {isActive && (
+                      <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 -top-24 w-52 rounded-xl border border-slate-200 bg-white shadow-xl p-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-700">{pin.title}</p>
+                        <p className="text-[9px] text-slate-500 mt-1">{pin.count} Expert{pin.count === 1 ? '' : 'en'} an diesem Ort</p>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMapPinKey(null);
+                              router.push(pin.profileHref);
+                            }}
+                            className="flex-1 px-2 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-widest"
+                          >
+                            Profil
+                          </button>
+                          {pin.hasOffer && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMapPinKey(null);
+                                router.push(pin.offerHref);
+                              }}
+                              className="flex-1 px-2 py-2 rounded-lg border border-slate-200 text-slate-700 text-[9px] font-black uppercase tracking-widest"
+                            >
+                              Anzeige
+                            </button>
+                          )}
+                        </div>
+                        {!pin.hasOffer && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMapPinKey(null);
+                              router.push(defaultHref);
+                            }}
+                            className="mt-2 w-full px-2 py-2 rounded-lg bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest"
+                          >
+                            Öffnen
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {activeMapPinKey && (
+              <button
+                type="button"
+                aria-label="Karten-Popup schließen"
+                onClick={() => setActiveMapPinKey(null)}
+                className="absolute inset-0 z-[1] pointer-events-auto"
+              />
+            )}
 
             {/* Entfernt: Banner mit "Alle Entfernungen • X Pins" */}
           </section>
         )}
 
       </main>
+
+      {mobileMapOpen && (
+        <div className="fixed inset-0 z-80 lg:hidden">
+          <button
+            type="button"
+            aria-label="Karte schließen"
+            onClick={() => {
+              setActiveMapPinKey(null);
+              setMobileMapOpen(false);
+            }}
+            className="absolute inset-0 bg-slate-900/40"
+          />
+          <div className="absolute left-0 right-0 bottom-0 h-[72vh] bg-white rounded-t-3xl border-t border-slate-200 shadow-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Karte</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMapPinKey(null);
+                  setMobileMapOpen(false);
+                }}
+                className="p-2 rounded-lg border border-slate-200 bg-white text-slate-600"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="relative h-[calc(72vh-52px)] bg-slate-200">
+              <iframe
+                title="Mobile Karte"
+                className="absolute inset-0 w-full h-full [filter:grayscale(88%)_brightness(1.08)_contrast(0.82)_saturate(0.55)]"
+                loading="lazy"
+                src="https://www.openstreetmap.org/export/embed.html?bbox=5.5%2C47.0%2C15.5%2C55.5&layer=mapnik"
+              />
+
+              <div className="absolute inset-0 z-[2] pointer-events-none">
+                {mapPins.map((pin) => {
+                  const coords = mapCoordsByLocation[pin.locationKey] || (() => {
+                    const fallback = hashToCoord(pin.locationKey);
+                    return { x: fallback.x, y: fallback.y, exact: false };
+                  })();
+                  const isActive = activeMapPinKey === pin.key;
+                  const defaultHref = inhaltFilter === 'angebote' ? pin.offerHref : pin.profileHref;
+
+                  return (
+                    <div key={`mobile-${pin.key}`} style={{ left: `${coords.x}%`, top: `${coords.y}%` }} className="absolute -translate-x-1/2 -translate-y-full">
+                      <button
+                        type="button"
+                        onClick={() => setActiveMapPinKey((prev) => (prev === pin.key ? null : pin.key))}
+                        title={`${pin.title} (${pin.count})`}
+                        className={`pointer-events-auto h-9 min-w-9 px-2 rounded-full border-2 shadow-lg flex items-center justify-center transition-all ${isActive ? 'bg-emerald-500 border-emerald-700 text-white' : 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-500'}`}
+                      >
+                        <MapPin size={14} />
+                        {pin.count > 1 ? <span className="ml-1 text-[9px] font-black">{pin.count}</span> : null}
+                      </button>
+
+                      {isActive && (
+                        <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 -top-24 w-52 rounded-xl border border-slate-200 bg-white shadow-xl p-3">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-700">{pin.title}</p>
+                          <p className="text-[9px] text-slate-500 mt-1">{pin.count} Expert{pin.count === 1 ? '' : 'en'} an diesem Ort</p>
+                          <div className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMapPinKey(null);
+                                setMobileMapOpen(false);
+                                router.push(pin.profileHref);
+                              }}
+                              className="flex-1 px-2 py-2 rounded-lg border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-widest"
+                            >
+                              Profil
+                            </button>
+                            {pin.hasOffer && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveMapPinKey(null);
+                                  setMobileMapOpen(false);
+                                  router.push(pin.offerHref);
+                                }}
+                                className="flex-1 px-2 py-2 rounded-lg border border-slate-200 text-slate-700 text-[9px] font-black uppercase tracking-widest"
+                              >
+                                Anzeige
+                              </button>
+                            )}
+                          </div>
+                          {!pin.hasOffer && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMapPinKey(null);
+                                setMobileMapOpen(false);
+                                router.push(defaultHref);
+                              }}
+                              className="mt-2 w-full px-2 py-2 rounded-lg bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest"
+                            >
+                              Öffnen
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {mobileFilterOpen && (
         <div className="fixed inset-0 z-80">
