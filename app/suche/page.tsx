@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, MapPin, Filter, Star, Navigation, ChevronRight, ChevronUp, ChevronDown, X, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { Search, MapPin, Filter, Navigation, ChevronUp, ChevronDown, X, PanelRightOpen, PanelRightClose, Heart, Plus } from 'lucide-react';
 import { ANGEBOT_KATEGORIEN, ZERTIFIKAT_KATEGORIEN } from './kategorien-daten';
 import { addWishlistItem, getGroupsFeed, getSearchFeed, getStoredProfileData, getWaitlistOverviewForViewer, joinNetworkGroup, joinProWaitlist, sendConnectionRequest } from '../actions';
 import NotificationBell from '../components/notification-bell';
@@ -59,8 +59,8 @@ export default function Suchseite() {
   const [selectedThemen, setSelectedThemen] = useState<string[]>([]);
   const [selectedZertifikate, setSelectedZertifikate] = useState<string[]>([]);
   const [umkreisKm, setUmkreisKm] = useState<number | null>(null);
-  const [typFilter, setTypFilter] = useState<'alle' | 'experte' | 'nutzer' | 'gruppe'>('alle');
-  const [inhaltFilter, setInhaltFilter] = useState<'' | 'profile' | 'angebote' | 'suchen' | 'beitraege' | 'gruppen'>('');
+  const [typFilter, setTypFilter] = useState<'alle' | 'experte' | 'nutzer' | 'gruppe'>('experte');
+  const [inhaltFilter, setInhaltFilter] = useState<'' | 'profile' | 'angebote' | 'suchen' | 'beitraege' | 'gruppen'>('profile');
   const [gruppen, setGruppen] = useState<GruppeEintrag[]>([]);
   const [joinedGroupIds, setJoinedGroupIds] = useState<Set<number>>(new Set());
   const [eintraege, setEintraege] = useState<SuchEintrag[]>([]);
@@ -74,12 +74,10 @@ export default function Suchseite() {
     angebote: false,
     zertifikate: false
   });
-  const [expandedOfferId, setExpandedOfferId] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'granted' | 'unavailable'>('idle');
   const [viewerHasEarlyAccess, setViewerHasEarlyAccess] = useState(false);
     const [feedError, setFeedError] = useState('');
   const [mapCoordsByLocation, setMapCoordsByLocation] = useState<Record<string, { x: number; y: number; exact: boolean }>>({});
-  const [hoveredPinKey, setHoveredPinKey] = useState<string | null>(null);
   const normalizedRole = String(role || '').trim().toLowerCase();
   const isExpertRole = Boolean(normalizedRole) && !['nutzer', 'user', 'kunde'].includes(normalizedRole);
 
@@ -169,11 +167,6 @@ export default function Suchseite() {
       }
 
       setFeedError('');
-          {feedError && (
-            <div className="lg:col-span-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
-              {feedError}
-            </div>
-          )}
 
       setViewerHasEarlyAccess(Boolean(res.viewerHasEarlyAccess));
 
@@ -379,18 +372,14 @@ export default function Suchseite() {
   });
 
   const mapPins = useMemo(() => {
-    const pins: Array<{
+    const grouped = new Map<string, {
       key: string;
       locationKey: string;
       title: string;
       subtitle: string;
       href: string;
-      pinType: 'angebot' | 'experte';
-      imageUrl?: string;
-      userId?: number;
-      offerId?: string;
-      eintrag?: SuchEintrag;
-    }> = [];
+      count: number;
+    }>();
 
     gefilterteEintraege
       .filter((eintrag) => eintrag.typ === 'experte' && eintrag.userId && Number(eintrag.userId) > 0)
@@ -402,35 +391,28 @@ export default function Suchseite() {
         const offerHref = eintrag.primaryOfferId
           ? `/anzeige/${eintrag.userId}/${encodeURIComponent(eintrag.primaryOfferId)}`
           : profileHref;
+        const href = inhaltFilter === 'angebote' ? offerHref : profileHref;
 
-        pins.push({
-          key: `experte-${eintrag.id}`,
-          locationKey,
-          title: eintrag.name,
-          subtitle: 'Experte',
-          href: profileHref,
-          pinType: 'experte',
-          userId: Number(eintrag.userId),
-          eintrag,
-        });
-
-        if (eintrag.angeboteCount > 0) {
-          pins.push({
-            key: `angebot-${eintrag.id}`,
+        const existing = grouped.get(locationKey);
+        if (!existing) {
+          grouped.set(locationKey, {
+            key: `ort-${locationKey}`,
             locationKey,
-            title: eintrag.name,
-            subtitle: 'Angebot',
-            href: offerHref,
-            pinType: 'angebot',
-            userId: Number(eintrag.userId),
-            offerId: eintrag.primaryOfferId || undefined,
-            eintrag,
+            title: `${eintrag.plz ? `${eintrag.plz} ` : ''}${eintrag.ort}`.trim() || eintrag.name,
+            subtitle: 'Experten',
+            href,
+            count: 1,
+          });
+        } else {
+          grouped.set(locationKey, {
+            ...existing,
+            count: existing.count + 1,
           });
         }
       });
 
-    return pins;
-  }, [gefilterteEintraege, inhaltFilter, typFilter]);
+    return Array.from(grouped.values());
+  }, [gefilterteEintraege, inhaltFilter]);
 
   useEffect(() => {
     const missingKeys = Array.from(new Set(mapPins.map((pin) => pin.locationKey))).filter((key) => !mapCoordsByLocation[key]);
@@ -522,16 +504,6 @@ export default function Suchseite() {
     alert(dbRes.inserted ? 'Zur Merkliste hinzugefügt.' : 'Bereits in der Merkliste.');
   };
 
-  const startMessage = (eintrag: SuchEintrag) => {
-    const params = new URLSearchParams();
-    params.set('target', eintrag.name);
-    params.set('targetType', eintrag.typ);
-    if (eintrag.userId) {
-      params.set('targetUserId', String(eintrag.userId));
-    }
-    router.push(`/nachrichten?${params.toString()}`);
-  };
-
   const connectToUser = async (eintrag: SuchEintrag) => {
     if (!userId) {
       alert('Bitte zuerst einloggen, um dich zu vernetzen.');
@@ -613,6 +585,16 @@ export default function Suchseite() {
 
     const hash = target === 'profil' ? '' : `#${target}`;
     router.push(`/profil/${eintrag.userId}${hash}`);
+  };
+
+  const openEintragCard = (eintrag: SuchEintrag) => {
+    const openAnzeige = inhaltFilter === 'angebote' && eintrag.typ === 'experte' && Boolean(eintrag.primaryOfferId);
+    openProfileTarget(eintrag, openAnzeige ? 'anzeigen' : 'profil');
+  };
+
+  const toggleCardWishlist = async (eintrag: SuchEintrag) => {
+    const isAnzeigeMode = inhaltFilter === 'angebote' && eintrag.typ === 'experte' && Boolean(eintrag.primaryOfferId);
+    await addToWishlist(isAnzeigeMode ? 'anzeige' : 'person', eintrag);
   };
 
   const openProfile = () => {
@@ -1116,14 +1098,31 @@ export default function Suchseite() {
             </div>
           )}
 
+          {feedError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
+              {feedError}
+            </div>
+          )}
+
           <div className={mapOpen ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 lg:grid-cols-2 gap-4'}>
           {gefilterteEintraege.map((eintrag) => {
             const hasBoost = Boolean(eintrag.boostedUntil && new Date(eintrag.boostedUntil).getTime() > Date.now());
             const hasWeeklyAd = Boolean(eintrag.weeklyAdUntil && new Date(eintrag.weeklyAdUntil).getTime() > Date.now());
-            const hasPriorityPlan = eintrag.planKey === 'nutzer_plus' || eintrag.planKey === 'experte_pro';
 
             return (
-            <div key={eintrag.id} className={`bg-white rounded-[2rem] p-5 border shadow-sm hover:shadow-xl transition-all group cursor-pointer relative overflow-hidden h-full ${hasBoost ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-slate-100 hover:border-emerald-100'}`}>
+            <div
+              key={eintrag.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => openEintragCard(eintrag)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  openEintragCard(eintrag);
+                }
+              }}
+              className={`bg-white rounded-[2rem] p-5 border shadow-sm hover:shadow-xl transition-all group cursor-pointer relative overflow-hidden h-full ${hasBoost ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-slate-100 hover:border-emerald-100'}`}
+            >
               <div className="flex flex-col sm:flex-row gap-5">
                 <div className="w-full sm:w-28 h-28 bg-slate-100 rounded-[1.25rem] flex-shrink-0 overflow-hidden relative">
                    <div className="w-full h-full flex items-center justify-center text-slate-300 font-black text-3xl italic">E</div>
@@ -1135,66 +1134,39 @@ export default function Suchseite() {
                 <div className="flex-1">
                   <div className="flex justify-between items-start">
                     <div className="flex gap-2">
-                      <span className="text-[8px] font-black uppercase text-emerald-600 tracking-widest px-2 py-1 bg-emerald-50 rounded-lg">{eintrag.verifiziert ? 'Verifiziert' : 'Wird geprüft'}</span>
-                      <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest px-2 py-1 bg-slate-50 rounded-lg italic">{eintrag.typ === 'experte' ? 'Pro' : 'Suche'}</span>
+                      {eintrag.verifiziert ? <span className="text-[8px] font-black uppercase text-emerald-600 tracking-widest px-2 py-1 bg-emerald-50 rounded-lg">Verifiziert</span> : null}
                       {hasBoost ? <span className="text-[8px] font-black uppercase text-white tracking-widest px-2 py-1 bg-emerald-600 rounded-lg">Hochgeschoben</span> : null}
                       {hasWeeklyAd ? <span className="text-[8px] font-black uppercase text-violet-700 tracking-widest px-2 py-1 bg-violet-100 rounded-lg">Startseitenwerbung</span> : null}
-                      {!hasBoost && hasPriorityPlan ? <span className="text-[8px] font-black uppercase text-slate-700 tracking-widest px-2 py-1 bg-slate-200 rounded-lg">{eintrag.planKey === 'nutzer_plus' ? 'Plus' : 'Abo'}</span> : null}
                     </div>
-                    {eintrag.typ === 'experte' && (
-                      <div className="flex items-center gap-1 text-amber-400 font-black text-xs">
-                        <Star size={14} fill="currentColor" /> {eintrag.verifiedRatingCount > 0 ? eintrag.rating.toFixed(1) : 'Neu'}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void toggleCardWishlist(eintrag);
+                        }}
+                        className="w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700 flex items-center justify-center"
+                        title={inhaltFilter === 'angebote' ? 'Anzeige merken' : 'Profil merken'}
+                        aria-label={inhaltFilter === 'angebote' ? 'Anzeige merken' : 'Profil merken'}
+                      >
+                        <Heart size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void connectToUser(eintrag);
+                        }}
+                        className="w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700 flex items-center justify-center"
+                        title="Vernetzen"
+                        aria-label="Vernetzen"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => openProfileTarget(eintrag, 'profil')}
-                    className="text-left"
-                  >
-                    <h3 className="text-xl font-black italic uppercase text-slate-900 mt-2 group-hover:text-emerald-600 transition-colors leading-none">{eintrag.name}</h3>
-                  </button>
-                  
-                  {eintrag.typ === 'experte' && eintrag.angebotText && (
-                    <button
-                      onClick={() => setExpandedOfferId(expandedOfferId === eintrag.id ? null : eintrag.id)}
-                      className="mt-2 text-left w-full"
-                    >
-                      <div className="flex items-start gap-2 p-2.5 bg-emerald-50 rounded-lg border border-emerald-100 hover:border-emerald-300 transition-colors group/expand">
-                        <div className="mt-0.5 text-emerald-600 flex-shrink-0">
-                          {expandedOfferId === eintrag.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Detaillierte Anzeige</p>
-                          <p className="text-[10px] font-medium text-emerald-600 mt-0.5 line-clamp-2">{eintrag.angebotText}</p>
-                        </div>
-                      </div>
-                    </button>
-                  )}
-                  
-                  {expandedOfferId === eintrag.id && eintrag.typ === 'experte' && (
-                    <div className="mt-3 p-3 bg-gradient-to-b from-emerald-50 to-slate-50 rounded-lg border border-emerald-100 space-y-2">
-                      <div className="space-y-2">
-                        <div>
-                          <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">Angebot Details</p>
-                          <p className="text-[10px] font-medium text-slate-700 mt-1 leading-relaxed">{eintrag.angebotText}</p>
-                        </div>
-                        {eintrag.kategorien.length > 0 && (
-                          <div>
-                            <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">Kategorien</p>
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {eintrag.kategorien.map((kat) => (
-                                <span key={`detail-${eintrag.id}-${kat}`} className="text-[7px] font-black uppercase tracking-widest px-2 py-1 bg-white border border-emerald-200 text-emerald-700 rounded">
-                                  {kat}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  <h3 className="text-xl font-black italic uppercase text-slate-900 mt-2 group-hover:text-emerald-600 transition-colors leading-none">{eintrag.name}</h3>
                   <p className="text-slate-500 text-[10px] font-bold uppercase tracking-tight mt-1 flex items-center gap-1">
                     <span className="text-emerald-600">●</span> {eintrag.kategorien.join(' • ')}
                   </p>
@@ -1207,13 +1179,6 @@ export default function Suchseite() {
                   {eintrag.typ === 'experte' && eintrag.angeboteCount > 0 && (
                     <p className="text-[9px] mt-1 font-black uppercase tracking-widest text-emerald-700">
                       {eintrag.angeboteCount} Anzeige(n) verfügbar
-                    </p>
-                  )}
-                  {eintrag.typ === 'experte' && (
-                    <p className="text-[9px] mt-1 font-black uppercase tracking-widest text-amber-700">
-                      {eintrag.verifiedRatingCount > 0
-                        ? `${eintrag.verifiedRatingCount} verifizierte Bewertung(en)`
-                        : 'Noch keine verifizierten Bewertungen'}
                     </p>
                   )}
 
@@ -1249,14 +1214,7 @@ export default function Suchseite() {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <button
-                      type="button"
-                      onClick={() => openProfileTarget(eintrag, 'profil')}
-                      className="px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                    >
-                      Profil öffnen
-                    </button>
+                  <div className="flex flex-wrap gap-2 mt-3" onClick={(event) => event.stopPropagation()}>
                     {eintrag.profilePostsCount > 0 && (
                       <button
                         type="button"
@@ -1266,7 +1224,7 @@ export default function Suchseite() {
                         Vollständigen Beitrag öffnen
                       </button>
                     )}
-                    {eintrag.typ === 'experte' && eintrag.angeboteCount > 0 && (
+                    {eintrag.typ === 'experte' && eintrag.angeboteCount > 0 && eintrag.primaryOfferId && (
                       <button
                         type="button"
                         onClick={() => openProfileTarget(eintrag, 'anzeigen')}
@@ -1275,34 +1233,6 @@ export default function Suchseite() {
                         Zur Anzeige
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => addToWishlist('person', eintrag)}
-                      className="px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest bg-slate-50 border border-slate-200 text-slate-600 hover:border-emerald-300"
-                    >
-                      Profil merken
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => addToWishlist('anzeige', eintrag)}
-                      className="px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest bg-slate-50 border border-slate-200 text-slate-600 hover:border-emerald-300"
-                    >
-                      Anzeige merken
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => connectToUser(eintrag)}
-                      className="px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest bg-white border border-slate-200 text-slate-600 hover:border-emerald-300"
-                    >
-                      Vernetzen
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => startMessage(eintrag)}
-                      className="px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest bg-emerald-600 border border-emerald-600 text-white hover:bg-emerald-500"
-                    >
-                      Nachricht schreiben
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1377,7 +1307,7 @@ export default function Suchseite() {
           <section className="hidden lg:block flex-1 bg-slate-200 relative">
             <iframe
               title="Karte"
-              className="absolute inset-0 w-full h-full [filter:grayscale(35%)_brightness(1.06)_contrast(0.94)_saturate(1.08)]"
+              className="absolute inset-0 w-full h-full [filter:grayscale(88%)_brightness(1.08)_contrast(0.82)_saturate(0.55)]"
               loading="lazy"
               src="https://www.openstreetmap.org/export/embed.html?bbox=5.5%2C47.0%2C15.5%2C55.5&layer=mapnik"
             />
@@ -1391,39 +1321,17 @@ export default function Suchseite() {
                   return { x: fallback.x, y: fallback.y, exact: false };
                 })();
 
-                const colorClass = pin.pinType === 'angebot'
-                  ? 'bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-500'
-                  : 'bg-orange-500 border-orange-600 text-white hover:bg-orange-400';
-
-                const isHovered = hoveredPinKey === pin.key;
-
                 return (
                   <div key={pin.key} style={{ left: `${coords.x}%`, top: `${coords.y}%` }} className="absolute -translate-x-1/2 -translate-y-full">
                     <button
                       type="button"
-                      onMouseEnter={() => setHoveredPinKey(pin.key)}
-                      onMouseLeave={() => setHoveredPinKey(null)}
                       onClick={() => router.push(pin.href)}
-                      title={`${pin.subtitle}: ${pin.title}`}
-                      className={`pointer-events-auto h-8 w-8 rounded-full border-2 shadow-lg flex items-center justify-center transition-all ${colorClass}`}
+                      title={`${pin.title} (${pin.count})`}
+                      className="pointer-events-auto h-9 min-w-9 px-2 rounded-full border-2 shadow-lg flex items-center justify-center transition-all bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-500"
                     >
                       <MapPin size={14} />
+                      {pin.count > 1 ? <span className="ml-1 text-[9px] font-black">{pin.count}</span> : null}
                     </button>
-
-                    {isHovered && pin.eintrag && (
-                      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-24 bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden z-50 w-48">
-                        <div className="p-3">
-                          <p className="text-xs font-black uppercase text-slate-900 truncate">{pin.title}</p>
-                          <p className="text-[9px] text-slate-500 mt-1">{pin.subtitle}</p>
-                          {pin.eintrag.ort && (
-                            <p className="text-[9px] text-slate-400 mt-1 truncate">{pin.eintrag.plz} {pin.eintrag.ort}</p>
-                          )}
-                          {pin.eintrag.rating > 0 && (
-                            <p className="text-[9px] text-amber-600 mt-1">⭐ {pin.eintrag.rating.toFixed(1)}</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
