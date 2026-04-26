@@ -39,6 +39,8 @@ function resolveDbSslConfig(connectionString: string) {
 }
 
 const localDbPort = Number(process.env.DB_PORT || process.env.PGPORT || 5432);
+const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
+const MAX_VIDEO_UPLOAD_BYTES = 120 * 1024 * 1024;
 
 function sanitizeUploadFileName(name: string) {
   const safe = String(name || '')
@@ -5882,12 +5884,13 @@ export async function getStoredProfileData(userId: number) {
       }
     }
 
-    const roleRes = await getResolvedUserRole(safeUserId);
+    const storedRole = String(row.role || '').trim().toLowerCase();
+    const roleRes = storedRole ? null : await getResolvedUserRole(safeUserId);
     return {
       success: true,
       data: {
         ...row,
-        role: roleRes.success && roleRes.role ? roleRes.role : row.role
+        role: roleRes?.success && roleRes.role ? roleRes.role : row.role
       }
     };
   } catch (error: any) {
@@ -9759,8 +9762,8 @@ export async function uploadProfileHorseImage(userId: number, role: 'nutzer' | '
       return { success: false, error: 'Nur JPG, PNG, WEBP oder GIF sind erlaubt.' };
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      return { success: false, error: 'Datei zu groß (max. 8MB).' };
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      return { success: false, error: 'Datei zu groß (max. 20MB).' };
     }
 
     const publicUrl = await persistUploadedFile({
@@ -9784,8 +9787,8 @@ export async function uploadProfilbild(userId: number, formData: FormData) {
     if (!allowedTypes.includes(file.type)) {
       return { success: false, error: 'Nur JPG, PNG, WEBP oder GIF sind erlaubt.' };
     }
-    if (file.size > 5 * 1024 * 1024) {
-      return { success: false, error: 'Datei zu groß (max. 5MB).' };
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      return { success: false, error: 'Datei zu groß (max. 20MB).' };
     }
 
     const publicUrl = await persistUploadedFile({
@@ -12479,8 +12482,6 @@ export async function bookExpertCalendarSlot(payload: { studentId: number; slotI
 
 export async function uploadGalerieMedia(userId: number, formData: FormData) {
   try {
-    const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-    const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
     const validUserId = Number(userId);
     if (!Number.isInteger(validUserId) || validUserId <= 0) {
       return { success: false, error: 'Ungueltige Nutzer-ID.' };
@@ -12496,11 +12497,11 @@ export async function uploadGalerieMedia(userId: number, formData: FormData) {
       return { success: false, error: 'Nur Bilder und Videos sind erlaubt.' };
     }
 
-    if (isImage && file.size > MAX_IMAGE_BYTES) {
-      return { success: false, error: 'Bild ist zu gross (max. 10 MB).' };
+    if (isImage && file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      return { success: false, error: 'Bild ist zu gross (max. 20 MB).' };
     }
-    if (isVideo && file.size > MAX_VIDEO_BYTES) {
-      return { success: false, error: 'Video ist zu gross (max. 80 MB).' };
+    if (isVideo && file.size > MAX_VIDEO_UPLOAD_BYTES) {
+      return { success: false, error: 'Video ist zu gross (max. 120 MB).' };
     }
 
     const publicUrl = await persistUploadedFile({
@@ -13133,7 +13134,6 @@ export async function getBookmarkedNetworkPosts(userId: number, limit = 120) {
 
 export async function uploadProfileImage(userId: number, formData: FormData) {
   try {
-    const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
     const validUserId = Number(userId);
     if (!Number.isInteger(validUserId) || validUserId <= 0) {
       return { success: false, error: 'Ungueltige Nutzer-ID.' };
@@ -13148,8 +13148,8 @@ export async function uploadProfileImage(userId: number, formData: FormData) {
       return { success: false, error: 'Nur Bilder sind erlaubt.' };
     }
 
-    if (file.size > MAX_IMAGE_BYTES) {
-      return { success: false, error: 'Bild ist zu gross (max. 10 MB).' };
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      return { success: false, error: 'Bild ist zu gross (max. 20 MB).' };
     }
 
     const publicUrl = await persistUploadedFile({
@@ -13216,8 +13216,8 @@ export async function uploadOwnAdvertisingMedia(userId: number, formData: FormDa
       return { success: false, error: 'Nur Bilder sind fuer Werbeanzeigen erlaubt.' };
     }
 
-    if (file.size > 12 * 1024 * 1024) {
-      return { success: false, error: 'Bild ist zu gross (max. 12 MB).' };
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      return { success: false, error: 'Bild ist zu gross (max. 20 MB).' };
     }
 
     const publicUrl = await persistUploadedFile({

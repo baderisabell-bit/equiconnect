@@ -90,8 +90,8 @@ type PostMediaItem = {
   mediaType: "image" | "video";
 };
 
-const MAX_GALERIE_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_GALERIE_VIDEO_BYTES = 80 * 1024 * 1024;
+const MAX_GALERIE_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_GALERIE_VIDEO_BYTES = 120 * 1024 * 1024;
 const EMPTY_PFERD: PferdItem = { name: "", rasse: "", alter: "", beschreibung: "", bilder: [] };
 const EMPTY_ANALYTICS: AnalyticsData = {
   profileViewsTotal: 0,
@@ -119,8 +119,8 @@ const validateGalerieFile = (file: File) => {
   const isImage = mime.startsWith("image/");
   const isVideo = mime.startsWith("video/");
   if (!isImage && !isVideo) return "Nur Bilder und Videos sind erlaubt.";
-  if (isImage && file.size > MAX_GALERIE_IMAGE_BYTES) return "Bild zu gross (max. 10 MB).";
-  if (isVideo && file.size > MAX_GALERIE_VIDEO_BYTES) return "Video zu gross (max. 80 MB).";
+  if (isImage && file.size > MAX_GALERIE_IMAGE_BYTES) return "Bild zu gross (max. 20 MB).";
+  if (isVideo && file.size > MAX_GALERIE_VIDEO_BYTES) return "Video zu gross (max. 120 MB).";
   return null;
 };
 

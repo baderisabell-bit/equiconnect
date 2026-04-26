@@ -243,28 +243,37 @@ export default function PublicProfilePage() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
     const load = async () => {
       const profileUserId = parseInt(String(params.userId || ''), 10);
       if (Number.isNaN(profileUserId) || profileUserId <= 0) {
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
       }
 
       const viewerUserIdRaw = sessionStorage.getItem('userId');
       const viewerUserId = viewerUserIdRaw ? parseInt(viewerUserIdRaw, 10) : 0;
       const safeViewer = Number.isNaN(viewerUserId) ? 0 : viewerUserId;
+      if (!isMounted) return;
       setViewerUserId(safeViewer);
       setViewerRole(sessionStorage.getItem('userRole'));
       setViewerName(sessionStorage.getItem('userName') || 'Profil');
       setEditMode(false);
 
-      const [profileRes, postsRes, metaRes, teamRes, horsesRes] = await Promise.all([
+      const [profileRes, postsRes, metaRes] = await Promise.all([
         getStoredProfileData(profileUserId),
         getProfilePosts(safeViewer, profileUserId, 12),
-        getPublicProfileMeta({ profileUserId, viewerUserId: safeViewer }),
-        getExpertTeamMembers(profileUserId),
-        getExpertHorses(profileUserId)
+        getPublicProfileMeta({ profileUserId, viewerUserId: safeViewer })
       ]);
+
+      if (!isMounted) return;
+
+      const isExpertProfile = Boolean(
+        profileRes.success
+          && profileRes.data
+          && String(profileRes.data.role || '').trim().toLowerCase() === 'experte'
+      );
 
       if (profileRes.success && profileRes.data) {
         const row = profileRes.data;
@@ -294,7 +303,7 @@ export default function PublicProfilePage() {
         }
 
         if (safeViewer > 0 && safeViewer !== profileUserId) {
-          await trackProfileVisit(safeViewer, profileUserId);
+          void trackProfileVisit(safeViewer, profileUserId);
         }
       } else {
         setLoadError(String(profileRes.error || 'Profil konnte nicht geladen werden.'));
@@ -317,6 +326,27 @@ export default function PublicProfilePage() {
         })));
       }
 
+      if (metaRes.success) {
+        setStats(metaRes.stats);
+        setRatings((metaRes.ratings || []) as RatingItem[]);
+        setConnection((metaRes.connection || null) as ConnectionItem | null);
+      }
+
+      setLoading(false);
+
+      if (!isExpertProfile) {
+        setExpertTeamMembers([]);
+        setExpertHorses([]);
+        return;
+      }
+
+      const [teamRes, horsesRes] = await Promise.all([
+        getExpertTeamMembers(profileUserId),
+        getExpertHorses(profileUserId)
+      ]);
+
+      if (!isMounted) return;
+
       if (teamRes.success && Array.isArray(teamRes.teamMembers)) {
         setExpertTeamMembers(teamRes.teamMembers as Array<{ id: number; name: string | null; role: string | null; description: string | null; member_user_id: number | null; email: string | null; user_display_name: string | null }>);
       } else {
@@ -328,17 +358,12 @@ export default function PublicProfilePage() {
       } else {
         setExpertHorses([]);
       }
-
-      if (metaRes.success) {
-        setStats(metaRes.stats);
-        setRatings((metaRes.ratings || []) as RatingItem[]);
-        setConnection((metaRes.connection || null) as ConnectionItem | null);
-      }
-
-      setLoading(false);
     };
 
     load();
+    return () => {
+      isMounted = false;
+    };
   }, [params]);
 
   const horseImages = useMemo(() => {
