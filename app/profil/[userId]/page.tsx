@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Eye, Heart, Home, MapPin, Play, Share2, Star, User, Users, ShieldCheck } from 'lucide-react';
+import { Eye, Heart, Home, MapPin, Play, Share2, Star, User, Users, ShieldCheck, Info } from 'lucide-react';
 import LoggedInHeader from '../../components/logged-in-header';
 import MediaDropzone from '../../components/media-dropzone';
 import {
@@ -2994,7 +2994,20 @@ export default function PublicProfilePage() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Teamprofil verlinken</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <input value={newTeamForm.memberUserId} onChange={(e) => setNewTeamForm((prev) => ({ ...prev, memberUserId: e.target.value }))} placeholder="Vorhandene Profil-ID" className="rounded-xl border border-slate-200 bg-white p-3 text-sm" />
+                  <div className="relative group">
+                    <input value={newTeamForm.memberUserId} onChange={(e) => setNewTeamForm((prev) => ({ ...prev, memberUserId: e.target.value }))} placeholder="Vorhandene Profil-ID" className="rounded-xl border border-slate-200 bg-white p-3 text-sm w-full" />
+                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1" title="Die Profil-ID findest du in der URL oder im Profil-Dashboard">
+                      <Info size={16} />
+                      <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-slate-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10">
+                        <div className="font-semibold mb-1">Profil-ID finden:</div>
+                        <div>1. Gehe zu deinem Profil</div>
+                        <div>2. Die ID findest du in der Browser-URL</div>
+                        <div>   (z.B. /profil/12345)</div>
+                        <div className="mt-1 text-slate-300 text-[10px]">oder im Dashboard unter Einstellungen</div>
+                        <div className="absolute top-full right-3 -translate-y-1/2 border-4 border-transparent border-t-slate-900"></div>
+                      </div>
+                    </button>
+                  </div>
                   <input value={newTeamForm.inviteEmail} onChange={(e) => setNewTeamForm((prev) => ({ ...prev, inviteEmail: e.target.value }))} placeholder="E-Mail für Registrierungslink (optional)" className="rounded-xl border border-slate-200 bg-white p-3 text-sm" />
                 </div>
                 <p className="text-xs text-slate-500">Nur vorhandene Profile können direkt verlinkt werden. Für neue Mitglieder sende einen Registrierungslink.</p>
