@@ -69,7 +69,7 @@ async function checkBlob() {
   const blobPath = `healthchecks/ping-${Date.now()}.txt`;
   try {
     const blob = await put(blobPath, 'ok', {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: true,
       contentType: 'text/plain',
     });
