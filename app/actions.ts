@@ -72,7 +72,7 @@ async function persistUploadedFile(params: {
   const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
   if (blobToken) {
     const blob = await put(`${folder}/${fileName}`, file, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       contentType: String(file.type || '').trim() || undefined,
     });

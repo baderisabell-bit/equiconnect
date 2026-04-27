@@ -233,8 +233,9 @@ export default function PublicProfilePage() {
     && (promotionSettings?.plan_key === 'experte_pro' || Boolean(promotionSettings?.lifetime_free_access))
   );
 
-  const loadMeta = async (profileUserId: number, viewerId: number) => {
+  const loadMeta = async (profileUserId: number, viewerId: number, isMounted = true) => {
     const metaRes = await getPublicProfileMeta({ profileUserId, viewerUserId: viewerId });
+    if (!isMounted) return;
     if (metaRes.success) {
       setStats(metaRes.stats);
       setRatings((metaRes.ratings || []) as RatingItem[]);
@@ -261,10 +262,9 @@ export default function PublicProfilePage() {
       setViewerName(sessionStorage.getItem('userName') || 'Profil');
       setEditMode(false);
 
-      const [profileRes, postsRes, metaRes] = await Promise.all([
+      const [profileRes, postsRes] = await Promise.all([
         getStoredProfileData(profileUserId),
-        getProfilePosts(safeViewer, profileUserId, 12),
-        getPublicProfileMeta({ profileUserId, viewerUserId: safeViewer })
+        getProfilePosts(safeViewer, profileUserId, 12)
       ]);
 
       if (!isMounted) return;
@@ -326,13 +326,9 @@ export default function PublicProfilePage() {
         })));
       }
 
-      if (metaRes.success) {
-        setStats(metaRes.stats);
-        setRatings((metaRes.ratings || []) as RatingItem[]);
-        setConnection((metaRes.connection || null) as ConnectionItem | null);
-      }
-
       setLoading(false);
+
+      void loadMeta(profileUserId, safeViewer, isMounted);
 
       if (!isExpertProfile) {
         setExpertTeamMembers([]);

@@ -1315,15 +1315,16 @@ export default function Suchseite() {
         </section>
 
         {mapOpen && (
-          <section className="hidden lg:block flex-1 bg-slate-200 relative">
+          <section className="hidden lg:block flex-1 bg-[linear-gradient(180deg,#f5fbff_0%,#eef8f3_52%,#fff7f0_100%)] relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0.06),rgba(15,23,42,0.05))]" />
             <iframe
               title="Karte"
-              className="absolute inset-0 w-full h-full [filter:grayscale(88%)_brightness(1.08)_contrast(0.82)_saturate(0.55)]"
+              className="absolute inset-0 w-full h-full [filter:grayscale(54%)_brightness(1.08)_contrast(0.95)_saturate(0.82)]"
               loading="lazy"
               src="https://www.openstreetmap.org/export/embed.html?bbox=5.5%2C47.0%2C15.5%2C55.5&layer=mapnik"
             />
 
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-white/30 via-white/5 to-slate-900/5" />
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0.06),rgba(15,23,42,0.05))]" />
 
             <div className="absolute inset-0 z-[2] pointer-events-none">
               {mapPins.map((pin) => {
@@ -1419,7 +1420,7 @@ export default function Suchseite() {
             }}
             className="absolute inset-0 bg-slate-900/40"
           />
-          <div className="absolute left-0 right-0 bottom-0 h-[72vh] bg-white rounded-t-3xl border-t border-slate-200 shadow-2xl overflow-hidden">
+          <div className="absolute left-0 right-0 bottom-0 h-[72vh] bg-[linear-gradient(180deg,#f8fcff_0%,#eefbf4_100%)] rounded-t-3xl border-t border-slate-200 shadow-2xl overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Karte</p>
               <button
@@ -1434,13 +1435,16 @@ export default function Suchseite() {
               </button>
             </div>
 
-            <div className="relative h-[calc(72vh-52px)] bg-slate-200">
+            <div className="relative h-[calc(72vh-52px)] bg-slate-200 overflow-hidden">
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,#f5fbff_0%,#eef8f3_52%,#fff7f0_100%)]" />
               <iframe
                 title="Mobile Karte"
-                className="absolute inset-0 w-full h-full [filter:grayscale(88%)_brightness(1.08)_contrast(0.82)_saturate(0.55)]"
+                className="absolute inset-0 w-full h-full [filter:grayscale(54%)_brightness(1.08)_contrast(0.95)_saturate(0.82)]"
                 loading="lazy"
                 src="https://www.openstreetmap.org/export/embed.html?bbox=5.5%2C47.0%2C15.5%2C55.5&layer=mapnik"
               />
+
+              <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top,rgba(34,197,94,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0.06),rgba(15,23,42,0.05))]" />
 
               <div className="absolute inset-0 z-[2] pointer-events-none">
                 {mapPins.map((pin) => {

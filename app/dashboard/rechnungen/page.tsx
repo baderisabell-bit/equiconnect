@@ -157,15 +157,18 @@ export default function RechnungenPage() {
       setLoading(true);
       setMessage("");
 
-      const subInvoicesRes = await getOwnSubscriptionInvoices(userId, 36);
-      if (subInvoicesRes.success) {
-        setSubscriptionInvoices(((subInvoicesRes as any).items || []) as SubscriptionInvoiceItem[]);
-      } else {
-        setSubscriptionInvoices([]);
-      }
-
       if (role === "experte") {
-        const studentsRes = await getMyStudents(userId);
+        const [subInvoicesRes, studentsRes] = await Promise.all([
+          getOwnSubscriptionInvoices(userId, 36),
+          getMyStudents(userId),
+        ]);
+
+        if (subInvoicesRes.success) {
+          setSubscriptionInvoices(((subInvoicesRes as any).items || []) as SubscriptionInvoiceItem[]);
+        } else {
+          setSubscriptionInvoices([]);
+        }
+
         if (studentsRes.success) {
           const nextStudents = ((studentsRes as any).students || []) as ExpertStudent[];
           setExpertStudents(nextStudents);
@@ -174,7 +177,17 @@ export default function RechnungenPage() {
           setMessage(studentsRes.error || "Kunden konnten nicht geladen werden.");
         }
       } else {
-        const bookingsRes = await getUserBookings(userId);
+        const [subInvoicesRes, bookingsRes] = await Promise.all([
+          getOwnSubscriptionInvoices(userId, 36),
+          getUserBookings(userId),
+        ]);
+
+        if (subInvoicesRes.success) {
+          setSubscriptionInvoices(((subInvoicesRes as any).items || []) as SubscriptionInvoiceItem[]);
+        } else {
+          setSubscriptionInvoices([]);
+        }
+
         if (bookingsRes.success) {
           setUserBookings(((bookingsRes as any).items || []) as BookingItem[]);
         } else {
@@ -190,7 +203,11 @@ export default function RechnungenPage() {
 
   useEffect(() => {
     const loadExpertInvoice = async () => {
-      if (!userId || role !== "experte" || !selectedStudentId) return;
+      if (!userId || role !== "experte" || !selectedStudentId) {
+        setInvoiceData(null);
+        setBusy(false);
+        return;
+      }
       setBusy(true);
       const res = await getInvoiceData(userId, selectedStudentId, invoiceMonth);
       setBusy(false);
@@ -477,6 +494,8 @@ export default function RechnungenPage() {
 
         {!selectedStudent ? (
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">Keine Kunden verfügbar.</div>
+        ) : busy ? (
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">Rechnung wird geladen...</div>
         ) : !invoiceData ? (
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">Rechnung konnte nicht geladen werden.</div>
         ) : (
