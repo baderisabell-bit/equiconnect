@@ -3,9 +3,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Eye, Heart, Home, MapPin, Play, Share2, Star, User, Users, ShieldCheck, Info } from 'lucide-react';
+import { Eye, Heart, Home, MapPin, Play, Share2, Star, User, Users, ShieldCheck, Info, CheckCircle2, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
 import LoggedInHeader from '../../components/logged-in-header';
 import MediaDropzone from '../../components/media-dropzone';
+import { ZERTIFIKAT_KATEGORIEN } from '../../suche/kategorien-daten';
 import {
   createNetworkPost,
   getProfilePosts,
@@ -189,6 +190,9 @@ export default function PublicProfilePage() {
   const [editingHorseForm, setEditingHorseForm] = useState({ name: '', breed: '', age: '', notes: '', imageUrl: '' });
   const offerViewTrackRef = useRef('');
   const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [editCertificates, setEditCertificates] = useState<string[]>([]);
+  const [newQualificationInput, setNewQualificationInput] = useState('');
+  const [openQualificationSection, setOpenQualificationSection] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     name: '',
     ort: '',
@@ -197,8 +201,14 @@ export default function PublicProfilePage() {
     description: '',
     werbungText: '',
     profilbildUrl: '',
-    website: ''
+    website: '',
+    profilbildPositionX: 50,
+    profilbildPositionY: 50,
+    profilbildZoom: 1
   });
+  const [showRatingsDetails, setShowRatingsDetails] = useState(false);
+  const [profileImageDragActive, setProfileImageDragActive] = useState(false);
+  const profileImageFrameRef = useRef<HTMLDivElement | null>(null);
   const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
   const [searchVisibilityFilter, setSearchVisibilityFilter] = useState<'public' | 'draft'>('public');
   const [wishlistedOfferIds, setWishlistedOfferIds] = useState<string[]>([]);
@@ -243,6 +253,63 @@ export default function PublicProfilePage() {
     }
   };
 
+  const loadSecondaryProfileData = async (profileUserId: number, viewerId: number, isExpertProfile: boolean, isMounted = true) => {
+    const [postsRes, metaRes] = await Promise.all([
+      getProfilePosts(viewerId, profileUserId, 12),
+      getPublicProfileMeta({ profileUserId, viewerUserId: viewerId })
+    ]);
+
+    if (!isMounted) return;
+
+    if (postsRes.success && Array.isArray(postsRes.posts)) {
+      setPosts((postsRes.posts || []).map((post: any) => ({
+        id: Number(post.id),
+        title: String(post.title || '').trim(),
+        content: String(post.content || '').trim(),
+        created_at: String(post.created_at || ''),
+        media_items: Array.isArray(post.media_items)
+          ? post.media_items
+              .map((item: any) => ({
+                type: String(item?.mediaType || item?.type || 'image') === 'video' ? 'video' : 'image',
+                url: String(item?.url || '').trim()
+              }))
+              .filter((item: GalerieItem) => item.url.length > 0)
+          : []
+      })));
+    }
+
+    if (metaRes.success) {
+      setStats(metaRes.stats);
+      setRatings((metaRes.ratings || []) as RatingItem[]);
+      setConnection((metaRes.connection || null) as ConnectionItem | null);
+    }
+
+    if (!isExpertProfile) {
+      setExpertTeamMembers([]);
+      setExpertHorses([]);
+      return;
+    }
+
+    const [teamRes, horsesRes] = await Promise.all([
+      getExpertTeamMembers(profileUserId),
+      getExpertHorses(profileUserId)
+    ]);
+
+    if (!isMounted) return;
+
+    if (teamRes.success && Array.isArray(teamRes.teamMembers)) {
+      setExpertTeamMembers(teamRes.teamMembers as Array<{ id: number; name: string | null; role: string | null; description: string | null; member_user_id: number | null; email: string | null; user_display_name: string | null }>);
+    } else {
+      setExpertTeamMembers([]);
+    }
+
+    if (horsesRes.success && Array.isArray(horsesRes.horses)) {
+      setExpertHorses(horsesRes.horses as Array<{ id: number; name: string | null; breed: string | null; age: number | null; notes: string | null; image_url: string | null }>);
+    } else {
+      setExpertHorses([]);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -262,10 +329,7 @@ export default function PublicProfilePage() {
       setViewerName(sessionStorage.getItem('userName') || 'Profil');
       setEditMode(false);
 
-      const [profileRes, postsRes] = await Promise.all([
-        getStoredProfileData(profileUserId),
-        getProfilePosts(safeViewer, profileUserId, 12)
-      ]);
+      const profileRes = await getStoredProfileData(profileUserId);
 
       if (!isMounted) return;
 
@@ -307,53 +371,13 @@ export default function PublicProfilePage() {
         }
       } else {
         setLoadError(String(profileRes.error || 'Profil konnte nicht geladen werden.'));
-      }
-
-      if (postsRes.success && Array.isArray(postsRes.posts)) {
-        setPosts((postsRes.posts || []).map((post: any) => ({
-          id: Number(post.id),
-          title: String(post.title || '').trim(),
-          content: String(post.content || '').trim(),
-          created_at: String(post.created_at || ''),
-          media_items: Array.isArray(post.media_items)
-            ? post.media_items
-                .map((item: any) => ({
-                  type: String(item?.mediaType || item?.type || 'image') === 'video' ? 'video' : 'image',
-                  url: String(item?.url || '').trim()
-                }))
-                .filter((item: GalerieItem) => item.url.length > 0)
-            : []
-        })));
+        setLoading(false);
+        return;
       }
 
       setLoading(false);
 
-      void loadMeta(profileUserId, safeViewer, isMounted);
-
-      if (!isExpertProfile) {
-        setExpertTeamMembers([]);
-        setExpertHorses([]);
-        return;
-      }
-
-      const [teamRes, horsesRes] = await Promise.all([
-        getExpertTeamMembers(profileUserId),
-        getExpertHorses(profileUserId)
-      ]);
-
-      if (!isMounted) return;
-
-      if (teamRes.success && Array.isArray(teamRes.teamMembers)) {
-        setExpertTeamMembers(teamRes.teamMembers as Array<{ id: number; name: string | null; role: string | null; description: string | null; member_user_id: number | null; email: string | null; user_display_name: string | null }>);
-      } else {
-        setExpertTeamMembers([]);
-      }
-
-      if (horsesRes.success && Array.isArray(horsesRes.horses)) {
-        setExpertHorses(horsesRes.horses as Array<{ id: number; name: string | null; breed: string | null; age: number | null; notes: string | null; image_url: string | null }>);
-      } else {
-        setExpertHorses([]);
-      }
+      void loadSecondaryProfileData(profileUserId, safeViewer, isExpertProfile, isMounted);
     };
 
     load();
@@ -637,6 +661,14 @@ export default function PublicProfilePage() {
   const wishlistedOfferIdSet = useMemo(() => new Set(wishlistedOfferIds), [wishlistedOfferIds]);
 
   const has = (value: any) => Boolean(String(value || '').trim());
+  const clampPercent = (value: number, fallback = 50) => {
+    if (!Number.isFinite(value)) return fallback;
+    return Math.max(0, Math.min(100, value));
+  };
+  const clampZoom = (value: number, fallback = 1) => {
+    if (!Number.isFinite(value)) return fallback;
+    return Math.max(1, Math.min(2, value));
+  };
   const galerieItems = useMemo((): GalerieItem[] => {
     if (!profile) return [];
     const raw = profile.profilData?.galerie;
@@ -670,6 +702,25 @@ export default function PublicProfilePage() {
     }
     return profileImageUrl;
   }, [editForm.profilbildUrl, editMode, isOwnProfile, profileImageUrl]);
+  const profileImagePosition = useMemo(() => {
+    if (isOwnProfile && editMode) {
+      return {
+        x: clampPercent(Number(editForm.profilbildPositionX), 50),
+        y: clampPercent(Number(editForm.profilbildPositionY), 50),
+        zoom: clampZoom(Number(editForm.profilbildZoom), 1)
+      };
+    }
+
+    const x = clampPercent(Number(profile?.profilData?.profilbild_position_x), 50);
+    const y = clampPercent(Number(profile?.profilData?.profilbild_position_y), 50);
+    const zoom = clampZoom(Number(profile?.profilData?.profilbild_zoom), 1);
+    return { x, y, zoom };
+  }, [editForm.profilbildPositionX, editForm.profilbildPositionY, editForm.profilbildZoom, editMode, isOwnProfile, profile?.profilData?.profilbild_position_x, profile?.profilData?.profilbild_position_y, profile?.profilData?.profilbild_zoom]);
+  const profileImageObjectStyle = useMemo(() => ({
+    objectPosition: `${profileImagePosition.x}% ${profileImagePosition.y}%`,
+    transform: `scale(${profileImagePosition.zoom})`,
+    transformOrigin: `${profileImagePosition.x}% ${profileImagePosition.y}%`
+  }), [profileImagePosition.x, profileImagePosition.y, profileImagePosition.zoom]);
 
   const isPublicProfile = profile ? profile.profilData?.isPublicProfile !== false : true;
   const hasTeam = teamCards.length > 0;
@@ -685,6 +736,59 @@ export default function PublicProfilePage() {
       selected: profile.kategorien.includes(label)
     }));
   }, [profile]);
+  const verifiedQualificationSet = useMemo(() => {
+    const values = Array.isArray(profile?.profilData?.verifizierteZertifikate)
+      ? profile!.profilData.verifizierteZertifikate
+      : [];
+    return new Set(values.map((item: any) => String(item || '').trim()).filter(Boolean));
+  }, [profile]);
+  const qualificationGroups = useMemo(() => {
+    return Object.entries(ZERTIFIKAT_KATEGORIEN).map(([groupName, content]) => {
+      const tokens: string[] = [];
+
+      const collectTokens = (value: any, prefix?: string) => {
+        if (Array.isArray(value)) {
+          value.forEach((entry) => {
+            const token = prefix ? `${prefix}: ${String(entry)}` : String(entry);
+            if (token.trim()) tokens.push(token.trim());
+          });
+          return;
+        }
+
+        if (value && typeof value === 'object') {
+          Object.entries(value).forEach(([childKey, childValue]) => {
+            if (childKey === 'Sonstiges') {
+              return;
+            }
+            if (Array.isArray(childValue)) {
+              childValue.forEach((entry) => {
+                const token = `${childKey}: ${String(entry)}`;
+                if (token.trim()) tokens.push(token.trim());
+              });
+              return;
+            }
+            if (childValue == null) {
+              if (childKey.trim()) tokens.push(childKey.trim());
+              return;
+            }
+            const token = `${childKey}: ${String(childValue)}`;
+            if (token.trim()) tokens.push(token.trim());
+          });
+          return;
+        }
+
+        const token = String(value || '').trim();
+        if (token) tokens.push(token);
+      };
+
+      collectTokens(content);
+
+      return {
+        groupName,
+        tokens: Array.from(new Set(tokens)),
+      };
+    });
+  }, []);
   const postDraftKey = profile?.userId ? `equi:draft:profile:${profile.userId}:new-post` : '';
   const offerDraftKey = profile?.userId ? `equi:draft:profile:${profile.userId}:new-offer` : '';
   const searchDraftKey = profile?.userId ? `equi:draft:profile:${profile.userId}:new-search` : '';
@@ -713,6 +817,25 @@ export default function PublicProfilePage() {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return '-';
     return parsed.toLocaleString('de-DE');
+  };
+
+  const toggleQualification = (value: string) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return;
+    setEditCertificates((prev) => (prev.includes(normalized) ? prev.filter((item) => item !== normalized) : [...prev, normalized]));
+  };
+
+  const addCustomQualification = () => {
+    const normalized = String(newQualificationInput || '').trim();
+    if (!normalized) return;
+    setEditCertificates((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]));
+    setNewQualificationInput('');
+  };
+
+  const removeQualification = (value: string) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return;
+    setEditCertificates((prev) => prev.filter((item) => item !== normalized));
   };
 
   const openReportDialog = () => {
@@ -890,9 +1013,20 @@ export default function PublicProfilePage() {
       werbungText: werbung,
       profilbildUrl,
       website,
+      profilbildPositionX: clampPercent(Number(profile.profilData?.profilbild_position_x), 50),
+      profilbildPositionY: clampPercent(Number(profile.profilData?.profilbild_position_y), 50),
+      profilbildZoom: clampZoom(Number(profile.profilData?.profilbild_zoom), 1),
     });
     setEditCategories(Array.isArray(profile.kategorien) ? profile.kategorien : []);
+    setEditCertificates(Array.isArray(profile.zertifikate) ? profile.zertifikate : []);
+    setNewQualificationInput('');
   }, [profile]);
+
+  useEffect(() => {
+    if (activeTab !== 'beitraege') {
+      setShowRatingsDetails(false);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (!isOwnProfile || !editMode || !postDraftKey || !offerDraftKey || draftsHydrated) return;
@@ -1029,6 +1163,9 @@ export default function PublicProfilePage() {
 
     const nextProfilData = {
       profilbild_url: editForm.profilbildUrl,
+      profilbild_position_x: clampPercent(Number(editForm.profilbildPositionX), 50),
+      profilbild_position_y: clampPercent(Number(editForm.profilbildPositionY), 50),
+      profilbild_zoom: clampZoom(Number(editForm.profilbildZoom), 1),
       freitextBeschreibung: editForm.description,
       website: editForm.website,
       startseitenwerbungText: editForm.werbungText
@@ -1041,7 +1178,7 @@ export default function PublicProfilePage() {
             ort: editForm.ort,
             plz: editForm.plz,
             angebote: editCategories,
-            zertifikate: profile.zertifikate,
+            zertifikate: editCertificates,
             angebotText: editForm.mainText,
             ...nextProfilData
           })
@@ -1050,6 +1187,7 @@ export default function PublicProfilePage() {
             ort: editForm.ort,
             plz: editForm.plz,
             kategorien: profile.kategorien,
+            zertifikate: editCertificates,
             sucheText: editForm.mainText,
             ...nextProfilData
           });
@@ -1067,13 +1205,18 @@ export default function PublicProfilePage() {
           ort: editForm.ort,
           plz: editForm.plz,
           kategorien: prev.role === 'experte' ? editCategories : prev.kategorien,
+          zertifikate: editCertificates,
           angebotText: prev.role === 'experte' ? editForm.mainText : prev.angebotText,
           sucheText: prev.role === 'nutzer' ? editForm.mainText : prev.sucheText,
           profilData: {
             ...(prev.profilData || {}),
             profilbild_url: editForm.profilbildUrl,
+            profilbild_position_x: clampPercent(Number(editForm.profilbildPositionX), 50),
+            profilbild_position_y: clampPercent(Number(editForm.profilbildPositionY), 50),
+            profilbild_zoom: clampZoom(Number(editForm.profilbildZoom), 1),
             freitextBeschreibung: editForm.description,
             website: editForm.website,
+            verifizierteZertifikate: Array.isArray(prev.profilData?.verifizierteZertifikate) ? prev.profilData.verifizierteZertifikate : []
           }
         };
       });
@@ -1125,8 +1268,14 @@ export default function PublicProfilePage() {
       werbungText: '',
       profilbildUrl,
       website,
+      profilbildPositionX: clampPercent(Number(profile.profilData?.profilbild_position_x), 50),
+      profilbildPositionY: clampPercent(Number(profile.profilData?.profilbild_position_y), 50),
+      profilbildZoom: clampZoom(Number(profile.profilData?.profilbild_zoom), 1),
     });
     setEditCategories(Array.isArray(profile.kategorien) ? profile.kategorien : []);
+    setEditCertificates(Array.isArray(profile.zertifikate) ? profile.zertifikate : []);
+    setNewQualificationInput('');
+    setOpenQualificationSection(null);
     setDraftsHydrated(false);
     setEditMode(false);
   };
@@ -1156,7 +1305,10 @@ export default function PublicProfilePage() {
 
       setEditForm((prev) => ({
         ...prev,
-        profilbildUrl: uploadRes.url || ''
+        profilbildUrl: uploadRes.url || '',
+        profilbildPositionX: 50,
+        profilbildPositionY: 50,
+        profilbildZoom: 1
       }));
 
       setProfile((prev) => {
@@ -1165,7 +1317,10 @@ export default function PublicProfilePage() {
           ...prev,
           profilData: {
             ...(prev.profilData || {}),
-            profilbild_url: String(uploadRes.url || '').trim()
+            profilbild_url: String(uploadRes.url || '').trim(),
+            profilbild_position_x: 50,
+            profilbild_position_y: 50,
+            profilbild_zoom: 1
           }
         };
       });
@@ -1176,6 +1331,32 @@ export default function PublicProfilePage() {
     } finally {
       setUploadingProfileImage(false);
     }
+  };
+
+  const applyProfileImagePositionFromPointer = (clientX: number, clientY: number) => {
+    if (!isOwnProfile || !editMode || !profileImageFrameRef.current) return;
+    const rect = profileImageFrameRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const nextX = clampPercent(((clientX - rect.left) / rect.width) * 100, 50);
+    const nextY = clampPercent(((clientY - rect.top) / rect.height) * 100, 50);
+    setEditForm((prev) => ({ ...prev, profilbildPositionX: nextX, profilbildPositionY: nextY }));
+  };
+
+  const handleProfileImagePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isOwnProfile || !editMode || !profileImagePreviewUrl) return;
+    setProfileImageDragActive(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    applyProfileImagePositionFromPointer(event.clientX, event.clientY);
+  };
+
+  const handleProfileImagePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!profileImageDragActive) return;
+    applyProfileImagePositionFromPointer(event.clientX, event.clientY);
+  };
+
+  const handleProfileImagePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    setProfileImageDragActive(false);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
   };
 
   const setContentFeedback = (message: string, error = '') => {
@@ -1807,11 +1988,30 @@ export default function PublicProfilePage() {
     }
   };
 
-  const openOfferDetail = (offerId: string) => {
+  const openOfferDetail = (offerId: string, mode?: 'view' | 'edit') => {
     if (!profile) return;
     const safeOfferId = String(offerId || '').trim();
     if (!safeOfferId) return;
-    router.push(`/anzeige/${profile.userId}/${encodeURIComponent(safeOfferId)}`);
+    const query = mode === 'edit' ? '?mode=edit' : '';
+    router.push(`/profil/${profile.userId}/detail/angebote/${encodeURIComponent(safeOfferId)}${query}`);
+  };
+
+  const openPostDetail = (postId: number | string, mode?: 'view' | 'edit' | 'new') => {
+    if (!profile) return;
+    const safePostId = String(postId || '').trim();
+    if (!safePostId) return;
+    const query = mode === 'edit' ? '?mode=edit' : mode === 'new' ? '?mode=new' : '';
+    router.push(`/profil/${profile.userId}/detail/beitraege/${encodeURIComponent(safePostId)}${query}`);
+  };
+
+  const openCreateOfferPage = () => {
+    if (!profile) return;
+    router.push(`/profil/${profile.userId}/detail/angebote/new?mode=new`);
+  };
+
+  const openCreatePostPage = () => {
+    if (!profile) return;
+    router.push(`/profil/${profile.userId}/detail/beitraege/new?mode=new`);
   };
 
   const sendTeamRegisterLinkByMail = () => {
@@ -2056,22 +2256,26 @@ export default function PublicProfilePage() {
             <div className="space-y-4">
               <div className="aspect-square rounded-3xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center relative group">
                 {profileImagePreviewUrl ? (
-                  <img src={String(profileImagePreviewUrl).trim()} alt="Profilbild" className="w-full h-full object-cover" />
+                  <div
+                    ref={profileImageFrameRef}
+                    onPointerDown={handleProfileImagePointerDown}
+                    onPointerMove={handleProfileImagePointerMove}
+                    onPointerUp={handleProfileImagePointerUp}
+                    onPointerLeave={handleProfileImagePointerUp}
+                    className={`w-full h-full relative ${isOwnProfile && editMode ? (profileImageDragActive ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+                  >
+                    <img src={String(profileImagePreviewUrl).trim()} alt="Profilbild" className="w-full h-full object-cover transition-transform duration-150" style={profileImageObjectStyle} />
+                    {isOwnProfile && editMode && (
+                      <>
+                        <div className="absolute inset-3 rounded-2xl border-2 border-emerald-400/90 shadow-[inset_0_0_0_9999px_rgba(15,23,42,0.22)] pointer-events-none" />
+                        <p className="absolute left-2 right-2 bottom-2 text-center text-[9px] font-black uppercase tracking-widest text-white bg-black/50 rounded-lg px-2 py-1 pointer-events-none">
+                          Rahmen zeigt den öffentlichen Ausschnitt · Bild verschieben
+                        </p>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <User size={64} className="text-slate-300" />
-                )}
-                {isOwnProfile && editMode && (
-                  <MediaDropzone
-                    title="Profilbild hochladen"
-                    description="Ziehe ein Bild hierher oder wähle eine Datei aus."
-                    accept="image/*"
-                    multiple={false}
-                    disabled={uploadingProfileImage}
-                    buttonLabel="Bild auswählen"
-                    busyLabel="Lade Profilbild..."
-                    onFiles={handleUploadProfileImage}
-                    className="absolute inset-0 bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                  />
                 )}
               </div>
               {isOwnProfile && editMode && (
@@ -2090,6 +2294,28 @@ export default function PublicProfilePage() {
                     onFiles={handleUploadProfileImage}
                     className="rounded-2xl border border-slate-200 bg-white p-3"
                   />
+                  <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ausschnitt Zoom</p>
+                      <button
+                        type="button"
+                        onClick={() => setEditForm((prev) => ({ ...prev, profilbildPositionX: 50, profilbildPositionY: 50, profilbildZoom: 1 }))}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600"
+                      >
+                        Zurücksetzen
+                      </button>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={2}
+                      step={0.01}
+                      value={clampZoom(Number(editForm.profilbildZoom), 1)}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, profilbildZoom: clampZoom(parseFloat(e.target.value), 1) }))}
+                      className="w-full accent-emerald-600"
+                    />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Zoom {clampZoom(Number(editForm.profilbildZoom), 1).toFixed(2)}x</p>
+                  </div>
                 </div>
               )}
               {galerieItems.length > 0 && (
@@ -2327,10 +2553,95 @@ export default function PublicProfilePage() {
                       </div>
                     </div>
                   )}
+
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Qualifikationen & Zertifikate</p>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{editCertificates.length} gewählt</span>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={newQualificationInput}
+                        onChange={(e) => setNewQualificationInput(e.target.value)}
+                        placeholder="Eigene Qualifikation hinzufügen"
+                        className="flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomQualification}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white"
+                      >
+                        <Plus size={14} /> Hinzufügen
+                      </button>
+                    </div>
+
+                    {editCertificates.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {editCertificates.map((item) => {
+                          const verified = verifiedQualificationSet.has(item);
+                          return (
+                            <span
+                              key={`selected-cert-${item}`}
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-[10px] font-black uppercase border ${verified ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-700'}`}
+                            >
+                              {verified && <CheckCircle2 size={12} />}
+                              {item}
+                              <button type="button" onClick={() => removeQualification(item)} className="ml-1 text-slate-400 hover:text-slate-700">
+                                <X size={12} />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      {qualificationGroups.map((group) => (
+                        <div key={group.groupName} className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setOpenQualificationSection((prev) => (prev === group.groupName ? null : group.groupName))}
+                            className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left ${openQualificationSection === group.groupName ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}
+                          >
+                            <span className="text-[11px] font-black uppercase tracking-widest">{group.groupName}</span>
+                            {openQualificationSection === group.groupName ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </button>
+
+                          {openQualificationSection === group.groupName && (
+                            <div className="p-4 bg-white">
+                              <div className="flex flex-wrap gap-2">
+                                {group.tokens.map((token) => {
+                                  const active = editCertificates.includes(token);
+                                  const verified = verifiedQualificationSet.has(token);
+                                  return (
+                                    <button
+                                      key={`${group.groupName}-${token}`}
+                                      type="button"
+                                      onClick={() => toggleQualification(token)}
+                                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-black uppercase border ${active ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-slate-200 text-slate-500'}`}
+                                    >
+                                      {verified && <CheckCircle2 size={12} />}
+                                      {token}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className="text-[10px] font-medium text-slate-400">
+                      Verifiziert wird die Liste im Adminbereich. Hier pflegst du nur deine Angaben und Nachweise.
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {profile && generalInfoText && !(isOwnProfile && editMode) && (
+              {profile && !(isOwnProfile && editMode) && (generalInfoText || expertCategoryBadges.length > 0 || (Array.isArray(profile.zertifikate) && profile.zertifikate.length > 0) || verifiedQualificationSet.size > 0) && (
                 <div className="space-y-3">
                   <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Allgemeine Informationen</h2>
                   {generalInfoText ? (
@@ -2352,6 +2663,41 @@ export default function PublicProfilePage() {
                           </span>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {Array.isArray(profile.zertifikate) && profile.zertifikate.length > 0 && (
+                    <div className="pt-2 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Qualifikationen</p>
+                      <div className="flex flex-wrap gap-2">
+                        {profile.zertifikate.map((item) => {
+                          const verified = verifiedQualificationSet.has(item);
+                          return (
+                            <span
+                              key={`public-cert-${item}`}
+                              className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase border ${verified ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                            >
+                              {verified && <CheckCircle2 size={12} />}
+                              {item}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {verifiedQualificationSet.size > 0 && (
+                    <div className="pt-2 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Verifizierte Nachweise</p>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from(verifiedQualificationSet).map((item) => (
+                          <span key={`verified-cert-${item}`} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase border bg-emerald-50 border-emerald-200 text-emerald-700">
+                            <CheckCircle2 size={12} />
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-[10px] font-medium text-slate-400">Die Freigabe erfolgt durch die Admin-Verifizierung.</p>
                     </div>
                   )}
                 </div>
@@ -2700,91 +3046,26 @@ export default function PublicProfilePage() {
                         }}
                         className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-200 bg-emerald-50 text-emerald-700"
                       >
-                        Anzeige erstellen
+                        Anzeige hinzufügen
                       </button>
                     </div>
                   )}
                 </div>
-                {isOwnProfile && editMode && (
-                  <div id="anzeige-formular" className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Neue Anzeige</p>
-                    <p className="text-xs text-slate-500">Entwurf wird automatisch gespeichert{hasOfferDraft ? ' (ungespeicherter Entwurf aktiv).' : '.'}</p>
-                    <input
-                      value={newOfferForm.titel}
-                      onChange={(e) => setNewOfferForm((prev) => ({ ...prev, titel: e.target.value }))}
-                      placeholder="Titel"
-                      className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
-                    />
-                    <input
-                      value={newOfferForm.kategorie}
-                      onChange={(e) => setNewOfferForm((prev) => ({ ...prev, kategorie: e.target.value }))}
-                      placeholder="Kategorie"
-                      className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
-                    />
-                    <textarea
-                      value={newOfferForm.beschreibung}
-                      onChange={(e) => setNewOfferForm((prev) => ({ ...prev, beschreibung: e.target.value }))}
-                      rows={4}
-                      placeholder="Beschreibung"
-                      className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
-                    />
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Titelbild</p>
-                      <MediaDropzone
-                        title="Titelbild hochladen"
-                        description="JPG, PNG oder WebP"
-                        accept="image/*"
-                        multiple={false}
-                        disabled={uploadingOfferMedia}
-                        buttonLabel="Titelbild auswählen"
-                        busyLabel="Lädt..."
-                        onFiles={(files) => handleOfferMediaUpload(files, 'title')}
-                      />
-                      {newOfferForm.titleImageUrl && (
-                        <img src={newOfferForm.titleImageUrl} alt="Titelbild" className="w-full max-w-sm h-32 object-cover rounded-xl border border-slate-200" />
-                      )}
+                {isOwnProfile && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Anzeige verwalten</p>
+                    <p className="text-xs text-slate-500">
+                      Neue Anzeigen und Bearbeitungen öffnen jetzt eine eigene Detailseite mit allen Feldern, Medien und der Nachrichtenfunktion.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={openCreateOfferPage}
+                        className="px-4 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white"
+                      >
+                        Anzeige hinzufügen
+                      </button>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Weitere Bilder / Videos</p>
-                      <MediaDropzone
-                        title="Weitere Medien hinzufügen"
-                        description="Bis zu 8 Medien pro Anzeige"
-                        accept="image/*,video/*"
-                        multiple
-                        disabled={uploadingOfferMedia}
-                        buttonLabel="Dateien auswählen"
-                        busyLabel="Lädt..."
-                        onFiles={(files) => handleOfferMediaUpload(files, 'gallery')}
-                      />
-                      {newOfferForm.mediaItems.length > 0 && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                          {newOfferForm.mediaItems.map((item, index) => (
-                            <div key={`${item.url}-${index}`} className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-                              {item.type === 'video' ? (
-                                <video src={item.url} className="w-full h-24 object-cover" muted playsInline />
-                              ) : (
-                                <img src={item.url} alt="Anzeigenmedium" className="w-full h-24 object-cover" />
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => removeOfferMediaItem(index)}
-                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 text-slate-700 flex items-center justify-center"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCreateOfferInline}
-                      disabled={contentBusy || uploadingOfferMedia}
-                      className="px-4 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white disabled:opacity-60"
-                    >
-                      Anzeige speichern
-                    </button>
                   </div>
                 )}
                 {visibleAngebotCards.length === 0 ? (
@@ -2803,7 +3084,9 @@ export default function PublicProfilePage() {
                         )}
                         <div className="flex items-center justify-between gap-2">
                           {has(angebot.kategorie) && <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">{angebot.kategorie}</p>}
-                          <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${angebot.visibility === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{angebot.visibility === 'public' ? 'Online' : 'Entwurf'}</span>
+                          {angebot.visibility === 'public' && (
+                            <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-emerald-100 text-emerald-700">Online</span>
+                          )}
                         </div>
                         <button
                           type="button"
@@ -2815,10 +3098,28 @@ export default function PublicProfilePage() {
                         >
                           Detailseite öffnen
                         </button>
-                        {has(angebot.titel) && <h3 className="text-base font-black uppercase italic text-slate-900">{angebot.titel}</h3>}
+                        {has(angebot.titel) && (
+                          <h3 className="text-base font-black uppercase italic text-slate-900">
+                            {angebot.visibility === 'draft' ? 'Entwurf: ' : ''}{angebot.titel}
+                          </h3>
+                        )}
                         {has(angebot.beschreibung) && <p className="text-sm text-slate-600 whitespace-pre-wrap">{angebot.beschreibung}</p>}
                         {has(angebot.preview) && <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{angebot.preview}</p>}
                         {has(angebot.conditionsText) && <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{angebot.conditionsText}</p>}
+                        {isOwnProfile && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openOfferDetail(angebot.id, 'edit');
+                              }}
+                              className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white text-slate-700"
+                            >
+                              Bearbeiten
+                            </button>
+                          </div>
+                        )}
                         <div className="flex items-center gap-4 pt-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
                           <span className="inline-flex items-center gap-1"><Eye size={13} /> {angebot.viewsCount}</span>
                           <span className="inline-flex items-center gap-1"><Heart size={13} /> {angebot.wishlistCount}</span>
@@ -3154,11 +3455,12 @@ export default function PublicProfilePage() {
 
         {activeTab === 'beitraege' && (
           <section className="space-y-6">
-            <section className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm space-y-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Star size={14} className="text-amber-400" /> Bewertungen</h2>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bewertungen entstehen nur auf Basis veröffentlichter Anzeigen</p>
-              </div>
+            {showRatingsDetails && (
+              <section className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Star size={14} className="text-amber-400" /> Bewertungen</h2>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bewertungen entstehen nur auf Basis veröffentlichter Anzeigen</p>
+                </div>
               {!isOwnProfile && viewerUserId > 0 && hasPublicExpertAds && (
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Deine Bewertung zur Anzeige</p>
@@ -3237,53 +3539,51 @@ export default function PublicProfilePage() {
                   ))}
                 </div>
               )}
-            </section>
+              </section>
+            )}
 
             <section className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm space-y-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Star size={14} className="text-amber-400" /> Beiträge</h2>
-              </div>
-              {isOwnProfile && editMode && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Neuer Beitrag</p>
-                  <p className="text-xs text-slate-500">
-                    Entwurf wird automatisch gespeichert{hasPostDraft ? ' (ungespeicherter Entwurf aktiv).' : '.'}
-                  </p>
-                  <input value={newPostForm.title} onChange={(e) => setNewPostForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Titel" className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" />
-                  <textarea value={newPostForm.content} onChange={(e) => setNewPostForm((prev) => ({ ...prev, content: e.target.value }))} rows={4} placeholder="Inhalt" className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" />
-                  <MediaDropzone
-                    title="Beitragsmedien hinzufügen"
-                    description="Ziehe Bilder oder Videos hierher oder wähle Dateien aus. Max. 8 Medien."
-                    accept="image/*,video/*"
-                    multiple
-                    disabled={uploadingPostMedia || contentBusy}
-                    buttonLabel="Medien auswählen"
-                    busyLabel="Lade Medien..."
-                    onFiles={handlePostMediaUpload}
-                  />
-                  {newPostMediaItems.length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {newPostMediaItems.map((item, index) => (
-                        <div key={`${item.url}-${index}`} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-100 aspect-square">
-                          {item.type === 'image' ? (
-                            <img src={String(item.url).trim()} alt="Beitragsmedium" className="w-full h-full object-cover" />
-                          ) : (
-                            <video src={String(item.url).trim()} className="w-full h-full object-cover" controls playsInline />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removePostMediaItem(index)}
-                            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white text-sm font-black"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                <div className="flex flex-wrap gap-2">
+                  {isOwnProfile && editMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditMode(true);
+                        window.setTimeout(() => {
+                          document.getElementById('beitrag-formular')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 0);
+                      }}
+                      className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-200 bg-emerald-50 text-emerald-700"
+                    >
+                      Beitrag hinzufügen
+                    </button>
                   )}
-                  <button type="button" onClick={handleCreatePostInline} disabled={contentBusy || uploadingPostMedia} className="px-4 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white disabled:opacity-60">
-                    Beitrag speichern
+                  <button
+                    type="button"
+                    onClick={() => setShowRatingsDetails((prev) => !prev)}
+                    className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border ${showRatingsDetails ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-white border-slate-200 text-slate-600'}`}
+                  >
+                    Bewertungen {showRatingsDetails ? 'ausblenden' : `anzeigen (${ratings.length})`}
                   </button>
+                </div>
+              </div>
+              {isOwnProfile && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Beitrag verwalten</p>
+                  <p className="text-xs text-slate-500">
+                    Neue Beiträge und Bearbeitungen oeffnen jetzt eine eigene Detailseite mit Medien, Text und Nachrichtenfunktion.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={openCreatePostPage}
+                      className="px-4 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white"
+                    >
+                      Beitrag hinzufügen
+                    </button>
+                  </div>
                 </div>
               )}
               {posts.length === 0 ? (
@@ -3292,52 +3592,38 @@ export default function PublicProfilePage() {
                 <div className="space-y-3">
                   {posts.map((post) => (
                     <article key={post.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50">
-                      {isOwnProfile && editMode && editingPostId === post.id ? (
-                        <div className="space-y-2">
-                          <input value={editingPostForm.title} onChange={(e) => setEditingPostForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Titel" className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" />
-                          <textarea value={editingPostForm.content} onChange={(e) => setEditingPostForm((prev) => ({ ...prev, content: e.target.value }))} rows={4} placeholder="Inhalt" className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" />
-                          <div className="flex gap-2">
-                            <button type="button" onClick={handleUpdatePostInline} disabled={contentBusy} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white disabled:opacity-60">Speichern</button>
-                            <button type="button" onClick={() => { setEditingPostId(null); setEditingPostForm({ title: '', content: '' }); }} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-white border border-slate-200 text-slate-700">Abbrechen</button>
-                          </div>
+                      <p className="text-sm font-black uppercase italic text-slate-800">{post.title}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">{new Date(post.created_at).toLocaleString('de-DE')}</p>
+                      <p className="text-sm text-slate-600 mt-2 whitespace-pre-wrap">{post.content}</p>
+                      {Array.isArray(post.media_items) && post.media_items.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
+                          {post.media_items.map((item, mediaIndex) => (
+                            <button
+                              key={`${post.id}-media-${mediaIndex}`}
+                              type="button"
+                              onClick={() => setLightboxItem(item)}
+                              className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white"
+                            >
+                              {item.type === 'image' ? (
+                                <img src={String(item.url).trim()} alt="Beitragsbild" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="relative w-full h-full">
+                                  <video src={String(item.url).trim()} className="w-full h-full object-cover" muted preload="metadata" playsInline />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent flex items-center justify-center">
+                                    <span className="w-10 h-10 rounded-full bg-black/60 border border-white/40 text-white flex items-center justify-center">
+                                      <Play size={16} fill="currentColor" />
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </button>
+                          ))}
                         </div>
-                      ) : (
-                        <>
-                          <p className="text-sm font-black uppercase italic text-slate-800">{post.title}</p>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-1">{new Date(post.created_at).toLocaleString('de-DE')}</p>
-                          <p className="text-sm text-slate-600 mt-2 whitespace-pre-wrap">{post.content}</p>
-                          {Array.isArray(post.media_items) && post.media_items.length > 0 && (
-                            <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-2">
-                              {post.media_items.map((item, mediaIndex) => (
-                                <button
-                                  key={`${post.id}-media-${mediaIndex}`}
-                                  type="button"
-                                  onClick={() => setLightboxItem(item)}
-                                  className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white"
-                                >
-                                  {item.type === 'image' ? (
-                                    <img src={String(item.url).trim()} alt="Beitragsbild" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="relative w-full h-full">
-                                      <video src={String(item.url).trim()} className="w-full h-full object-cover" muted preload="metadata" playsInline />
-                                      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent flex items-center justify-center">
-                                        <span className="w-10 h-10 rounded-full bg-black/60 border border-white/40 text-white flex items-center justify-center">
-                                          <Play size={16} fill="currentColor" />
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                          {isOwnProfile && editMode && (
-                            <div className="flex gap-2 pt-2">
-                              <button type="button" onClick={() => { setEditingPostId(post.id); setEditingPostForm({ title: post.title, content: post.content }); }} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-white border border-slate-200 text-slate-700">Bearbeiten</button>
-                              <button type="button" onClick={() => handleDeletePostInline(post.id)} disabled={contentBusy} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-red-50 border border-red-200 text-red-700 disabled:opacity-60">Löschen</button>
-                            </div>
-                          )}
-                        </>
+                      )}
+                      {isOwnProfile && (
+                        <div className="flex gap-2 pt-2">
+                          <button type="button" onClick={() => openPostDetail(post.id, 'edit')} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-white border border-slate-200 text-slate-700">Bearbeiten</button>
+                        </div>
                       )}
                     </article>
                   ))}

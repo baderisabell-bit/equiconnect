@@ -939,12 +939,8 @@ export default function SchuelerPage() {
             <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/dashboard/experte"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Dashboard</button>
           )}
           <button type="button" onClick={() => { setSidebarOpen(false); openProfile(); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Profil</button>
-          {isExpertRole && (
-            <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/dashboard/rechnungen"; }} className="block text-left text-lg font-black italic uppercase text-emerald-600">Rechnungen</button>
-          )}
-          {!isExpertRole && (
-            <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/dashboard/rechnungen"; }} className="block text-left text-lg font-black italic uppercase text-emerald-600">Rechnungen</button>
-          )}
+          <div className="block text-left text-lg font-black italic uppercase text-emerald-600">Schüler &amp; Kunden</div>
+          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/dashboard/rechnungen"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Rechnungen</button>
           <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/suche"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Suche</button>
           <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/netzwerk"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Netzwerk</button>
           <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/nachrichten"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Nachrichten</button>

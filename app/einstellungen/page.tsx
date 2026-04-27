@@ -653,6 +653,12 @@ export default function EinstellungenPage() {
     return parsed.toLocaleString("de-DE");
   };
 
+  const scrollToSection = (sectionId: string) => {
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const profileLink = userId && userId > 0 ? `/profil/${userId}` : "/login";
   const dashboardLink = currentRole === "experte" ? "/dashboard/experte" : "/dashboard/nutzer";
 
@@ -696,44 +702,37 @@ export default function EinstellungenPage() {
       />
 
       <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-8">
-        <aside className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm h-fit xl:sticky xl:top-8 space-y-3">
+        <aside className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm h-fit xl:sticky xl:top-8 space-y-4">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Navigation</p>
-          {role !== "experte" && (
-            <Link href="/dashboard/nutzer" className="block px-4 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">
-              Dashboard
-            </Link>
-          )}
-          <Link href={profileHref} className="block px-4 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">
-            Mein Profil
-          </Link>
-          <Link href="/netzwerk" className="block px-4 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">
-            Netzwerk
-          </Link>
-          <Link href="/merkliste" className="block px-4 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">
-            Merkliste
-          </Link>
-          <Link href={isExpertRole ? "/dashboard/experte" : "/dashboard/nutzer"} className="block px-4 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">
-            {isExpertRole ? 'Experten-Dashboard' : 'Dashboard'}
-          </Link>
-          {role === "experte" && (
-            <button
-              type="button"
-              onClick={() => {
-                const target = document.getElementById("eigene-werbung");
-                if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300"
-            >
-              Eigene Werbung
-            </button>
-          )}
-          <div className="px-4 py-3 rounded-xl border border-emerald-200 bg-emerald-50 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-            Einstellungen
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Einstellungen</p>
+            <button type="button" onClick={() => scrollToSection("section-private-data")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Private personenbezogene Daten</button>
+            <button type="button" onClick={() => scrollToSection("section-password-access")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Passwort & Zugang</button>
+            <button type="button" onClick={() => scrollToSection("section-delete-profile")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Profil dauerhaft löschen</button>
+            <button type="button" onClick={() => scrollToSection("section-cookies")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Cookies</button>
+            <button type="button" onClick={() => scrollToSection("section-subscription")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Abo & Zahlung</button>
+            <button type="button" onClick={() => scrollToSection("section-gallery")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Profil Galerie</button>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Verwaltung</p>
+            <button type="button" onClick={() => scrollToSection("section-marketing")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Marketing & Sichtbarkeit</button>
+            {isExpertRole && (
+              <button type="button" onClick={() => scrollToSection("section-ads")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Werbung</button>
+            )}
+            {isExpertRole && (
+              <Link href="/dashboard/experte/schueler" className="block px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Schüler & Kunden</Link>
+            )}
+            <button type="button" onClick={() => scrollToSection("section-bookings-invoices")} className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-emerald-300">Buchungen & Rechnungen</button>
+          </div>
+
+          <div className="px-4 py-3 rounded-xl border border-emerald-200 bg-emerald-50 text-[10px] font-black uppercase tracking-widest text-emerald-700 text-center">
+            Einstellungen aktiv
           </div>
         </aside>
 
         <div className="space-y-8">
-          <section className="bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-[2rem] p-8 shadow-sm space-y-4">
+          <section id="section-bookings-invoices" className="bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-[2rem] p-8 shadow-sm space-y-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Abrechnung</p>
               <h1 className="mt-2 text-3xl font-black italic uppercase tracking-tight text-slate-900">Rechnungen & Buchungen</h1>
@@ -754,7 +753,7 @@ export default function EinstellungenPage() {
           </section>
 
           <div className="grid grid-cols-1 2xl:grid-cols-[1fr_1fr] gap-8">
-        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-6">
+        <section id="section-private-data" className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-6">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Einstellungen</p>
             <h1 className="mt-2 text-3xl font-black italic uppercase tracking-tight text-slate-900">Private personenbezogene Daten</h1>
@@ -866,7 +865,7 @@ export default function EinstellungenPage() {
             {saving ? "Speichere..." : "Private Daten speichern"}
           </button>
 
-          <div className="pt-6 border-t border-slate-100 space-y-4">
+          <div id="section-password-access" className="pt-6 border-t border-slate-100 space-y-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Sicherheit</p>
               <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Passwort & Zugang</h2>
@@ -880,7 +879,7 @@ export default function EinstellungenPage() {
               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-100">
+            <div id="section-subscription" className="pt-6 border-t border-slate-100">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Abo & Zahlung</p>
                 <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Tarifverwaltung & Abrechnung</h2>
@@ -972,7 +971,7 @@ export default function EinstellungenPage() {
               )}
             </div>
 
-            <div className="pt-6 border-t border-slate-100">
+            <div id="section-cookies" className="pt-6 border-t border-slate-100">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Cookies & Speicher</p>
                 <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Deine Auswahl verwalten</h2>
@@ -1018,7 +1017,7 @@ export default function EinstellungenPage() {
               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-100">
+            <div id="section-marketing" className="pt-6 border-t border-slate-100">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Marketing & Sichtbarkeit</p>
                 <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Pushes und Startseitenwerbung</h2>
@@ -1091,7 +1090,7 @@ export default function EinstellungenPage() {
               )}
             </div>
 
-            <div className="pt-6 border-t border-slate-100 space-y-4">
+            <div id="section-gallery" className="pt-6 border-t border-slate-100 space-y-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Profil</p>
                 <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Galerie</h2>
@@ -1162,7 +1161,7 @@ export default function EinstellungenPage() {
             </div>
 
             {role === "experte" && (
-              <div id="eigene-werbung" className="pt-6 border-t border-slate-100 space-y-4">
+              <div id="section-ads" className="pt-6 border-t border-slate-100 space-y-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Werbung</p>
                   <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Eigene Werbung hochladen</h2>
@@ -1239,9 +1238,8 @@ export default function EinstellungenPage() {
               </div>
             )}
 
-            <div className="pt-6 border-t border-red-100 space-y-4">
+            <div id="section-delete-profile" className="pt-6 border-t border-black-100 space-y-4">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600">Gefahrenbereich</p>
                 <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Profil dauerhaft löschen</h2>
                 <p className="mt-2 text-sm font-medium text-slate-600">
                   Gib zur Bestätigung <span className="font-black">LOESCHEN</span> ein. Danach wird dein Konto endgültig entfernt.
@@ -1253,7 +1251,7 @@ export default function EinstellungenPage() {
                 value={deleteConfirmationInput}
                 onChange={(e) => setDeleteConfirmationInput(e.target.value)}
                 placeholder="LOESCHEN"
-                className="w-full md:w-72 p-4 rounded-xl border border-red-200 bg-red-50 font-black uppercase outline-none focus:border-red-400"
+                className="w-full md:w-72 p-4 rounded-xl border border-black-200 bg-black-50 font-black uppercase outline-none focus:border-black-400"
               />
 
               <input
@@ -1261,14 +1259,14 @@ export default function EinstellungenPage() {
                 value={deletePasswordInput}
                 onChange={(e) => setDeletePasswordInput(e.target.value)}
                 placeholder="Aktuelles Passwort"
-                className="w-full md:w-72 p-4 rounded-xl border border-red-200 bg-red-50 font-bold outline-none focus:border-red-400"
+                className="w-full md:w-72 p-4 rounded-xl border border-black-200 bg-black-50 font-bold outline-none focus:border-black-400"
               />
 
               <button
                 type="button"
                 onClick={handleDeleteAccount}
                 disabled={deletingAccount || deleteCooldownActive}
-                className="w-full md:w-auto px-8 py-4 rounded-xl bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-500 disabled:opacity-60"
+                className="w-full md:w-auto px-8 py-4 rounded-xl bg-black-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-black-500 disabled:opacity-60"
               >
                 {deletingAccount ? "Lösche Profil..." : deleteCooldownActive ? "Bitte kurz warten..." : "Profil dauerhaft löschen"}
               </button>

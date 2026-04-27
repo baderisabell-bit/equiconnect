@@ -53,7 +53,7 @@ export default function LoginPage() {
 
       <div className="w-full max-w-md bg-white rounded-[3rem] p-10 shadow-xl border border-slate-100">
         <div className="text-center mb-8">
-            <h1 className="text-3xl font-black text-emerald-600 italic tracking-tighter uppercase">EQUIPRO</h1>
+            <h1 className="text-3xl font-black text-emerald-600 italic tracking-tighter uppercase">EQUILY</h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Willkommen zurück</p>
         </div>
         
@@ -102,7 +102,7 @@ export default function LoginPage() {
           <div className="grid grid-cols-1 gap-3">
             <Link href="/registrieren/experte" className="group flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100 hover:bg-emerald-600 transition-all">
               <span className="text-emerald-700 font-bold text-xs group-hover:text-white transition-colors uppercase italic">➔ Als Profi starten</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest">Profi</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest">Experte</span>
             </Link>
 
             <Link href="/registrieren/nutzer" className="group flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200 hover:bg-slate-900 transition-all">
