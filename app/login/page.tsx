@@ -101,7 +101,7 @@ export default function LoginPage() {
           
           <div className="grid grid-cols-1 gap-3">
             <Link href="/registrieren/experte" className="group flex items-center justify-between p-4 bg-emerald-50 rounded-2xl border border-emerald-100 hover:bg-emerald-600 transition-all">
-              <span className="text-emerald-700 font-bold text-xs group-hover:text-white transition-colors uppercase italic">➔ Als Profi starten</span>
+              <span className="text-emerald-700 font-bold text-xs group-hover:text-white transition-colors uppercase italic">➔ Als Experte starten</span>
               <span className="text-[10px] font-bold uppercase tracking-widest">Experte</span>
             </Link>
 

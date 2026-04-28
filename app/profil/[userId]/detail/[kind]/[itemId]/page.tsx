@@ -107,6 +107,7 @@ export default function ProfileDetailPage() {
   const [offerForm, setOfferForm] = useState({
     titel: '',
     kategorie: '',
+    thema: '',
     beschreibung: '',
     titleImageUrl: '',
     mediaItems: [] as MediaItem[],
@@ -241,7 +242,7 @@ export default function ProfileDetailPage() {
     if (!isEditMode) {
       setPostForm({ title: '', content: '' });
       setPostMediaItems([]);
-      setOfferForm({ titel: '', kategorie: '', beschreibung: '', titleImageUrl: '', mediaItems: [] });
+      setOfferForm({ titel: '', kategorie: '', thema: '', beschreibung: '', titleImageUrl: '', mediaItems: [] });
       return;
     }
 
@@ -262,7 +263,7 @@ export default function ProfileDetailPage() {
 
     if (kind === 'angebote') {
       if (itemId === 'new') {
-        setOfferForm({ titel: '', kategorie: '', beschreibung: '', titleImageUrl: '', mediaItems: [] });
+        setOfferForm({ titel: '', kategorie: '', thema: '', beschreibung: '', titleImageUrl: '', mediaItems: [] });
         return;
       }
 
@@ -271,6 +272,7 @@ export default function ProfileDetailPage() {
         setOfferForm({
           titel: String(offer.titel || ''),
           kategorie: String(offer.kategorie || ''),
+          thema: String(offer.thema || offer.unterkategorie || ''),
           beschreibung: String(offer.beschreibung || ''),
           titleImageUrl: String(offer.titleImageUrl || ''),
           mediaItems: Array.isArray(offer.mediaItems) ? offer.mediaItems.filter(Boolean) : [],
@@ -461,6 +463,7 @@ export default function ProfileDetailPage() {
 
     const titel = String(offerForm.titel || '').trim();
     const kategorie = String(offerForm.kategorie || '').trim();
+    const thema = String(offerForm.thema || '').trim();
     const beschreibung = String(offerForm.beschreibung || '').trim();
     if (!titel) {
       setError('Bitte einen Titel für die Anzeige eingeben.');
@@ -481,6 +484,7 @@ export default function ProfileDetailPage() {
       id: currentId,
       titel,
       kategorie,
+      thema,
       beschreibung,
       titleImageUrl: String(offerForm.titleImageUrl || '').trim(),
       mediaItems: offerForm.mediaItems.map((item) => ({
@@ -798,6 +802,27 @@ export default function ProfileDetailPage() {
                           );
                         })}
                       </div>
+                      {String(offerForm.kategorie || '').trim() && (
+                        <div className="mt-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">Themen</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {(ANGEBOT_KATEGORIEN.find((c) => c.label === String(offerForm.kategorie).trim())?.themen || []).map((themaLabel: any) => {
+                              const label = typeof themaLabel === 'string' ? themaLabel : String(themaLabel.label || themaLabel.name || themaLabel);
+                              const active = String(offerForm.thema || '').trim() === String(label).trim();
+                              return (
+                                <button
+                                  key={`offer-thema-${label}`}
+                                  type="button"
+                                  onClick={() => setOfferForm((prev) => ({ ...prev, thema: label }))}
+                                  className={`rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-widest border ${active ? 'bg-emerald-600 border-emerald-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-emerald-200 hover:text-emerald-700'}`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                       {String(offerForm.kategorie || '').trim() && !ANGEBOT_KATEGORIEN.some((category) => category.label === String(offerForm.kategorie || '').trim()) && (
                         <p className="text-[10px] font-medium text-amber-700">
                           Diese Kategorie stammt aus einem älteren Eintrag und bleibt zur Kompatibilität erhalten.

@@ -180,6 +180,7 @@ export default function Suchseite() {
                 id: String(item?.id || '').trim(),
                 titel: String(item?.titel || '').trim(),
                 kategorie: String(item?.kategorie || '').trim(),
+                thema: String(item?.thema || item?.unterkategorie || '').trim(),
                 beschreibung: String(item?.beschreibung || '').trim(),
                 preise: Array.isArray(item?.preise)
                   ? item.preise
@@ -197,7 +198,8 @@ export default function Suchseite() {
 
         const mergedKategorien = [
           ...(Array.isArray(row.kategorien) ? row.kategorien : []),
-          ...angeboteAnzeigen.map((item: { kategorie: string }) => item.kategorie).filter(Boolean)
+          ...angeboteAnzeigen.map((item: { kategorie: string; thema?: string }) => item.kategorie).filter(Boolean),
+          ...angeboteAnzeigen.map((item: { kategorie: string; thema?: string }) => item.thema).filter(Boolean)
         ].filter((item: string, index: number, arr: string[]) => arr.indexOf(item) === index);
 
         const gesucheText = row.gesuche && typeof row.gesuche === 'object'
