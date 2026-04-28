@@ -115,7 +115,7 @@ export default function Suchseite() {
     const params = new URLSearchParams(window.location.search);
     const kat = params.get('kategorie');
     if (kat) setSelectedKategorien([kat]);
-  }, []);
+  }, [selectedKategorien, selectedThemen, selectedZertifikate, ortFilter, suchbegriff]);
 
   useEffect(() => {
     const savedRole = sessionStorage.getItem('userRole');
@@ -158,7 +158,13 @@ export default function Suchseite() {
       const userIdRaw = sessionStorage.getItem('userId');
       const viewerUserId = userIdRaw ? parseInt(userIdRaw, 10) : NaN;
 
-      const res = await getSearchFeed(!Number.isNaN(viewerUserId) ? viewerUserId : null);
+      const res = await getSearchFeed(!Number.isNaN(viewerUserId) ? viewerUserId : null, {
+        kategorien: selectedKategorien,
+        themen: selectedThemen,
+        zertifikate: selectedZertifikate,
+        ort: ortFilter,
+        q: suchbegriff,
+      });
       if (!res.success) {
         setFeedError(String(res.error || 'Suche konnte nicht geladen werden.'));
         return;

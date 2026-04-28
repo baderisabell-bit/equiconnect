@@ -6188,7 +6188,7 @@ export async function setProfileVisibility(payload: { userId: number; isPublic: 
   }
 }
 
-export async function getSearchFeed(viewerUserId?: number | null) {
+export async function getSearchFeed(viewerUserId?: number | null, filters?: { kategorien?: string[]; themen?: string[]; zertifikate?: string[]; ort?: string | null; q?: string | null }) {
   try {
     await ensureExtraSchema();
 
@@ -6219,7 +6219,29 @@ export async function getSearchFeed(viewerUserId?: number | null) {
            OR p.updated_at < NOW() - INTERVAL '24 hours'
          )`; // Otherwise only show profiles with boost or > 24h old
 
-    const buildSearchFeedQuery = (applyEarlyAccessFilter: boolean) => `
+    const buildSearchFeedQuery = (applyEarlyAccessFilter: boolean, filters?: { kategorien?: string[]; themen?: string[]; zertifikate?: string[]; ort?: string | null; q?: string | null }) => {
+      // prepare parameter placeholders and values
+      const params: any[] = [];
+      let idx = 1;
+
+      const katPlaceholder = (filters && Array.isArray(filters.kategorien) && filters.kategorien.length) ? `$${idx++}` : 'NULL';
+      if (katPlaceholder !== 'NULL') params.push(filters!.kategorien);
+
+      const themaPlaceholder = (filters && Array.isArray(filters.themen) && filters.themen.length) ? `$${idx++}` : 'NULL';
+      if (themaPlaceholder !== 'NULL') params.push(filters!.themen);
+
+      const zertPlaceholder = (filters && Array.isArray(filters.zertifikate) && filters.zertifikate.length) ? `$${idx++}` : 'NULL';
+      if (zertPlaceholder !== 'NULL') params.push(filters!.zertifikate);
+
+      const ortPlaceholder = (filters && filters.ort && String(filters.ort).trim()) ? `$${idx++}` : 'NULL';
+      if (ortPlaceholder !== 'NULL') params.push(`%${String(filters!.ort).trim().toLowerCase()}%`);
+
+      const qPlaceholder = (filters && filters.q && String(filters.q).trim()) ? `$${idx++}` : 'NULL';
+      if (qPlaceholder !== 'NULL') params.push(`%${String(filters!.q).trim().toLowerCase()}%`);
+
+      // base query as CTE to allow filtering on JSONB content (angeboteAnzeigen)
+      const sql = `
+      WITH base AS (
       SELECT p.user_id,
              CASE
                WHEN LOWER(COALESCE(u.role, '')) = 'experte'
@@ -6256,7 +6278,8 @@ export async function getSearchFeed(viewerUserId?: number | null) {
                WHEN COALESCE(us.plan_key, '') = 'nutzer_plus' THEN 180
                WHEN COALESCE(us.plan_key, '') = 'experte_pro' THEN 120
                ELSE 0
-             END AS visibility_score
+             END AS visibility_score,
+             p.updated_at
       FROM user_profiles p
       JOIN users u ON u.id = p.user_id
       LEFT JOIN user_subscriptions us ON us.user_id = p.user_id
@@ -6276,17 +6299,32 @@ export async function getSearchFeed(viewerUserId?: number | null) {
           AND r.is_verified_booking = TRUE
       ) rating_agg ON TRUE
       WHERE p.user_id IS NOT NULL
-      ORDER BY visibility_score DESC,
-               p.updated_at DESC;
-    `;
+      )
+      SELECT * FROM base
+      WHERE 1=1
+        AND (${katPlaceholder} IS NULL OR (base.kategorien && ${katPlaceholder}::text[] OR EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(base.profil_data->'angeboteAnzeigen','[]'::jsonb)) a WHERE (a->>'kategorie') = ANY(${katPlaceholder}::text[]))))
+        AND (${themaPlaceholder} IS NULL OR EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(base.profil_data->'angeboteAnzeigen','[]'::jsonb)) a WHERE (a->>'thema') = ANY(${themaPlaceholder}::text[]) OR (a->>'unterkategorie') = ANY(${themaPlaceholder}::text[]) OR ((a->>'thema') || ': ' || (a->>'unterkategorie')) = ANY(${themaPlaceholder}::text[])))
+        AND (${zertPlaceholder} IS NULL OR base.zertifikate && ${zertPlaceholder}::text[])
+        AND (${ortPlaceholder} IS NULL OR LOWER(COALESCE(base.plz,'') || ' ' || COALESCE(base.ort,'')) LIKE ${ortPlaceholder})
+        AND (${qPlaceholder} IS NULL OR (
+             LOWER(COALESCE(base.display_name,'') || ' ' || COALESCE(base.angebot_text,'') || ' ' || COALESCE(base.suche_text,'') || ' ' || COALESCE(array_to_string(base.kategorien,' '), '') || ' ' || COALESCE(array_to_string(base.zertifikate,' '), '')) LIKE ${qPlaceholder}
+             OR EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(base.profil_data->'angeboteAnzeigen','[]'::jsonb)) a WHERE LOWER(COALESCE(a->>'titel','') || ' ' || COALESCE(a->>'beschreibung','')) LIKE ${qPlaceholder})
+           ))
+      ORDER BY visibility_score DESC, base.updated_at DESC;
+      `;
+
+      return { text: sql, params };
+    };
 
     try {
-      let result = await pool.query(buildSearchFeedQuery(true));
-      if (result.rows.length === 0 && !viewerHasEarlyAccess) {
-        result = await pool.query(buildSearchFeedQuery(false));
+      const qTrue = buildSearchFeedQuery(true, filters);
+      let result = await pool.query(qTrue.text, qTrue.params);
+      if ((!result || result.rows.length === 0) && !viewerHasEarlyAccess) {
+        const qFalse = buildSearchFeedQuery(false, filters);
+        result = await pool.query(qFalse.text, qFalse.params);
       }
 
-      if (result.rows.length > 0) {
+      if (result && result.rows && result.rows.length > 0) {
         return { success: true, items: result.rows, viewerHasEarlyAccess };
       }
     } catch (_err) {
