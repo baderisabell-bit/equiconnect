@@ -749,6 +749,18 @@ async function ensureExtraSchema() {
     );
   `);
 
+  // Create helpful indexes for search/filtering
+  try {
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_profiles_kategorien_gin ON user_profiles USING gin (kategorien)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_profiles_zertifikate_gin ON user_profiles USING gin (zertifikate)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_profiles_profil_data_gin ON user_profiles USING gin (profil_data jsonb_path_ops)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_profiles_offers_kategorien ON user_profiles USING gin ((COALESCE((SELECT array_agg(elem ->> 'kategorie') FROM jsonb_array_elements(COALESCE(profil_data->'angeboteAnzeigen','[]'::jsonb)) elem), ARRAY[]::text[])))`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_profiles_offers_themen ON user_profiles USING gin ((COALESCE((SELECT array_agg(elem ->> 'thema') FROM jsonb_array_elements(COALESCE(profil_data->'angeboteAnzeigen','[]'::jsonb)) elem), ARRAY[]::text[])))`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_profiles_plz_ort_lower ON user_profiles (LOWER(COALESCE(plz,'') || ' ' || COALESCE(ort,'')) text_pattern_ops)`);
+  } catch (err) {
+    // Index creation can fail on some older PG versions or restricted environments; ignore to keep schema setup resilient.
+  }
+
   await pool.query(`
     ALTER TABLE users
     ADD COLUMN IF NOT EXISTS birth_date DATE;

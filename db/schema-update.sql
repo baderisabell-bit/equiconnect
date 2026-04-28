@@ -19,6 +19,28 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Indexes to speed up search/filter operations
+CREATE INDEX IF NOT EXISTS idx_user_profiles_kategorien_gin
+  ON user_profiles USING gin (kategorien);
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_zertifikate_gin
+  ON user_profiles USING gin (zertifikate);
+
+-- GIN index on profil_data for JSONB search
+CREATE INDEX IF NOT EXISTS idx_user_profiles_profil_data_gin
+  ON user_profiles USING gin (profil_data jsonb_path_ops);
+
+-- Extract offer categories/themen into array expressions and index them
+CREATE INDEX IF NOT EXISTS idx_user_profiles_offers_kategorien
+  ON user_profiles USING gin ((COALESCE((SELECT array_agg(elem ->> 'kategorie') FROM jsonb_array_elements(COALESCE(profil_data->'angeboteAnzeigen','[]'::jsonb)) elem), ARRAY[]::text[])));
+
+CREATE INDEX IF NOT EXISTS idx_user_profiles_offers_themen
+  ON user_profiles USING gin ((COALESCE((SELECT array_agg(elem ->> 'thema') FROM jsonb_array_elements(COALESCE(profil_data->'angeboteAnzeigen','[]'::jsonb)) elem), ARRAY[]::text[])));
+
+-- Index to speed up LIKE searches on location
+CREATE INDEX IF NOT EXISTS idx_user_profiles_plz_ort_lower
+  ON user_profiles (LOWER(COALESCE(plz,'') || ' ' || COALESCE(ort,'')) text_pattern_ops);
+
 CREATE TABLE IF NOT EXISTS wishlist_items (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
