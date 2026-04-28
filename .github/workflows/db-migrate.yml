@@ -1,0 +1,35 @@
+name: DB Migration (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    name: Apply DB migration (staging)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+
+      - name: Run DB migration
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          npm run db:migrate
+
+      - name: Verify indexes (optional)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          echo "Verifying indexes exist..."
+          psql "$DATABASE_URL" -Atc "SELECT indexname FROM pg_indexes WHERE tablename='user_profiles' ORDER BY indexname;"
