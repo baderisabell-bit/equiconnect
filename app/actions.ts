@@ -69,34 +69,37 @@ async function persistUploadedFile(params: {
     ? `${prefix}-${userId}-${now}-${safeName}`
     : `${userId}-${now}-${safeName}`;
 
+  // Only use Vercel Blob in production
+  const isProduction = process.env.NODE_ENV === 'production';
   const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
-  if (blobToken) {
+  
+  if (isProduction && blobToken) {
     const blob = await put(`${folder}/${fileName}`, file, {
       access: 'private',
       addRandomSuffix: false,
       contentType: String(file.type || '').trim() || undefined,
     });
-    console.log('Blob uploaded:', {
+    console.log('Blob uploaded to Vercel:', {
       key: `${folder}/${fileName}`,
       url: blob.url,
-      downloadUrl: blob.downloadUrl,
     });
     // Vercel Blob returns a signed URL that works even with private access
     return blob.url;
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('BLOB_READ_WRITE_TOKEN fehlt. Upload in Production nicht moeglich.');
-  }
-
-  // Dev fallback: keeps local development workflow unchanged.
+  // Dev fallback: use local filesystem
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
   const uploadDir = path.join(process.cwd(), 'public', ...folder.split('/'));
   await mkdir(uploadDir, { recursive: true });
   const filePath = path.join(uploadDir, fileName);
   await writeFile(filePath, buffer);
-  return `/${folder}/${fileName}`;
+  const localUrl = `/${folder}/${fileName}`;
+  console.log('File uploaded to local storage:', {
+    path: filePath,
+    url: localUrl,
+  });
+  return localUrl;
 }
 
 // Datenbank-Verbindung
