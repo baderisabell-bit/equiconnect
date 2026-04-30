@@ -73,7 +73,7 @@ async function persistUploadedFile(params: {
   const isProduction = process.env.NODE_ENV === 'production';
   const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
   
-  if (isProduction && blobToken) {
+  if (blobToken) {
     const blob = await put(`${folder}/${fileName}`, file, {
       access: 'private',
       addRandomSuffix: false,
@@ -83,8 +83,11 @@ async function persistUploadedFile(params: {
       key: `${folder}/${fileName}`,
       url: blob.url,
     });
-    // Vercel Blob returns a signed URL that works even with private access
-    return blob.url;
+    // For private blobs, use a proxy endpoint
+    const blobPath = `${folder}/${fileName}`;
+    const proxyUrl = `/api/blob-download/${blobPath}`;
+    console.log('Returning proxy URL:', proxyUrl);
+    return proxyUrl;
   }
 
   // Dev fallback: use local filesystem
