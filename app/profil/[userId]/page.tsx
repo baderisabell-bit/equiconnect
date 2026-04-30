@@ -2274,18 +2274,14 @@ export default function PublicProfilePage() {
                 {profileImagePreviewUrl ? (
                   <div
                     ref={profileImageFrameRef}
-                    onPointerDown={handleProfileImagePointerDown}
-                    onPointerMove={handleProfileImagePointerMove}
-                    onPointerUp={handleProfileImagePointerUp}
-                    onPointerLeave={handleProfileImagePointerUp}
-                    className={`w-full h-full relative ${(isOwnProfile && (editMode || imageEditMode)) ? (profileImageDragActive ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+                    className="w-full h-full relative"
                   >
-                    <img src={String(profileImagePreviewUrl).trim()} alt="Profilbild" className="w-full h-full object-cover transition-transform duration-150" style={profileImageObjectStyle} />
-                    {isOwnProfile && (editMode || imageEditMode) && (
+                    <img src={String(profileImagePreviewUrl).trim()} alt="Profilbild" className="w-full h-full object-cover" />
+                    {isOwnProfile && imageEditMode && (
                       <>
                         <div className="absolute inset-3 rounded-2xl border-2 border-emerald-400/90 shadow-[inset_0_0_0_9999px_rgba(15,23,42,0.22)] pointer-events-none" />
                         <p className="absolute left-2 right-2 bottom-2 text-center text-[9px] font-black uppercase tracking-widest text-white bg-black/50 rounded-lg px-2 py-1 pointer-events-none">
-                          Rahmen zeigt den öffentlichen Ausschnitt · Bild verschieben
+                          Rahmen zeigt den öffentlichen Ausschnitt
                         </p>
                       </>
                     )}
@@ -2296,7 +2292,7 @@ export default function PublicProfilePage() {
                         className="absolute right-3 top-3 z-20 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-black uppercase text-slate-700 border border-slate-200"
                         title={imageEditMode ? 'Bildbearbeitung schließen' : 'Profilbild bearbeiten'}
                       >
-                        {imageEditMode ? 'Fertig' : 'Bearbeiten'}
+                        {imageEditMode ? '✓ Fertig' : '✏️ Bearbeiten'}
                       </button>
                     )}
                   </div>
@@ -2317,29 +2313,6 @@ export default function PublicProfilePage() {
                     onFiles={handleUploadProfileImage}
                     className="rounded-2xl border border-slate-200 bg-white p-3"
                   />
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ausschnitt & Zoom</p>
-                      <button
-                        type="button"
-                        onClick={() => setEditForm((prev) => ({ ...prev, profilbildPositionX: 50, profilbildPositionY: 50, profilbildZoom: 1 }))}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600"
-                      >
-                        Zurücksetzen
-                      </button>
-                    </div>
-                    <input
-                      type="range"
-                      min={1}
-                      max={2}
-                      step={0.01}
-                      value={clampZoom(Number(editForm.profilbildZoom), 1)}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, profilbildZoom: clampZoom(parseFloat(e.target.value), 1) }))}
-                      className="w-full accent-emerald-600"
-                    />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Zoom {clampZoom(Number(editForm.profilbildZoom), 1).toFixed(2)}x</p>
-                    <p className="text-[10px] font-medium text-slate-500">Zum Verschieben: Maus klicken und ziehen.</p>
-                  </div>
                 </div>
               )}
               {isOwnProfile && editMode && (
@@ -2358,28 +2331,6 @@ export default function PublicProfilePage() {
                     onFiles={handleUploadProfileImage}
                     className="rounded-2xl border border-slate-200 bg-white p-3"
                   />
-                  <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ausschnitt Zoom</p>
-                      <button
-                        type="button"
-                        onClick={() => setEditForm((prev) => ({ ...prev, profilbildPositionX: 50, profilbildPositionY: 50, profilbildZoom: 1 }))}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600"
-                      >
-                        Zurücksetzen
-                      </button>
-                    </div>
-                    <input
-                      type="range"
-                      min={1}
-                      max={2}
-                      step={0.01}
-                      value={clampZoom(Number(editForm.profilbildZoom), 1)}
-                      onChange={(e) => setEditForm((prev) => ({ ...prev, profilbildZoom: clampZoom(parseFloat(e.target.value), 1) }))}
-                      className="w-full accent-emerald-600"
-                    />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Zoom {clampZoom(Number(editForm.profilbildZoom), 1).toFixed(2)}x</p>
-                  </div>
                 </div>
               )}
               {galerieItems.length > 0 && (
