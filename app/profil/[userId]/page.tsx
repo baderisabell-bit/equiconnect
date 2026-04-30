@@ -394,10 +394,20 @@ export default function PublicProfilePage() {
       ? pferdeRaw.flatMap((item: any) => (Array.isArray(item?.bilder) ? item.bilder : [])).map((url: any) => String(url || '').trim())
       : [];
     const legacyImages = Array.isArray(profile.profilData?.pferdBilder)
-      ? profile.profilData.pferdBilder.map((url: any) => String(url || '').trim())
+      ? profile.profilData.pferdBilder.map((url: any) => normalizeMediaUrl(String(url || '').trim()))
       : [];
-    return [...pferdeBilder, ...legacyImages].filter((url, index, all) => url.length > 0 && all.indexOf(url) === index);
+    return [...pferdeBilder.map((u) => normalizeMediaUrl(u)), ...legacyImages].filter((url, index, all) => url.length > 0 && all.indexOf(url) === index);
   }, [profile]);
+
+  // Normalize media URLs: turn root-relative paths into absolute URLs so <img src=...> works
+  const normalizeMediaUrl = (url?: string) => {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.startsWith('//')) return `${window.location.protocol}${raw}`;
+    if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
+    return raw;
+  };
 
   const horseCards = useMemo<Array<{ id: string; name: string; rasse: string; alter: string; beschreibung: string; bilder: string[] }>>(() => {
     if (!profile) return [];
@@ -677,7 +687,7 @@ export default function PublicProfilePage() {
     return raw
       .map((item: any) => ({
         type: (String(item?.type || 'image') === 'video' ? 'video' : 'image') as 'image' | 'video',
-        url: String(item?.url || '').trim()
+        url: normalizeMediaUrl(String(item?.url || '').trim())
       }))
       .filter((item) => item.url.length > 0);
   }, [profile]);
@@ -694,8 +704,8 @@ export default function PublicProfilePage() {
           }))
           .find((item: { type: string; url: string }) => item.type === 'image' && item.url.length > 0)?.url || ''
       : '';
-    if (firstGalleryImage) return firstGalleryImage;
-    return horseImages[0] || '';
+    if (firstGalleryImage) return normalizeMediaUrl(firstGalleryImage);
+    return normalizeMediaUrl(horseImages[0] || '');
   }, [horseImages, profile]);
   const profileImagePreviewUrl = useMemo(() => {
     if (isOwnProfile && editMode) {
