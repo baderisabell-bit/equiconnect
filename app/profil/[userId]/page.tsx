@@ -285,28 +285,9 @@ export default function PublicProfilePage() {
       setConnection((metaRes.connection || null) as ConnectionItem | null);
     }
 
+    // Don't auto-load team & horses; load them lazily when tabs are opened for better UX
     if (!isExpertProfile) {
       setExpertTeamMembers([]);
-      setExpertHorses([]);
-      return;
-    }
-
-    const [teamRes, horsesRes] = await Promise.all([
-      getExpertTeamMembers(profileUserId),
-      getExpertHorses(profileUserId)
-    ]);
-
-    if (!isMounted) return;
-
-    if (teamRes.success && Array.isArray(teamRes.teamMembers)) {
-      setExpertTeamMembers(teamRes.teamMembers as Array<{ id: number; name: string | null; role: string | null; description: string | null; member_user_id: number | null; email: string | null; user_display_name: string | null }>);
-    } else {
-      setExpertTeamMembers([]);
-    }
-
-    if (horsesRes.success && Array.isArray(horsesRes.horses)) {
-      setExpertHorses(horsesRes.horses as Array<{ id: number; name: string | null; breed: string | null; age: number | null; notes: string | null; image_url: string | null }>);
-    } else {
       setExpertHorses([]);
     }
   };
@@ -1038,6 +1019,29 @@ export default function PublicProfilePage() {
       setShowRatingsDetails(false);
     }
   }, [activeTab]);
+
+  // Lazy-load team and horses when tabs are opened (performance optimization)
+  useEffect(() => {
+    if (!profile || profile.role !== 'experte' || !profile.userId) return;
+    if (activeTab !== 'team' && activeTab !== 'schulpferde') return;
+
+    const loadTeamAndHorses = async () => {
+      if (activeTab === 'team' && expertTeamMembers.length === 0) {
+        const teamRes = await getExpertTeamMembers(profile.userId);
+        if (teamRes.success && Array.isArray(teamRes.teamMembers)) {
+          setExpertTeamMembers(teamRes.teamMembers as Array<{ id: number; name: string | null; role: string | null; description: string | null; member_user_id: number | null; email: string | null; user_display_name: string | null }>);
+        }
+      }
+      if (activeTab === 'schulpferde' && expertHorses.length === 0) {
+        const horsesRes = await getExpertHorses(profile.userId);
+        if (horsesRes.success && Array.isArray(horsesRes.horses)) {
+          setExpertHorses(horsesRes.horses as Array<{ id: number; name: string | null; breed: string | null; age: number | null; notes: string | null; image_url: string | null }>);
+        }
+      }
+    };
+
+    loadTeamAndHorses();
+  }, [activeTab, profile, expertTeamMembers.length, expertHorses.length]);
 
   useEffect(() => {
     if (!isOwnProfile || !editMode || !postDraftKey || !offerDraftKey || draftsHydrated) return;

@@ -8570,32 +8570,12 @@ export async function getProfilePosts(viewerUserId: number, profileUserId: numbe
               u.vorname,
               u.nachname,
               u.role,
-              COALESCE(sc.comment_count, 0) AS comment_count,
-              COALESCE(ss.save_count, 0) AS save_count,
-              COALESCE(sl.like_count, 0) AS like_count,
-              EXISTS (
-                SELECT 1
-                FROM social_post_likes splv
-                WHERE splv.post_id = p.id
-                  AND splv.user_id = $1
-              ) AS liked_by_viewer
+              (SELECT COUNT(*) FROM social_post_comments WHERE post_id = p.id)::INT AS comment_count,
+              (SELECT COUNT(*) FROM social_post_saves WHERE post_id = p.id)::INT AS save_count,
+              (SELECT COUNT(*) FROM social_post_likes WHERE post_id = p.id)::INT AS like_count,
+              EXISTS (SELECT 1 FROM social_post_likes WHERE post_id = p.id AND user_id = $1) AS liked_by_viewer
        FROM social_posts p
        JOIN users u ON u.id = p.author_user_id
-       LEFT JOIN (
-         SELECT post_id, COUNT(*)::INT AS comment_count
-         FROM social_post_comments
-         GROUP BY post_id
-       ) sc ON sc.post_id = p.id
-       LEFT JOIN (
-         SELECT post_id, COUNT(*)::INT AS save_count
-         FROM social_post_saves
-         GROUP BY post_id
-       ) ss ON ss.post_id = p.id
-       LEFT JOIN (
-         SELECT post_id, COUNT(*)::INT AS like_count
-         FROM social_post_likes
-         GROUP BY post_id
-       ) sl ON sl.post_id = p.id
        WHERE p.author_user_id = $2
          AND p.group_id IS NULL
          AND (
