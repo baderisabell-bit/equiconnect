@@ -673,7 +673,15 @@ export default function PublicProfilePage() {
       .filter((item) => item.url.length > 0);
   }, [profile]);
 
-  const profileImageUrl = useMemo(() => {
+  const profileImagePreviewUrl = useMemo(() => {
+    // In edit/image-edit mode, prioritize the current form value
+    if (isOwnProfile && (editMode || imageEditMode)) {
+      const formUrl = String(editForm.profilbildUrl || '').trim();
+      if (formUrl.length > 0) {
+        return normalizeMediaUrl(formUrl);
+      }
+    }
+    // Otherwise show the saved profile image
     if (!profile) return '';
     const profilbild = String(profile.profilData?.profilbild_url || '').trim();
     if (profilbild) return normalizeMediaUrl(profilbild);
@@ -687,14 +695,7 @@ export default function PublicProfilePage() {
       : '';
     if (firstGalleryImage) return normalizeMediaUrl(firstGalleryImage);
     return normalizeMediaUrl(horseImages[0] || '');
-  }, [horseImages, profile]);
-  const profileImagePreviewUrl = useMemo(() => {
-    if ((isOwnProfile && editMode) || (isOwnProfile && imageEditMode)) {
-      const url = String(editForm.profilbildUrl || '').trim();
-      return url ? normalizeMediaUrl(url) : profileImageUrl;
-    }
-    return profileImageUrl;
-  }, [editForm.profilbildUrl, editMode, imageEditMode, isOwnProfile, profileImageUrl]);
+  }, [editForm.profilbildUrl, editMode, imageEditMode, isOwnProfile, profile, horseImages]);
   const profileImagePosition = useMemo(() => {
     if (isOwnProfile && editMode) {
       return {
@@ -2273,12 +2274,23 @@ export default function PublicProfilePage() {
           <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 items-start">
             <div className="space-y-4">
               <div className="aspect-square rounded-3xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center relative group">
-                {profileImagePreviewUrl ? (
+                {profileImagePreviewUrl && (profileImagePreviewUrl.length > 0) ? (
                   <div
                     ref={profileImageFrameRef}
                     className="w-full h-full relative"
                   >
-                    <img src={String(profileImagePreviewUrl).trim()} alt="Profilbild" className="w-full h-full object-cover" />
+                    <img 
+                      src={profileImagePreviewUrl} 
+                      alt="Profilbild" 
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error('Image failed to load:', profileImagePreviewUrl);
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                      onLoad={() => {
+                        console.log('Image loaded:', profileImagePreviewUrl);
+                      }}
+                    />
                     {isOwnProfile && imageEditMode && (
                       <>
                         <div className="absolute inset-3 rounded-2xl border-2 border-emerald-400/90 shadow-[inset_0_0_0_9999px_rgba(15,23,42,0.22)] pointer-events-none" />
@@ -2299,7 +2311,12 @@ export default function PublicProfilePage() {
                     )}
                   </div>
                 ) : (
-                  <User size={64} className="text-slate-300" />
+                  <div className="w-full h-full flex items-center justify-center text-center">
+                    <div className="space-y-2">
+                      <User size={64} className="text-slate-300 mx-auto" />
+                      <p className="text-[10px] text-slate-400 font-medium">Kein Profilbild</p>
+                    </div>
+                  </div>
                 )}
               </div>
               {isOwnProfile && imageEditMode && (
