@@ -676,7 +676,7 @@ export default function PublicProfilePage() {
   const profileImageUrl = useMemo(() => {
     if (!profile) return '';
     const profilbild = String(profile.profilData?.profilbild_url || '').trim();
-    if (profilbild) return profilbild;
+    if (profilbild) return normalizeMediaUrl(profilbild);
     const firstGalleryImage = Array.isArray(profile.profilData?.galerie)
       ? profile.profilData.galerie
           .map((item: any) => ({
@@ -690,7 +690,8 @@ export default function PublicProfilePage() {
   }, [horseImages, profile]);
   const profileImagePreviewUrl = useMemo(() => {
     if (isOwnProfile && editMode) {
-      return String(editForm.profilbildUrl || '').trim() || profileImageUrl;
+      const url = String(editForm.profilbildUrl || '').trim();
+      return url ? normalizeMediaUrl(url) : profileImageUrl;
     }
     return profileImageUrl;
   }, [editForm.profilbildUrl, editMode, isOwnProfile, profileImageUrl]);
