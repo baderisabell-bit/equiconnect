@@ -72,11 +72,14 @@ async function persistUploadedFile(params: {
   const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
   if (blobToken) {
     const blob = await put(`${folder}/${fileName}`, file, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       contentType: String(file.type || '').trim() || undefined,
     });
-    return blob.url;
+    // For private blobs, use a proxy endpoint instead of direct URL
+    const blobPath = `${folder}/${fileName}`;
+    const proxyUrl = `/api/blob-proxy/${blobPath}`;
+    return proxyUrl;
   }
 
   if (process.env.NODE_ENV === 'production') {
