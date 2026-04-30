@@ -272,7 +272,7 @@ export default function PublicProfilePage() {
           ? post.media_items
               .map((item: any) => ({
                 type: String(item?.mediaType || item?.type || 'image') === 'video' ? 'video' : 'image',
-                url: String(item?.url || '').trim()
+                url: normalizeMediaUrl(String(item?.url || '').trim())
               }))
               .filter((item: GalerieItem) => item.url.length > 0)
           : []
@@ -399,7 +399,7 @@ export default function PublicProfilePage() {
         rasse: String(horse.breed || '').trim(),
         alter: horse.age == null ? '' : String(horse.age),
         beschreibung: String(horse.notes || '').trim(),
-        bilder: horse.image_url ? [String(horse.image_url).trim()] : []
+        bilder: horse.image_url ? [normalizeMediaUrl(String(horse.image_url).trim())] : []
       }));
     }
 
@@ -536,7 +536,7 @@ export default function PublicProfilePage() {
           visibility: item?.visibility === 'draft' ? 'draft' : 'public',
           viewsCount: Math.max(0, Number(item?.viewsCount || 0)),
           wishlistCount: Math.max(0, Number(item?.wishlistCount || 0)),
-          titleImageUrl: String(item?.titleImageUrl || '').trim(),
+          titleImageUrl: normalizeMediaUrl(String(item?.titleImageUrl || '').trim()),
           boostedUntil: item?.boostedUntil ? String(item.boostedUntil) : null
         };
       })
@@ -1485,7 +1485,7 @@ export default function PublicProfilePage() {
           ? post.media_items
               .map((item: any) => ({
                 type: String(item?.mediaType || item?.type || 'image') === 'video' ? 'video' : 'image',
-                url: String(item?.url || '').trim()
+                url: normalizeMediaUrl(String(item?.url || '').trim())
               }))
               .filter((item: GalerieItem) => item.url.length > 0)
           : []
