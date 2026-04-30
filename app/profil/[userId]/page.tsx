@@ -384,9 +384,21 @@ export default function PublicProfilePage() {
   const normalizeMediaUrl = (url?: string) => {
     const raw = String(url || '').trim();
     if (!raw) return '';
-    if (/^https?:\/\//i.test(raw)) return raw;
-    if (raw.startsWith('//')) return `${window.location.protocol}${raw}`;
-    if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
+    if (/^https?:\/\//i.test(raw)) {
+      console.log('normalizeMediaUrl: already absolute URL:', raw);
+      return raw;
+    }
+    if (raw.startsWith('//')) {
+      const result = `${window.location.protocol}${raw}`;
+      console.log('normalizeMediaUrl: protocol-relative to:', result);
+      return result;
+    }
+    if (raw.startsWith('/')) {
+      const result = `${window.location.origin}${raw}`;
+      console.log('normalizeMediaUrl: root-relative to:', result);
+      return result;
+    }
+    console.log('normalizeMediaUrl: unchanged:', raw);
     return raw;
   };
 
@@ -2304,7 +2316,10 @@ export default function PublicProfilePage() {
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}
                       onLoad={() => {
-                        console.log('Image loaded:', profileImagePreviewUrl);
+                        console.log('Image loaded successfully:', profileImagePreviewUrl);
+                      }}
+                      onLoadStart={() => {
+                        console.log('Image loading started:', profileImagePreviewUrl);
                       }}
                     />
                     {isOwnProfile && imageEditMode && (

@@ -76,10 +76,13 @@ async function persistUploadedFile(params: {
       addRandomSuffix: false,
       contentType: String(file.type || '').trim() || undefined,
     });
-    // For private blobs, use a proxy endpoint instead of direct URL
-    const blobPath = `${folder}/${fileName}`;
-    const proxyUrl = `/api/blob-proxy/${blobPath}`;
-    return proxyUrl;
+    console.log('Blob uploaded:', {
+      key: `${folder}/${fileName}`,
+      url: blob.url,
+      downloadUrl: blob.downloadUrl,
+    });
+    // Vercel Blob returns a signed URL that works even with private access
+    return blob.url;
   }
 
   if (process.env.NODE_ENV === 'production') {
