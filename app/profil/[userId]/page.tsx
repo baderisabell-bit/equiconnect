@@ -689,12 +689,12 @@ export default function PublicProfilePage() {
     return normalizeMediaUrl(horseImages[0] || '');
   }, [horseImages, profile]);
   const profileImagePreviewUrl = useMemo(() => {
-    if (isOwnProfile && editMode) {
+    if ((isOwnProfile && editMode) || (isOwnProfile && imageEditMode)) {
       const url = String(editForm.profilbildUrl || '').trim();
       return url ? normalizeMediaUrl(url) : profileImageUrl;
     }
     return profileImageUrl;
-  }, [editForm.profilbildUrl, editMode, isOwnProfile, profileImageUrl]);
+  }, [editForm.profilbildUrl, editMode, imageEditMode, isOwnProfile, profileImageUrl]);
   const profileImagePosition = useMemo(() => {
     if (isOwnProfile && editMode) {
       return {
@@ -1313,7 +1313,9 @@ export default function PublicProfilePage() {
         return;
       }
 
-      const persistedRes = await persistProfileImageUrl(profile.userId, String(uploadRes.url || ''));
+      const uploadedUrl = normalizeMediaUrl(String(uploadRes.url || ''));
+      
+      const persistedRes = await persistProfileImageUrl(profile.userId, uploadedUrl);
       if (!persistedRes.success) {
         alert(persistedRes.error || 'Profilbild konnte nicht gespeichert werden.');
         return;
@@ -1321,7 +1323,7 @@ export default function PublicProfilePage() {
 
       setEditForm((prev) => ({
         ...prev,
-        profilbildUrl: uploadRes.url || '',
+        profilbildUrl: uploadedUrl,
         profilbildPositionX: 50,
         profilbildPositionY: 50,
         profilbildZoom: 1
@@ -1333,7 +1335,7 @@ export default function PublicProfilePage() {
           ...prev,
           profilData: {
             ...(prev.profilData || {}),
-            profilbild_url: String(uploadRes.url || '').trim(),
+            profilbild_url: uploadedUrl,
             profilbild_position_x: 50,
             profilbild_position_y: 50,
             profilbild_zoom: 1
