@@ -716,6 +716,19 @@ export default function PublicProfilePage() {
     transformOrigin: `${profileImagePosition.x}% ${profileImagePosition.y}%`
   }), [profileImagePosition.x, profileImagePosition.y, profileImagePosition.zoom]);
 
+  // Debug: log profile image preview URL changes
+  useEffect(() => {
+    console.log('=== Profile Image Preview Debug ===');
+    console.log('profileImagePreviewUrl:', profileImagePreviewUrl);
+    console.log('editForm.profilbildUrl:', editForm.profilbildUrl);
+    console.log('isOwnProfile:', isOwnProfile);
+    console.log('editMode:', editMode);
+    console.log('imageEditMode:', imageEditMode);
+    if (profile?.profilData?.profilbild_url) {
+      console.log('profile.profilData.profilbild_url:', profile.profilData.profilbild_url);
+    }
+  }, [profileImagePreviewUrl, editForm.profilbildUrl, isOwnProfile, editMode, imageEditMode, profile?.profilData?.profilbild_url]);
+
   const isPublicProfile = profile ? profile.profilData?.isPublicProfile !== false : true;
   const hasTeam = teamCards.length > 0;
   const hasSchulpferde = horseCards.length > 0;
@@ -1314,7 +1327,9 @@ export default function PublicProfilePage() {
         return;
       }
 
+      console.log('Raw upload URL from server:', uploadRes.url);
       const uploadedUrl = normalizeMediaUrl(String(uploadRes.url || ''));
+      console.log('Normalized upload URL:', uploadedUrl);
       
       const persistedRes = await persistProfileImageUrl(profile.userId, uploadedUrl);
       if (!persistedRes.success) {
@@ -1322,6 +1337,7 @@ export default function PublicProfilePage() {
         return;
       }
 
+      console.log('Setting editForm with URL:', uploadedUrl);
       setEditForm((prev) => ({
         ...prev,
         profilbildUrl: uploadedUrl,
