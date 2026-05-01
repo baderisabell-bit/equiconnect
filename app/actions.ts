@@ -75,7 +75,7 @@ async function persistUploadedFile(params: {
   
   if (blobToken) {
     const blob = await put(`${folder}/${fileName}`, file, {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: false,
       contentType: String(file.type || '').trim() || undefined,
     });
@@ -83,11 +83,7 @@ async function persistUploadedFile(params: {
       key: `${folder}/${fileName}`,
       url: blob.url,
     });
-    // For private blobs, use a proxy endpoint
-    const blobPath = `${folder}/${fileName}`;
-    const proxyUrl = `/api/blob-download/${blobPath}`;
-    console.log('Returning proxy URL:', proxyUrl);
-    return proxyUrl;
+    return blob.url;
   }
 
   // Dev fallback: use local filesystem
