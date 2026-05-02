@@ -69,7 +69,7 @@ async function persistUploadedFile(params: {
     ? `${prefix}-${userId}-${now}-${safeName}`
     : `${userId}-${now}-${safeName}`;
 
-  const blobToken = String(process.env.EQUILY_READ_WRITE_TOKEN || '').trim();
+  const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
 
   if (blobToken) {
     const blob = await put(`${folder}/${fileName}`, file, {
