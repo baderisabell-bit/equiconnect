@@ -69,15 +69,14 @@ async function persistUploadedFile(params: {
     ? `${prefix}-${userId}-${now}-${safeName}`
     : `${userId}-${now}-${safeName}`;
 
-  // Only use Vercel Blob in production
-  const isProduction = process.env.NODE_ENV === 'production';
-  const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
-  
+  const blobToken = String(process.env.EQUILY_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN || '').trim();
+
   if (blobToken) {
     const blob = await put(`${folder}/${fileName}`, file, {
       access: 'public',
       addRandomSuffix: false,
       contentType: String(file.type || '').trim() || undefined,
+      token: blobToken,
     });
     console.log('Blob uploaded to Vercel:', {
       key: `${folder}/${fileName}`,

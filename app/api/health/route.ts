@@ -61,17 +61,18 @@ async function checkDatabase() {
 }
 
 async function checkBlob() {
-  const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
+  const blobToken = String(process.env.EQUILY_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN || '').trim();
   if (!blobToken) {
-    return { ok: false, error: 'BLOB_READ_WRITE_TOKEN missing.' };
+    return { ok: false, error: 'EQUILY_READ_WRITE_TOKEN missing.' };
   }
 
   const blobPath = `healthchecks/ping-${Date.now()}.txt`;
   try {
     const blob = await put(blobPath, 'ok', {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: true,
       contentType: 'text/plain',
+      token: blobToken,
     });
 
     await del(blob.url);
