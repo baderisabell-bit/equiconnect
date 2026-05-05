@@ -434,16 +434,21 @@ export async function trackProfileOfferViews(arg1: string | { viewerUserId?: num
 }
 
 // Wishlist Functions
-export async function getWishlistedOfferIds(userId: number, targetUserId?: number): Promise<any> {
+export async function getWishlistedOfferIds(viewerId: string, profileUserId: string): Promise<{ success: boolean; offerIds?: (string | number)[] }> {
   try {
-    const id = targetUserId ?? userId;
+    // Wir nutzen die viewerId, um die Wunschliste des Betrachters zu laden
     const result = await pool.query(
       `SELECT offer_id FROM wishlists WHERE user_id = $1`,
-      [id]
+      [viewerId]
     );
-    return { success: true, offerIds: result.rows.map(r => String(r.offer_id)) } as any;
-  } catch (error: any) {
-    return { success: false, offerIds: [] } as any;
+    
+    return { 
+      success: true, 
+      offerIds: result.rows.map(row => row.offer_id) 
+    };
+  } catch (error) {
+    console.error("Fehler beim Laden der Wunschliste:", error);
+    return { success: false, offerIds: [] };
   }
 }
 

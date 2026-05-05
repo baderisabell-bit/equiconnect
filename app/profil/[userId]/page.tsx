@@ -1840,12 +1840,18 @@ export default function PublicProfilePage() {
       return;
     }
 
-    setWishlistedOfferIds((prev) => {
-      if (res.wishlisted) {
-        return prev.includes(offerId) ? prev : [...prev, offerId];
-      }
-      return prev.filter((id) => id !== offerId);
-    });
+  setWishlistedOfferIds((prev: string[]) => {
+  // Sicherstellen, dass offerId ein String ist, da der State string[] erwartet
+  const targetId = String(offerId);
+
+  if (res.wishlisted) {
+    // Falls noch nicht vorhanden, hinzufügen
+    return prev.includes(targetId) ? prev : [...prev, targetId];
+  }
+  
+  // Entfernen: Hier definieren wir 'id' explizit als string, um den Fehler zu vermeiden
+  return prev.filter((id: string) => id !== targetId);
+});
 
     if (typeof res.wishlistCount === 'number') {
       setProfile((prev) => {
