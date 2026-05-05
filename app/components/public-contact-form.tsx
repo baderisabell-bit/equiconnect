@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUserSubscriptionSettings, submitKontaktForm } from "../actions";
+import { getUserSubscriptionSettings, sendPublicContactMessage } from "../actions";
 
 type ContactSource = {
   sourceKey: string;
@@ -95,7 +95,7 @@ export default function PublicContactForm() {
     setError("");
     setSuccess("");
 
-    const res = await submitKontaktForm({
+    const res = await sendPublicContactMessage({
       name,
       email,
       subject,
