@@ -893,10 +893,18 @@ export default function PublicProfilePage() {
     }
 
     let cancelled = false;
-    getWishlistedOfferIds(viewerUserId, profile.userId).then((res) => {
-      if (cancelled || !res.success) return;
-      setWishlistedOfferIds(Array.isArray(res.offerIds) ? res.offerIds.map((id) => String(id)) : []);
-    });
+    // 1. Wir wandeln die IDs explizit in Strings um, bevor wir sie an die Action senden
+getWishlistedOfferIds(String(viewerUserId), String(profile.userId)).then((res) => {
+  if (cancelled || !res.success) return;
+  
+  // 2. Wir stellen sicher, dass res.offerIds ein Array ist 
+  // 3. Wir typisieren 'id' im map als 'string | number', um den 'implicit any' Fehler zu lösen
+  const safeIds = Array.isArray(res.offerIds) 
+    ? res.offerIds.map((id: string | number) => String(id)) 
+    : [];
+    
+  setWishlistedOfferIds(safeIds);
+});
 
     return () => {
       cancelled = true;
