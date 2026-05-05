@@ -612,7 +612,8 @@ export async function addExpertTeamMember(expertId: number, data: any) {
   }
 }
 
-export async function updateExpertTeamMember(memberId: number, data: any) {
+// Wir fügen 'userId: any' als erstes Argument hinzu
+export async function updateExpertTeamMember(userId: any, memberId: number, data: any) {
   try {
     await pool.query(
       `UPDATE expert_team_members SET name = $1, role = $2, email = $3 WHERE id = $4`,
@@ -620,6 +621,7 @@ export async function updateExpertTeamMember(memberId: number, data: any) {
     );
     return { success: true };
   } catch (error: any) {
+    console.error("Fehler beim Update:", error);
     return { success: false, error: 'Teammitglied konnte nicht aktualisiert werden.' };
   }
 }
