@@ -205,19 +205,24 @@ export default function OfferDetailPage() {
             <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{details.offer.beschreibung}</p>
           )}
 
-          {details.offer.prices.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preisübersicht</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {details.offer.prices.map((preis, idx) => (
-                  <div key={`${details.offer.id}-price-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{preis.label || "Preis"}</p>
-                    <p className="text-sm font-black text-slate-900 mt-1">{preis.preis || "-"} {preis.einheit || ""}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        {details.offer.prices.map((price: OfferPrice, index) => (
+        <div key={`${details.offer.id}-price-${index}`} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+              {price.einheit || 'Leistung'}
+            </span>
+            
+            <span className="text-sm font-bold text-slate-900">
+              {price.label || 'Preis'}
+            </span>
+          </div>
+
+          <div className="text-right">
+            <span className="text-lg font-black text-slate-900">{price.preis}</span>
+            {price.einheit && <span className="text-[10px] block font-bold text-slate-400">{price.einheit}</span>}
+          </div>
+        </div>
+      ))}
 
           <div className="space-y-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Konditionen &amp; Rechnung</p>

@@ -10,10 +10,10 @@ import MediaDropzone from '../components/media-dropzone';
 
 type PriceRow = {
   id: string;
-  typ: 'einzel' | 'gruppe';
   betrag: string;
-  leistung: string;
-  anzahlLeistungen: string;
+  typ: 'einzel' | 'abo' | 'custom';
+  typBezeichnung: string; // Für "eigene Bezeichnung" oder Info-Text
+  anzahlLeistungen: string; // Nur für Abo relevant
 };
 
 type AdItem = {
@@ -41,10 +41,10 @@ type AdItem = {
 
 const EMPTY_PRICE_ROW = (): PriceRow => ({
   id: `price-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  typ: 'einzel',
   betrag: '',
-  leistung: '',
-  anzahlLeistungen: ''
+  typ: 'einzel',
+  typBezeichnung: '',
+  anzahlLeistungen: '1'
 });
 
 const MOBIL_RADIUS_OPTIONS = ['5', '10', '15', '20', '25', '30', '40', '50'];
@@ -142,9 +142,9 @@ export default function InserierenPage() {
             preise: Array.isArray(item?.preise)
               ? item.preise.map((preis: any, priceIdx: number) => ({
                   id: String(preis?.id || `price-${idx}-${priceIdx}`),
-                  typ: preis?.typ === 'gruppe' ? 'gruppe' : 'einzel',
+                  typ: preis?.typ === 'abo' ? 'abo' : preis?.typ === 'custom' ? 'custom' : 'einzel',
                   betrag: String(preis?.betrag || '').trim(),
-                  leistung: String(preis?.leistung || '').trim(),
+                  typBezeichnung: String(preis?.typBezeichnung || preis?.leistung || '').trim(),
                   anzahlLeistungen: String(preis?.anzahlLeistungen || '').trim()
                 }))
               : [],
@@ -267,13 +267,9 @@ export default function InserierenPage() {
       setError('Bitte für Mobil einen gültigen Umkreis auswählen.');
       return;
     }
-    const validPreisRows = preisRows.filter((row) => row.betrag.trim() && row.leistung.trim());
+    const validPreisRows = preisRows.filter((row) => row.betrag.trim() && (row.typ === 'abo' ? row.anzahlLeistungen.trim() : row.typBezeichnung.trim()));
     if (validPreisRows.length === 0) {
       setError('Bitte mindestens eine vollständige Preiszeile anlegen.');
-      return;
-    }
-    if (validPreisRows.some((row) => row.typ === 'gruppe' && !row.anzahlLeistungen.trim())) {
-      setError('Bei Gruppenpreis bitte Anzahl an Leistungen angeben.');
       return;
     }
     if (formData.billingType === 'abo' && !String(formData.sessionsPerAbo || '').trim()) {
@@ -370,13 +366,9 @@ export default function InserierenPage() {
       return;
     }
 
-    const validPreisRows = preisRows.filter((row) => row.betrag.trim() && row.leistung.trim());
+    const validPreisRows = preisRows.filter((row) => row.betrag.trim() && (row.typ === 'abo' ? row.anzahlLeistungen.trim() : row.typBezeichnung.trim()));
     if (validPreisRows.length === 0) {
       setError('Bitte mindestens eine vollständige Preiszeile anlegen.');
-      return;
-    }
-    if (validPreisRows.some((row) => row.typ === 'gruppe' && !row.anzahlLeistungen.trim())) {
-      setError('Bei Gruppenpreis bitte Anzahl an Leistungen angeben.');
       return;
     }
     if (formData.billingType === 'abo' && !String(formData.sessionsPerAbo || '').trim()) {
@@ -419,21 +411,6 @@ export default function InserierenPage() {
     setPreisRows([EMPTY_PRICE_ROW()]);
   };
 
-  const updateAdVisibility = async (adId: string, visibility: 'public' | 'draft') => {
-    const nextAds = ads.map((ad) => (ad.id === adId ? { ...ad, visibility, updatedAt: new Date().toISOString() } : ad));
-    const ok = await persistAds(nextAds);
-    if (!ok) return;
-    setMessage(visibility === 'public' ? 'Anzeige ist jetzt öffentlich sichtbar.' : 'Anzeige wurde als Entwurf markiert.');
-  };
-
-  const deleteAd = async (adId: string) => {
-    if (!confirm('Anzeige wirklich löschen?')) return;
-    const nextAds = ads.filter((ad) => ad.id !== adId);
-    const ok = await persistAds(nextAds);
-    if (!ok) return;
-    setMessage('Anzeige gelöscht.');
-  };
-
   const shareAdLink = async (adId: string) => {
     if (!userId) return;
     const safeAdId = String(adId || '').trim();
@@ -453,6 +430,26 @@ export default function InserierenPage() {
       setError('');
     } catch {
       window.prompt('Anzeige-Link manuell kopieren:', url);
+    }
+  };
+
+  const updateAdVisibility = async (adId: string, visibility: 'public' | 'draft') => {
+    const nextAds = ads.map((ad) => (ad.id === adId ? { ...ad, visibility, updatedAt: new Date().toISOString() } : ad));
+    const ok = await persistAds(nextAds);
+    if (ok) {
+      setMessage(visibility === 'public' ? 'Anzeige wurde online geschaltet.' : 'Anzeige wurde zu Entwürfen verschoben.');
+    }
+  };
+
+  const deleteAd = async (adId: string) => {
+    if (!window.confirm('Anzeige wirklich löschen?')) return;
+    const nextAds = ads.filter((ad) => ad.id !== adId);
+    const ok = await persistAds(nextAds);
+    if (ok) {
+      setMessage('Anzeige gelöscht.');
+      if (editingAdId === adId) {
+        cancelEditingAd();
+      }
     }
   };
 
@@ -624,123 +621,96 @@ export default function InserierenPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preise</p>
               <button type="button" onClick={() => setPreisRows((prev) => [...prev, EMPTY_PRICE_ROW()])} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase inline-flex items-center gap-1"><Plus size={13} /> Preiszeile</button>
             </div>
 
             {preisRows.map((row) => (
-              <div key={row.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 grid grid-cols-1 md:grid-cols-5 gap-2 items-center">
-                <select value={row.typ} onChange={(e) => setPreisRows((prev) => prev.map((item) => item.id === row.id ? { ...item, typ: e.target.value === 'gruppe' ? 'gruppe' : 'einzel' } : item))} className="rounded-lg border border-slate-200 bg-white p-2 text-sm">
-                  <option value="einzel">Einzelpreis</option>
-                  <option value="gruppe">Gruppenpreis</option>
-                </select>
-                <input value={row.betrag} onChange={(e) => setPreisRows((prev) => prev.map((item) => item.id === row.id ? { ...item, betrag: e.target.value } : item))} placeholder="Betrag" className="rounded-lg border border-slate-200 bg-white p-2 text-sm" />
-                <input value={row.leistung} onChange={(e) => setPreisRows((prev) => prev.map((item) => item.id === row.id ? { ...item, leistung: e.target.value } : item))} placeholder="Leistung (z.B. 60 Minuten)" className="rounded-lg border border-slate-200 bg-white p-2 text-sm md:col-span-2" />
-                {row.typ === 'gruppe' ? (
-                  <input value={row.anzahlLeistungen} onChange={(e) => setPreisRows((prev) => prev.map((item) => item.id === row.id ? { ...item, anzahlLeistungen: e.target.value } : item))} placeholder="Anzahl Leistungen" className="rounded-lg border border-slate-200 bg-white p-2 text-sm" />
-                ) : (
-                  <button type="button" onClick={() => setPreisRows((prev) => prev.filter((item) => item.id !== row.id))} className="px-2 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-[10px] font-black uppercase inline-flex items-center justify-center gap-1"><Trash2 size={12} /> Entfernen</button>
+              <div key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  <div className="md:col-span-3">
+                    <label className="text-[9px] uppercase font-bold text-slate-400 ml-1">Betrag (€)</label>
+                    <input
+                      value={row.betrag}
+                      onChange={(e) => setPreisRows((prev) => prev.map((priceRow) => (priceRow.id === row.id ? { ...priceRow, betrag: e.target.value } : priceRow)))}
+                      placeholder="0,00"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
+                    />
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="text-[9px] uppercase font-bold text-slate-400 ml-1">Leistungstyp</label>
+                    <select
+                      value={row.typ}
+                      onChange={(e) => setPreisRows((prev) => prev.map((priceRow) => (priceRow.id === row.id ? { ...priceRow, typ: e.target.value as PriceRow['typ'] } : priceRow)))}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
+                    >
+                      <option value="einzel">Einzelleistung</option>
+                      <option value="abo">Monatsabo</option>
+                      <option value="custom">Eigene Bezeichnung</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-5">
+                    {row.typ === 'abo' ? (
+                      <>
+                        <label className="text-[9px] uppercase font-bold text-slate-400 ml-1">Anzahl Leistungen</label>
+                        <input
+                          value={row.anzahlLeistungen}
+                          onChange={(e) => setPreisRows((prev) => prev.map((priceRow) => (priceRow.id === row.id ? { ...priceRow, anzahlLeistungen: e.target.value } : priceRow)))}
+                          placeholder="z. B. 4"
+                          className="w-full rounded-xl border border-slate-200 bg-emerald-50 p-3 text-sm"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <label className="text-[9px] uppercase font-bold text-slate-400 ml-1">Bezeichnung</label>
+                        <input
+                          value={row.typBezeichnung}
+                          onChange={(e) => setPreisRows((prev) => prev.map((priceRow) => (priceRow.id === row.id ? { ...priceRow, typBezeichnung: e.target.value } : priceRow)))}
+                          placeholder={row.typ === 'custom' ? 'z. B. Intensiv-Workshop' : 'Zusatzinfo'}
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {preisRows.length > 1 && (
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => setPreisRows((prev) => prev.filter((priceRow) => priceRow.id !== row.id))} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
           </div>
 
-          <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Konditionen für Rechnung</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Abrechnungsmodell</label>
-                <select
-                  value={formData.billingType}
-                  onChange={(e) => setFormData((prev) => ({
-                    ...prev,
-                    billingType: e.target.value === 'abo' ? 'abo' : 'einmal',
-                    sessionsPerAbo: e.target.value === 'abo' ? prev.sessionsPerAbo : '',
-                    singleSessionCancellationAllowed: e.target.value === 'abo' ? prev.singleSessionCancellationAllowed : false,
-                    maxCancellationsPerAbo: e.target.value === 'abo' ? prev.maxCancellationsPerAbo : '',
-                    cancellationWindowHours: e.target.value === 'abo' ? prev.cancellationWindowHours : '',
-                  }))}
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-                >
-                  <option value="einmal">Einmalzahlung</option>
-                  <option value="abo">Abo</option>
-                </select>
-              </div>
-              {formData.billingType === 'abo' && (
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Leistungen im Abo</label>
-                  <input
-                    value={formData.sessionsPerAbo}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, sessionsPerAbo: e.target.value }))}
-                    placeholder="z.B. 4"
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-                  />
-                </div>
-              )}
-            </div>
+          <div className="fixed bottom-6 right-6 flex flex-col md:flex-row gap-3 z-[100]">
+            <button
+              type="button"
+              onClick={() => {
+                const previewData = { ...formData, prices: preisRows };
+                localStorage.setItem('ad_preview', JSON.stringify(previewData));
+                window.open('/offer/preview', '_blank');
+              }}
+              className="px-10 py-4 bg-white text-slate-900 rounded-2xl font-black uppercase italic shadow-xl border border-slate-200 hover:bg-slate-50 transition-all flex items-center gap-2"
+            >
+              <Eye size={18} /> Vorschau
+            </button>
 
-            {formData.billingType === 'abo' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rücktritt einzelner Leistung</label>
-                  <select
-                    value={formData.singleSessionCancellationAllowed ? 'ja' : 'nein'}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, singleSessionCancellationAllowed: e.target.value === 'ja' }))}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-                  >
-                    <option value="nein">Nein</option>
-                    <option value="ja">Ja</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rücktrittsfrist (Stunden)</label>
-                  <input
-                    value={formData.cancellationWindowHours}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, cancellationWindowHours: e.target.value }))}
-                    placeholder="z.B. 24"
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-                  />
-                </div>
-                {formData.singleSessionCancellationAllowed && (
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Max. Rücktritte im Abo</label>
-                    <input
-                      value={formData.maxCancellationsPerAbo}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, maxCancellationsPerAbo: e.target.value }))}
-                      placeholder="z.B. 1"
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div>
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Konditionshinweis (optional)</label>
-              <textarea
-                value={formData.billingNotes}
-                onChange={(e) => setFormData((prev) => ({ ...prev, billingNotes: e.target.value }))}
-                rows={2}
-                placeholder="z.B. Monatsabo wird anteilig bei Rücktritt angepasst"
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"
-              />
-            </div>
+            <button
+              type="button"
+              onClick={() => editingAdId ? saveEditedAd() : createAd('public')}
+              disabled={saving}
+              className="px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase italic shadow-xl hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {saving ? 'Speichert...' : editingAdId ? 'Änderungen speichern' : 'Jetzt Veröffentlichen'}
+            </button>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            {editingAdId ? (
-              <>
-                <button type="button" onClick={saveEditedAd} disabled={saving} className="px-5 py-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase disabled:opacity-60">Änderungen speichern</button>
-                <button type="button" onClick={cancelEditingAd} disabled={saving} className="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 text-[10px] font-black uppercase disabled:opacity-60">Abbrechen</button>
-              </>
-            ) : (
-              <>
-                <button type="button" onClick={() => createAd('draft')} disabled={saving} className="px-5 py-3 rounded-xl border border-slate-300 bg-white text-slate-700 text-[10px] font-black uppercase disabled:opacity-60">Als Entwurf speichern</button>
-                <button type="button" onClick={() => createAd('public')} disabled={saving} className="px-5 py-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase disabled:opacity-60">Online schalten</button>
-              </>
-            )}
-          </div>
         </section>
 
         <section className={`${hasExpertProAccess ? 'bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm space-y-4' : 'hidden'}`}>

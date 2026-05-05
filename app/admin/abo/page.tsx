@@ -646,16 +646,38 @@ export default function AdminAboPage() {
     return { hasTimingIssue, cancelPendingWithoutDate, cancelEffectivePast };
   };
 
-  const displayedSubscriptionUsers = useMemo(() => {
-    if (issueFilterMode === "all") return subscriptionUsers;
-    return subscriptionUsers.filter((item) => {
-      const flags = getSubscriptionIssueFlags(item);
-      if (issueFilterMode === "overdue-cancellations") {
-        return flags.cancelEffectivePast;
+ const displayedSubscriptionUsers = useMemo(() => {
+    return subscriptionUsers.filter((user) => {
+      // 1. Suche via Textfeld (Name/E-Mail) bleibt erhalten
+      const matchesSearch = 
+        user.email.toLowerCase().includes(subSearch.toLowerCase()) ||
+        user.display_name.toLowerCase().includes(subSearch.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      // 2. AUTOMATISCHE ROLLEN-TRENNUNG (Ohne Buttons)
+      // Ein Experte wird NUR angezeigt, wenn sein Plan ein Experten-Plan ist.
+      if (user.role === "experte") {
+        return user.plan_key.toLowerCase().includes("experte");
+      } 
+      
+      // Ein Nutzer wird NUR angezeigt, wenn sein Plan ein Nutzer-Plan oder 'free' ist.
+      if (user.role === "nutzer") {
+        return user.plan_key.toLowerCase().includes("nutzer") || user.plan_key === "free";
       }
-      return flags.hasTimingIssue || flags.cancelPendingWithoutDate || flags.cancelEffectivePast;
+
+      // Falls es Rollen gibt, die weder Experte noch Nutzer sind, werden sie hier abgefangen
+      return true;
     });
-  }, [issueFilterMode, subscriptionUsers]);
+    // subRoleFilter aus den Abhängigkeiten entfernen, da wir keine Buttons mehr nutzen
+  }, [subscriptionUsers, subSearch]);
+
+  const getPlanLabel = (planKey: string) => {
+  if (planKey === 'free') return "kostenlos";
+  if (planKey.includes('nutzer')) return "Premium";
+  if (planKey.includes('experte')) return "Experte";
+  return planKey;
+};
 
   const dryRunStatus =
     dryRunData === null

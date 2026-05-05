@@ -954,15 +954,6 @@ export default function ProfileDetailPage() {
                                 <MessageSquare size={14} /> Nachricht schreiben
                               </button>
                             )}
-                            {isOwnProfile && isExpertProfile && itemId !== 'new' && (
-                              <button
-                                type="button"
-                                onClick={() => router.replace(`/profil/${profileUserId}/detail/angebote/${encodeURIComponent(String(itemId))}?mode=edit`)}
-                                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700"
-                              >
-                                <PencilLine size={14} /> Bearbeiten
-                              </button>
-                            )}
                           </div>
                         </div>
                       </article>

@@ -40,6 +40,9 @@ type InvoiceBooking = {
   offer_conditions_text?: string | null;
   unit_price_euro?: number;
   total_euro?: number;
+  price_type?: 'einzel' | 'abo' | 'custom' | null;
+  price_type_label?: string | null;
+  price_units?: number | null;
 };
 
 type SubscriptionInvoiceItem = {
@@ -368,28 +371,60 @@ export default function RechnungenPage() {
     </article>
   );
 
-  const renderInvoiceBookingCard = (booking: InvoiceBooking) => (
-    <article key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">{booking.source_offer_id ? "Equily" : "Weitere Buchungen"}</p>
-          <h3 className="mt-2 text-lg font-black uppercase italic text-slate-900">{formatTitle(booking.service_title)}</h3>
-          <p className="mt-1 text-sm text-slate-600">{formatDate(booking.booking_date)}</p>
+  const renderInvoiceBookingCard = (booking: InvoiceBooking) => {
+    // Logik für den dynamischen Titel auf der Rechnung
+    const getDisplayTitle = () => {
+      const baseTitle = formatTitle(booking.service_title);
+      
+      if (booking.price_type === 'abo') {
+        return `Monatsabo: ${baseTitle} (${booking.price_units || 4} Einheiten)`;
+      }
+      if (booking.price_type === 'custom' && booking.price_type_label) {
+        return `${booking.price_type_label}: ${baseTitle}`;
+      }
+      return baseTitle;
+    };
+
+    return (
+      <article key={booking.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">
+              {booking.price_type === 'abo' ? "Abonnement" : (booking.source_offer_id ? "Equily" : "Weitere Buchungen")}
+            </p>
+            <h3 className="mt-2 text-lg font-black uppercase italic text-slate-900">
+              {getDisplayTitle()}
+            </h3>
+            <p className="mt-1 text-sm text-slate-600">{formatDate(booking.booking_date)}</p>
+          </div>
+          <button type="button" onClick={printCurrentView} className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white print:hidden">
+            Als PDF drucken
+          </button>
         </div>
-        <button type="button" onClick={printCurrentView} className="rounded-xl bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white print:hidden">
-          Als PDF drucken
-        </button>
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
-        <p>Menge: <span className="font-black text-slate-900">{booking.quantity || 1}</span></p>
-        <p>Dauer: <span className="font-black text-slate-900">{booking.duration_minutes || 0} Min.</span></p>
-        <p>Einzelpreis: <span className="font-black text-slate-900">{formatMoney(booking.unit_price_cents)}</span></p>
-        <p>Gesamt: <span className="font-black text-slate-900">{formatMoney(booking.total_cents)}</span></p>
-      </div>
-      {booking.offer_conditions_text && <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-pre-line">{booking.offer_conditions_text}</p>}
-      {booking.notes && <p className="mt-4 text-sm text-slate-500 whitespace-pre-line">{booking.notes}</p>}
-    </article>
-  );
+        
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
+          <p>Menge: <span className="font-black text-slate-900">{booking.quantity || 1}</span></p>
+          <p>Dauer: <span className="font-black text-slate-900">{booking.duration_minutes || 0} Min.</span></p>
+          <p>Einzelpreis: <span className="font-black text-slate-900">{formatMoney(booking.unit_price_cents)}</span></p>
+          <p>Gesamt: <span className="font-black text-slate-900">{formatMoney(booking.total_cents)}</span></p>
+        </div>
+
+        {/* Spezielle Info-Box für Abos */}
+        {booking.price_type === 'abo' && (
+          <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+            <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest">Abrechnungs-Info</p>
+            <p className="text-xs text-emerald-700">Dieses Abo verlängert sich automatisch monatlich, sofern nicht gekündigt.</p>
+          </div>
+        )}
+
+        {booking.offer_conditions_text && (
+          <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-pre-line border-t border-slate-50 pt-3">
+            {booking.offer_conditions_text}
+          </p>
+        )}
+      </article>
+    );
+  };
 
   const renderUserContent = () => {
     const groups = userBookingGroups;
