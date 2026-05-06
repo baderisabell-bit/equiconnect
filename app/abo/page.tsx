@@ -384,14 +384,6 @@ function AboPageContent() {
     return null;
   }, [selectedPlan]);
 
-  const goCardlessCheckoutUrl = useMemo(() => {
-    if (!selectedPlan) return "";
-    if (selectedPlan.key === "nutzer_plus") return GOCARDLESS_NUTZER_PLUS_CHECKOUT_URL;
-    if (selectedPlan.key === "experte_abo") return GOCARDLESS_EXPERTE_ABO_CHECKOUT_URL;
-    if (selectedPlan.key === "experte_pro") return GOCARDLESS_EXPERTE_PRO_CHECKOUT_URL;
-    return "";
-  }, [selectedPlan]);
-
   const addonLinks = useMemo(() => {
     return role === "experte" ? EXPERT_ADDON_CHECKOUT_LINKS : USER_ADDON_CHECKOUT_LINKS;
   }, [role]);
@@ -525,11 +517,6 @@ function AboPageContent() {
 
   const handleConnectGoCardless = async () => {
     if (!userId) return;
-
-    if (goCardlessCheckoutUrl) {
-      window.location.href = goCardlessCheckoutUrl;
-      return;
-    }
 
     setGoCardlessBusy(true);
     setError("");
@@ -706,14 +693,9 @@ function AboPageContent() {
                       <p className="font-black text-slate-900">{item.label}</p>
                       <p className="mt-1 font-bold text-slate-900">{item.price}</p>
                       <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
-                      <a
-                        href={item.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-slate-400 hover:bg-slate-100"
-                      >
-                        {item.method} öffnen
-                      </a>
+                      <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Zahlungsart wählst du unten im Tarifbereich.
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -891,9 +873,7 @@ function AboPageContent() {
                         {goCardlessLastError && (
                           <p className="text-xs font-bold text-red-700">Letzter GoCardless-Fehler: {goCardlessLastError}</p>
                         )}
-                        {goCardlessCheckoutUrl && (
-                          <p className="text-xs text-slate-600">Für den gewählten Tarif wird der passende GoCardless-Checkout geöffnet.</p>
-                        )}
+                        <p className="text-xs text-slate-600">SEPA wird über GoCardless verbunden, nachdem du die Zahlungsart ausgewählt hast.</p>
                         <button
                           type="button"
                           onClick={handleConnectGoCardless}

@@ -1243,8 +1243,210 @@ export async function moderateGroupPost(arg1: number | { postId?: number; action
 }
 
 // ==================== SEARCH & DISCOVERY ====================
+type SearchFeedEntry = {
+  id: string;
+  userId: number | null;
+  typ: 'experte' | 'nutzer' | 'beitrag' | 'gruppe' | 'angebot';
+  name: string;
+  ort: string;
+  plz?: string;
+  rating: number;
+  kategorien: string[];
+  angebotText: string;
+  sucheText: string;
+  lat?: number;
+  lon?: number;
+};
+
+const searchGeoCache = new Map<string, { lat: number; lon: number } | null>();
+
+function normalizeSearchValue(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+async function resolveSearchCoordinates(location: string) {
+  const key = normalizeSearchValue(location);
+  if (!key) return null;
+  if (searchGeoCache.has(key)) return searchGeoCache.get(key) || null;
+
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(location)}`, {
+      headers: {
+        'User-Agent': 'EquiOffice/1.0',
+        'Accept-Language': 'de',
+      },
+    });
+
+    if (response.ok) {
+      const payload = await response.json();
+      const first = Array.isArray(payload) ? payload[0] : null;
+      const lat = Number(first?.lat);
+      const lon = Number(first?.lon);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        const coords = { lat, lon };
+        searchGeoCache.set(key, coords);
+        return coords;
+      }
+    }
+  } catch {
+    // Ignore geocoding failures and fall back to text-only results.
+  }
+
+  searchGeoCache.set(key, null);
+  return null;
+}
+
 export async function getSearchFeed(userId: number | null, filters: any): Promise<any> {
-  return { success: true, feed: [], results: [], groups: [], items: [] } as any;
+  try {
+    const queryText = normalizeSearchValue(filters?.q || '');
+    const locationText = normalizeSearchValue(filters?.ort || '');
+    const categoryFilters = uniqueStrings([...(Array.isArray(filters?.kategorien) ? filters.kategorien : []), ...(Array.isArray(filters?.themen) ? filters.themen : [])]).map(normalizeSearchValue);
+    const certificateFilters = uniqueStrings(Array.isArray(filters?.zertifikate) ? filters.zertifikate : []).map(normalizeSearchValue);
+
+    const result = await pool.query(
+      `SELECT
+         u.id AS user_id,
+         u.role AS user_role,
+         COALESCE(up.role, u.role, 'nutzer') AS profile_role,
+         COALESCE(up.display_name, CONCAT('Benutzer ', u.id)) AS display_name,
+         COALESCE(up.ort, '') AS ort,
+         COALESCE(up.plz, '') AS plz,
+         COALESCE(up.kategorien, ARRAY[]::text[]) AS kategorien,
+         COALESCE(up.zertifikate, ARRAY[]::text[]) AS zertifikate,
+         COALESCE(up.angebot_text, '') AS angebot_text,
+         COALESCE(up.suche_text, '') AS suche_text,
+         COALESCE(up.gesuche, '[]'::jsonb) AS gesuche,
+         COALESCE(up.profil_data, '{}'::jsonb) AS profil_data
+       FROM users u
+       LEFT JOIN user_profiles up ON up.user_id = u.id
+       ORDER BY u.id DESC`,
+      []
+    );
+
+    const baseItems: SearchFeedEntry[] = [];
+
+    for (const row of result.rows) {
+      const profileData = row.profil_data && typeof row.profil_data === 'object' ? row.profil_data : {};
+      const rating = Number(profileData?.rating || profileData?.rating_avg || profileData?.score || 0);
+      const role = String(row.profile_role || row.user_role || 'nutzer').toLowerCase() === 'experte' ? 'experte' : 'nutzer';
+      const categories = uniqueStrings([
+        ...(Array.isArray(row.kategorien) ? row.kategorien : []),
+        ...(Array.isArray(profileData?.kategorien) ? profileData.kategorien : []),
+      ]);
+      const searchBundle = normalizeSearchValue([
+        row.display_name,
+        row.ort,
+        row.plz,
+        row.angebot_text,
+        row.suche_text,
+        categories.join(' '),
+        Array.isArray(row.zertifikate) ? row.zertifikate.join(' ') : '',
+      ].join(' '));
+
+      const profileItem: SearchFeedEntry = {
+        id: `profile-${row.user_id}`,
+        userId: Number(row.user_id),
+        typ: role,
+        name: String(row.display_name || `Benutzer ${row.user_id}`),
+        ort: String(row.ort || ''),
+        plz: String(row.plz || ''),
+        rating: Number.isFinite(rating) ? rating : 0,
+        kategorien: categories,
+        angebotText: String(row.angebot_text || ''),
+        sucheText: String(row.suche_text || ''),
+      };
+
+      const profileCoordinates = await resolveSearchCoordinates([profileItem.plz, profileItem.ort].filter(Boolean).join(' '));
+      if (profileCoordinates) {
+        profileItem.lat = profileCoordinates.lat;
+        profileItem.lon = profileCoordinates.lon;
+      }
+
+      if (!queryText || searchBundle.includes(queryText)) {
+        const matchesLocation = !locationText || normalizeSearchValue([profileItem.ort, profileItem.plz || ''].join(' ')).includes(locationText);
+        const matchesCategories = categoryFilters.length === 0 || categoryFilters.some((filter) => categories.some((category) => normalizeSearchValue(category).includes(filter)));
+        const matchesCertificates = certificateFilters.length === 0 || certificateFilters.some((filter) => normalizeSearchValue(Array.isArray(row.zertifikate) ? row.zertifikate.join(' ') : '').includes(filter));
+        if (matchesLocation && matchesCategories && matchesCertificates) {
+          baseItems.push(profileItem);
+        }
+      }
+
+      const offers = Array.isArray(profileData.angeboteAnzeigen) ? profileData.angeboteAnzeigen : [];
+      for (const offer of offers) {
+        const offerName = String(offer?.titel || offer?.title || offer?.name || offer?.label || offer?.bezeichnung || 'Anzeige').trim();
+        const offerText = String(offer?.text || offer?.content || offer?.beschreibung || offer?.description || '').trim();
+        const offerCategories = uniqueStrings([
+          ...categories,
+          offer?.kategorie,
+          offer?.thema,
+          ...(Array.isArray(offer?.kategorien) ? offer.kategorien : []),
+        ]);
+        const offerBundle = normalizeSearchValue([
+          offerName,
+          offerText,
+          row.ort,
+          row.plz,
+          offerCategories.join(' '),
+        ].join(' '));
+
+        if (queryText && !offerBundle.includes(queryText)) continue;
+
+        const matchesLocation = !locationText || normalizeSearchValue([row.ort, row.plz || ''].join(' ')).includes(locationText);
+        const matchesCategories = categoryFilters.length === 0 || categoryFilters.some((filter) => offerCategories.some((category) => normalizeSearchValue(category).includes(filter)));
+        const matchesCertificates = certificateFilters.length === 0 || certificateFilters.some((filter) => normalizeSearchValue(Array.isArray(row.zertifikate) ? row.zertifikate.join(' ') : '').includes(filter));
+
+        if (!matchesLocation || !matchesCategories || !matchesCertificates) continue;
+
+        const offerItem: SearchFeedEntry = {
+          id: `offer-${row.user_id}-${String(offer?.id || offer?.offerId || offerName)}`,
+          userId: Number(row.user_id),
+          typ: 'angebot',
+          name: offerName,
+          ort: String(row.ort || ''),
+          plz: String(row.plz || ''),
+          rating: Number.isFinite(rating) ? rating : 0,
+          kategorien: offerCategories,
+          angebotText: offerText || String(row.angebot_text || ''),
+          sucheText: String(row.suche_text || ''),
+        };
+
+        const offerCoordinates = await resolveSearchCoordinates([offerItem.plz, offerItem.ort].filter(Boolean).join(' '));
+        if (offerCoordinates) {
+          offerItem.lat = offerCoordinates.lat;
+          offerItem.lon = offerCoordinates.lon;
+        }
+
+        baseItems.push(offerItem);
+      }
+    }
+
+    const priority = { experte: 0, angebot: 1, nutzer: 2, gruppe: 3, beitrag: 4 } as const;
+    const items = baseItems.sort((left, right) => {
+      const leftPriority = priority[left.typ as keyof typeof priority] ?? 99;
+      const rightPriority = priority[right.typ as keyof typeof priority] ?? 99;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      if (right.rating !== left.rating) return right.rating - left.rating;
+      return left.name.localeCompare(right.name, 'de');
+    });
+
+    return { success: true, feed: items, results: items, groups: [], items } as any;
+  } catch (error: any) {
+    console.error('Error in getSearchFeed:', error);
+    return { success: false, error: error?.message || 'Suche konnte nicht geladen werden.', feed: [], results: [], groups: [], items: [] } as any;
+  }
 }
 
 // ==================== BOOKINGS & CALENDAR ====================

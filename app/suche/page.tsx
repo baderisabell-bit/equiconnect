@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ChevronDown, Heart, MapPin, Search, X, Menu } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown, Filter, Heart, MapPin, Search, X } from "lucide-react";
 import NotificationBell from "../components/notification-bell";
 import SearchMap from "../components/search-map";
 import { ANGEBOT_KATEGORIEN } from "./kategorien-daten";
-import { getSearchFeed, addWishlistItem, sendConnectionRequest } from "../actions";
+import { safeToFixed } from "../lib/num";
+import { addWishlistItem, getSearchFeed, sendConnectionRequest } from "../actions";
 
-type SuchEintrag = {
+type FilterType = "all" | "profile" | "groups" | "posts" | "offers";
+
+type SearchEntry = {
   id: string;
   userId: number | null;
   typ: "experte" | "nutzer" | "beitrag" | "gruppe" | "angebot";
@@ -24,7 +27,10 @@ type SuchEintrag = {
   lon?: number;
 };
 
-type FilterType = "profile" | "groups" | "posts" | "offers" | "all";
+type CategoryOption = {
+  label: string;
+  themen: string[];
+};
 
 const FILTER_TYPES: { value: FilterType; label: string }[] = [
   { value: "all", label: "Alle" },
@@ -34,24 +40,64 @@ const FILTER_TYPES: { value: FilterType; label: string }[] = [
   { value: "offers", label: "Anzeigen" },
 ];
 
-export default function SearchPage() {
+function normalizeText(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function displayText(value: string) {
+  return String(value || "")
+    .replace(/ae/g, "ä")
+    .replace(/oe/g, "ö")
+    .replace(/ue/g, "ü");
+}
+
+function buildCategoryOptions(): CategoryOption[] {
+  return ANGEBOT_KATEGORIEN.map((category) => ({
+    label: String(category.label || "").trim(),
+    themen: Array.isArray(category.themen)
+      ? category.themen.flatMap((entry) => {
+          if (typeof entry === "string") return [entry];
+          const base = [String(entry?.name || "").trim()].filter(Boolean);
+          const subs = Array.isArray(entry?.subs) ? entry.subs.map((item) => String(item || "").trim()).filter(Boolean) : [];
+          return [...base, ...subs];
+        })
+      : [],
+  }));
+}
+
+function SuchseiteContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const categoryOptions = useMemo(buildCategoryOptions, []);
+
   const [role, setRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
-  const [category, setCategory] = useState("");
-  const [distance, setDistance] = useState(50);
-  const [showMap, setShowMap] = useState(true);
-  const [eintraege, setEintraege] = useState<SuchEintrag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [feedError, setFeedError] = useState("");
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [showMap, setShowMap] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [ortFilter, setOrtFilter] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [entries, setEntries] = useState<SearchEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [feedError, setFeedError] = useState("");
 
-  // Initialize user session
+  const activeCategory = useMemo(() => categoryOptions.find((category) => category.label === selectedCategory) || null, [categoryOptions, selectedCategory]);
+  const selectedThemeSet = useMemo(() => new Set(selectedThemes), [selectedThemes]);
+
   useEffect(() => {
     const rawUserId = sessionStorage.getItem("userId");
     const parsedUserId = rawUserId ? parseInt(rawUserId, 10) : NaN;
@@ -60,340 +106,461 @@ export default function SearchPage() {
     if (!Number.isNaN(parsedUserId) && parsedUserId > 0) {
       setUserId(parsedUserId);
     }
-    setLoading(false);
   }, []);
 
-  // Handle URL search parameter
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get("q");
-    const cat = params.get("kategorie");
-    if (q) setSearchTerm(q);
-    if (cat) setCategory(cat);
-  }, []);
+    const q = searchParams.get("q") || "";
+    const ort = searchParams.get("ort") || "";
+    const kategorie = searchParams.get("kategorie") || "";
+    const thema = searchParams.get("thema") || "";
 
-  // Fetch search results
+    if (q) setSearchTerm(q);
+    if (ort) setOrtFilter(ort);
+    if (kategorie) setSelectedCategory(kategorie);
+    if (thema) setSelectedThemes([thema]);
+  }, [searchParams]);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       const res = await getSearchFeed(userId, {
-        kategorien: category ? [category] : [],
-        themen: [],
+        kategorien: selectedCategory ? [selectedCategory] : [],
+        themen: selectedThemes,
         zertifikate: [],
-        ort: "",
+        ort: ortFilter,
         q: searchTerm,
       });
 
       if (!res.success) {
         setFeedError(String(res.error || "Suche konnte nicht geladen werden."));
-        setEintraege([]);
+        setEntries([]);
         setLoading(false);
         return;
       }
 
       setFeedError("");
-      setEintraege(Array.isArray(res.items) ? res.items : []);
+      setEntries(Array.isArray(res.items) ? res.items : []);
       setLoading(false);
     };
 
     load();
-  }, [category, searchTerm, userId]);
+  }, [ortFilter, searchTerm, selectedCategory, selectedThemes, userId]);
 
-  // Filter entries by type
   const filteredEntries = useMemo(() => {
-    return eintraege.filter((entry) => {
-      if (filterType === "profile" && entry.typ !== "experte" && entry.typ !== "nutzer") return false;
-      if (filterType === "groups" && entry.typ !== "gruppe") return false;
-      if (filterType === "posts" && entry.typ !== "beitrag") return false;
-      if (filterType === "offers" && entry.typ !== "angebot") return false;
-      return true;
+    const query = normalizeText(searchTerm);
+    const locationQuery = normalizeText(ortFilter);
+    const categoryQuery = normalizeText(selectedCategory);
+
+    return entries.filter((entry) => {
+      const entryText = normalizeText([
+        entry.name,
+        entry.ort,
+        entry.plz || "",
+        entry.angebotText,
+        entry.sucheText,
+        entry.kategorien.join(" "),
+      ].join(" "));
+
+      const matchesQuery = !query || entryText.includes(query);
+      const matchesLocation = !locationQuery || normalizeText([entry.ort, entry.plz || ""].join(" ")).includes(locationQuery);
+      const matchesCategory = !categoryQuery || entry.kategorien.some((item) => normalizeText(item).includes(categoryQuery));
+      const matchesThemes = selectedThemes.length === 0 || selectedThemes.some((theme) => entryText.includes(normalizeText(theme)));
+      const matchesType =
+        filterType === "all" ||
+        (filterType === "profile" && (entry.typ === "experte" || entry.typ === "nutzer")) ||
+        (filterType === "groups" && entry.typ === "gruppe") ||
+        (filterType === "posts" && entry.typ === "beitrag") ||
+        (filterType === "offers" && entry.typ === "angebot");
+
+      return matchesQuery && matchesLocation && matchesCategory && matchesThemes && matchesType;
     });
-  }, [eintraege, filterType]);
+  }, [entries, filterType, ortFilter, searchTerm, selectedCategory, selectedThemes]);
 
-  // Entries for map display (only profiles and offers, not posts/groups)
-  const mapEntries = useMemo(() => {
-    return filteredEntries.filter((entry) => (entry.typ === "experte" || entry.typ === "nutzer" || entry.typ === "angebot") && entry.lat && entry.lon);
-  }, [filteredEntries]);
+  const mapEntries = useMemo(
+    () => filteredEntries.filter((entry) => (entry.typ === "experte" || entry.typ === "nutzer" || entry.typ === "angebot") && Number.isFinite(entry.lat) && Number.isFinite(entry.lon)),
+    [filteredEntries]
+  );
 
-  const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const query = searchTerm.trim();
-    if (query) {
-      router.push(`/suche?q=${encodeURIComponent(query)}`);
-    }
-  };
-
-  const handleAddToWishlist = async (entry: SuchEintrag) => {
+  const addToWishlist = async (entry: SearchEntry) => {
     if (!userId) {
-      alert("Bitte zuerst einloggen.");
+      alert("Bitte zuerst einloggen, um zur Merkliste hinzuzufügen.");
       return;
     }
 
-    await addWishlistItem(userId, {
+    const res = await addWishlistItem(userId, {
       typ: "person",
-      targetUserId: entry.userId || 0,
-      targetName: entry.name,
+      profilTyp: entry.typ,
+      sourceId: `${entry.typ}-${entry.id}`,
+      name: entry.name,
+      ort: entry.ort,
+      plz: entry.plz || "",
+      kategorieText: entry.kategorien.join(", "),
+      content: entry.typ === "angebot" ? entry.angebotText : entry.sucheText || entry.angebotText,
     });
-  };
 
-  const handleConnect = async (entry: SuchEintrag) => {
-    if (!userId || !entry.userId) {
-      alert("Bitte zuerst einloggen.");
+    if (!res.success) {
+      alert(res.error || "Merkliste konnte nicht gespeichert werden.");
       return;
     }
 
-    await sendConnectionRequest({
-      requesterId: userId,
-      targetUserId: entry.userId,
-    });
+    alert(res.inserted ? "Zur Merkliste hinzugefügt." : "Bereits in der Merkliste.");
   };
 
-  const handleLogout = () => {
-    sessionStorage.clear();
-    window.location.href = "/";
+  const connectToUser = async (entry: SearchEntry) => {
+    if (!userId || !entry.userId || entry.userId === userId) return;
+    const res = await sendConnectionRequest({ requesterId: userId, targetUserId: entry.userId });
+    if (!res.success) {
+      alert(res.error || "Vernetzungsanfrage fehlgeschlagen.");
+      return;
+    }
+    alert(res.status === "accepted" ? "Ihr seid jetzt vernetzt." : "Vernetzungsanfrage gesendet.");
   };
 
-  const categoryOptions = useMemo(() => {
-    const labels = ANGEBOT_KATEGORIEN.map((c) => c.label);
-    return labels;
-  }, []);
+  const openProfile = () => {
+    if (userId && userId > 0) {
+      window.location.href = `/profil/${userId}`;
+      return;
+    }
+    window.location.href = "/login";
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setOrtFilter("");
+    setFilterType("all");
+    setSelectedCategory("");
+    setSelectedThemes([]);
+  };
+
+  const themeOptions = activeCategory?.themen || [];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Sidebar */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setSidebarOpen(false)}>
-          <aside className="absolute left-0 top-0 h-full w-80 bg-white shadow-2xl p-8 flex flex-col">
-            <div className="flex justify-between items-center mb-10 text-emerald-600 font-black">
-              MENÜ <button onClick={() => setSidebarOpen(false)} className="text-slate-300">×</button>
-            </div>
-            <nav className="space-y-6 flex-grow">
-              <Link href="/" className="block text-xl font-black italic uppercase text-slate-800 hover:text-emerald-600">Startseite</Link>
-              <Link href="/suche" className="block text-xl font-black italic uppercase text-emerald-600">Suche</Link>
-              <Link href="/netzwerk" className="block text-xl font-black italic uppercase text-slate-800 hover:text-emerald-600">Netzwerk</Link>
-              <Link href="/nachrichten" className="block text-xl font-black italic uppercase text-slate-800 hover:text-emerald-600">Nachrichten</Link>
-              <Link href="/merkliste" className="block text-xl font-black italic uppercase text-slate-800 hover:text-emerald-600">Merkliste</Link>
-              <Link href="/einstellungen" className="block text-xl font-black italic uppercase text-slate-800 hover:text-emerald-600">Einstellungen</Link>
-              <Link href="/kontakt" className="block text-xl font-black italic uppercase text-slate-800 hover:text-emerald-600">Kontakt & FAQ</Link>
-            </nav>
-            <button onClick={handleLogout} className="mt-auto p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-red-50 hover:text-red-500">
-              Abmelden
-            </button>
-          </aside>
-        </div>
-      )}
-
-      {/* Main Header */}
-      <header className="sticky top-0 z-50 bg-white border-b shadow-sm">
-        <div className="px-8 py-5 flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(true)} className="p-3 bg-slate-50 rounded-xl hover:bg-emerald-50">
-            <Menu size={24} className="text-slate-900" />
-          </button>
-          <div className="flex flex-col">
-            <span className="font-black text-emerald-600 text-2xl italic uppercase">Equily</span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Suche</span>
-          </div>
-          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-auto hidden md:flex gap-2">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Spezialisierung oder Ort..."
-              className="w-full px-4 py-3 bg-slate-50 rounded-xl border outline-none focus:border-emerald-300"
-            />
-            <button type="submit" className="px-5 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black">
-              Suchen
-            </button>
-          </form>
-          <div className="flex items-center gap-3 ml-auto">
-            <NotificationBell userId={userId} />
-            <button className="w-10 h-10 bg-slate-900 rounded-full text-white font-black border-2 border-emerald-500">
-              {userName?.[0]}
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Header */}
-        <div className="border-t bg-white px-8 py-4 flex items-center gap-4 flex-wrap">
-          <div className="relative">
-            <button
-              onClick={() => setTypeDropdownOpen(!typeDropdownOpen)}
-              className="px-4 py-2 rounded-xl border border-slate-200 bg-white flex items-center gap-2 font-bold text-sm"
-            >
-              Typ: {FILTER_TYPES.find((t) => t.value === filterType)?.label} <ChevronDown size={16} />
-            </button>
-            {typeDropdownOpen && (
-              <div className="absolute top-full mt-2 left-0 bg-white border shadow-lg rounded-xl z-50">
-                {FILTER_TYPES.map((type) => (
-                  <button
-                    key={type.value}
-                    onClick={() => {
-                      setFilterType(type.value);
-                      setTypeDropdownOpen(false);
-                    }}
-                    className="block w-full text-left px-4 py-2 hover:bg-slate-50"
-                  >
-                    {type.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
-              className="px-4 py-2 rounded-xl border border-slate-200 bg-white flex items-center gap-2 font-bold text-sm"
-            >
-              Kategorie: {category || "Alle"} <ChevronDown size={16} />
-            </button>
-            {categoryDropdownOpen && (
-              <div className="absolute top-full mt-2 left-0 bg-white border shadow-lg rounded-xl z-50 max-h-64 overflow-y-auto">
-                <button
-                  onClick={() => {
-                    setCategory("");
-                    setCategoryDropdownOpen(false);
-                  }}
-                  className="block w-full text-left px-4 py-2 hover:bg-slate-50"
-                >
-                  Alle
-                </button>
-                {categoryOptions.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => {
-                      setCategory(cat);
-                      setCategoryDropdownOpen(false);
-                    }}
-                    className="block w-full text-left px-4 py-2 hover:bg-slate-50"
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-bold">Entfernung: {distance}km</label>
-            <input
-              type="range"
-              min="1"
-              max="100"
-              value={distance}
-              onChange={(e) => setDistance(Number(e.target.value))}
-              className="w-32"
-            />
-          </div>
-
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.08),_transparent_42%),linear-gradient(180deg,_#f8fafc_0%,_#f8fafc_55%,_#eef2f7_100%)] text-slate-900">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4">
           <button
-            onClick={() => setShowMap(!showMap)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold ${showMap ? "bg-emerald-600 text-white" : "border border-slate-200 bg-white"}`}
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700"
           >
-            Karte {showMap ? "▼" : "▶"}
+            Menü
           </button>
+          <Link href="/" className="shrink-0 text-sm font-black uppercase italic tracking-wider text-emerald-700">
+            Suche
+          </Link>
+          <div className="ml-auto flex items-center gap-2">
+            <NotificationBell userId={userId} />
+            <button
+              type="button"
+              onClick={openProfile}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-black text-white"
+            >
+              {userName?.[0] || "P"}
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Results List */}
-        <div className={`${showMap ? "w-full lg:w-1/2" : "w-full"} overflow-y-auto p-8 space-y-4`}>
-          {loading ? (
-            <p className="text-slate-500">Lädt...</p>
-          ) : feedError ? (
-            <p className="text-red-600">{feedError}</p>
-          ) : filteredEntries.length === 0 ? (
-            <p className="text-slate-500">Keine Ergebnisse gefunden.</p>
-          ) : (
-            filteredEntries.map((entry) => (
-              <article key={entry.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900">{entry.name}</h3>
-                    <p className="text-sm text-slate-600 flex items-center gap-1">
-                      <MapPin size={14} /> {entry.ort}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleAddToWishlist(entry)}
-                    className="p-2 rounded-lg bg-slate-50 hover:bg-red-50"
-                  >
-                    <Heart size={16} className="text-slate-600 hover:text-red-500" />
-                  </button>
-                </div>
-                {entry.kategorien.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {entry.kategorien.map((kat) => (
-                      <span key={kat} className="px-2 py-1 rounded-lg bg-emerald-50 text-[10px] font-black uppercase text-emerald-700">
-                        {kat}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {entry.angebotText && <p className="text-sm text-slate-600">{entry.angebotText}</p>}
-                <div className="flex gap-2 pt-2">
-                  <Link
-                    href={`/profil/${entry.userId}`}
-                    className="px-3 py-2 rounded-lg text-[10px] font-black uppercase border border-emerald-300 bg-emerald-50 text-emerald-700"
-                  >
-                    Profil öffnen
-                  </Link>
-                  <button
-                    onClick={() => handleConnect(entry)}
-                    className="px-3 py-2 rounded-lg text-[10px] font-black uppercase border border-slate-200 hover:bg-slate-50"
-                  >
-                    Nachricht
-                  </button>
-                </div>
-              </article>
-            ))
-          )}
-        </div>
-
-        {/* Map Sidebar */}
-        {showMap && (
-          <div className="hidden lg:block w-1/2 border-l bg-white overflow-hidden">
-            <SearchMap
-              entries={mapEntries}
-              searchTerm={searchTerm}
-              onSelectEntry={(id: string) => {
-                const entry = filteredEntries.find((e) => e.id === id);
-                if (entry?.userId) {
-                  router.push(`/profil/${entry.userId}`);
-                }
-              }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Mobile Map Modal */}
-      {showMap && (
-        <div className="lg:hidden fixed inset-0 bg-black/50 z-40 flex items-end">
-          <div className="w-full h-3/4 bg-white rounded-t-3xl overflow-hidden flex flex-col">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h2 className="font-black text-lg">Karte</h2>
-              <button onClick={() => setShowMap(false)} className="text-slate-500">
-                <X size={24} />
+      {sidebarOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Menü schließen"
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-[90] bg-slate-900/30 backdrop-blur-[1px]"
+          />
+          <aside className="fixed left-0 top-0 z-[100] h-full w-72 border-r border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="mb-8 flex items-center justify-between">
+              <p className="text-sm font-black uppercase tracking-widest text-slate-900">Menü</p>
+              <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-full border border-slate-200 px-2 py-1 text-slate-500">
+                <X size={14} />
               </button>
             </div>
-            <div className="flex-1">
-              <SearchMap
-                entries={mapEntries}
-                searchTerm={searchTerm}
-                onSelectEntry={(id: string) => {
-                  const entry = filteredEntries.find((e) => e.id === id);
-                  if (entry?.userId) {
-                    setShowMap(false);
-                    router.push(`/profil/${entry.userId}`);
-                  }
-                }}
+            <nav className="space-y-3 text-sm font-black uppercase tracking-widest text-slate-700">
+              <Link href="/" className="block">
+                Startseite
+              </Link>
+              <Link href="/netzwerk" className="block">
+                Netzwerk
+              </Link>
+              <Link href="/nachrichten" className="block">
+                Nachrichten
+              </Link>
+              <Link href="/merkliste" className="block">
+                Merkliste
+              </Link>
+              <button type="button" onClick={openProfile} className="block text-left">
+                Mein Profil
+              </button>
+            </nav>
+          </aside>
+        </>
+      )}
+
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 space-y-6">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_auto]">
+            <div className="relative">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Suche nach Namen, Angebot oder Thema"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-emerald-400 focus:bg-white"
               />
             </div>
+            <div className="relative">
+              <MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={ortFilter}
+                onChange={(event) => setOrtFilter(event.target.value)}
+                placeholder="Ort oder PLZ"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-emerald-400 focus:bg-white"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              <Filter size={14} /> Filter löschen
+            </button>
           </div>
+        </section>
+
+        <section className="rounded-[1.5rem] border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm">
+          <div className="grid gap-3 lg:grid-cols-[auto_1fr_auto] lg:items-start">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setTypeDropdownOpen((prev) => !prev);
+                  setCategoryDropdownOpen(false);
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700"
+              >
+                Typ: {FILTER_TYPES.find((type) => type.value === filterType)?.label} <ChevronDown size={16} />
+              </button>
+              {typeDropdownOpen && (
+                <div className="absolute left-0 top-full z-20 mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                  {FILTER_TYPES.map((type) => (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() => {
+                        setFilterType(type.value);
+                        setTypeDropdownOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-bold transition ${filterType === type.value ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      <span>{type.label}</span>
+                      {filterType === type.value ? <span>•</span> : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryDropdownOpen((prev) => !prev);
+                    setTypeDropdownOpen(false);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700"
+                >
+                  Kategorie: {selectedCategory ? displayText(selectedCategory) : "Alle"} <ChevronDown size={16} />
+                </button>
+
+                {selectedCategory && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory("");
+                      setSelectedThemes([]);
+                    }}
+                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500"
+                  >
+                    Kategorie zurücksetzen
+                  </button>
+                )}
+              </div>
+
+              {categoryDropdownOpen && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="flex flex-wrap gap-2">
+                    {categoryOptions.map((category) => {
+                      const active = selectedCategory === category.label;
+                      return (
+                        <button
+                          key={category.label}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory(active ? "" : category.label);
+                            setSelectedThemes([]);
+                          }}
+                          className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition ${active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                        >
+                          {displayText(category.label)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeCategory && themeOptions.length > 0 && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Unterkategorien</p>
+                      <div className="flex flex-wrap gap-2">
+                        {themeOptions.map((theme) => {
+                          const active = selectedThemeSet.has(theme);
+                          return (
+                            <button
+                              key={theme}
+                              type="button"
+                              onClick={() => {
+                                setSelectedThemes((prev) => (prev.includes(theme) ? prev.filter((item) => item !== theme) : [...prev, theme]));
+                              }}
+                              className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition ${active ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                            >
+                              {displayText(theme)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowMap((prev) => !prev)}
+              className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition ${showMap ? "border border-slate-900 bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+            >
+              Karte {showMap ? "ausblenden" : "anzeigen"}
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            {selectedCategory ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2">{displayText(selectedCategory)}</span> : null}
+            {selectedThemes.map((theme) => (
+              <span key={theme} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2">
+                {displayText(theme)}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {(feedError || loading) && (
+          <div className={`rounded-2xl border p-4 text-sm ${feedError ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
+            {feedError || "Lade Treffer..."}
+          </div>
+        )}
+
+        <div className={showMap ? "grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]" : "block"}>
+          <section className="space-y-4">
+            {filteredEntries.length === 0 && !loading ? (
+              <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white p-8 text-sm text-slate-500">
+                Keine Treffer gefunden. Bitte Suche, Ort oder Kategorien anpassen.
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {filteredEntries.map((entry) => (
+                  <article key={entry.id} className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {entry.typ === "experte" ? "Experte" : entry.typ === "nutzer" ? "Nutzer" : entry.typ === "angebot" ? "Anzeige" : entry.typ === "gruppe" ? "Gruppe" : "Beitrag"}
+                        </p>
+                        <h3 className="mt-1 text-lg font-black italic uppercase text-slate-900">{displayText(entry.name)}</h3>
+                        <p className="text-xs text-slate-500">
+                          {displayText(entry.ort)}
+                          {entry.plz ? ` · ${entry.plz}` : ""}
+                        </p>
+                      </div>
+                      <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{safeToFixed(entry.rating, 1)}</div>
+                    </div>
+
+                    <p className="mt-3 text-sm text-slate-600 line-clamp-3">
+                      {displayText(entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar.")}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {entry.kategorien.slice(0, 4).map((category) => (
+                        <span key={`${entry.id}-${category}`} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                          {displayText(category)}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {(entry.typ === "experte" || entry.typ === "angebot") && entry.userId ? (
+                        <button
+                          type="button"
+                          onClick={() => connectToUser(entry)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700"
+                        >
+                          Vernetzen
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => addToWishlist(entry)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700"
+                      >
+                        <Heart size={14} /> Merken
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {showMap && (
+            <section className="xl:sticky xl:top-24">
+              <div className="rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Karte</p>
+                    <h2 className="mt-1 text-lg font-black italic uppercase tracking-tight text-slate-900">Standorte der Treffer</h2>
+                  </div>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    {mapEntries.length} Marker
+                  </span>
+                </div>
+                <SearchMap
+                  className="h-[72vh] w-full rounded-[1.5rem] overflow-hidden"
+                  entries={mapEntries}
+                  onSelectEntry={(id: string) => {
+                    const entry = filteredEntries.find((item) => item.id === id);
+                    if (entry?.userId) {
+                      router.push(`/profil/${entry.userId}`);
+                    }
+                  }}
+                />
+              </div>
+            </section>
+          )}
         </div>
-      )}
+      </main>
     </div>
+  );
+}
+
+export default function Suchseite() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 p-8 text-slate-500">
+          Suche wird geladen...
+        </div>
+      }
+    >
+      <SuchseiteContent />
+    </Suspense>
   );
 }

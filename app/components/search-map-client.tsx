@@ -1,13 +1,22 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import type { LatLngExpression } from "leaflet";
+import React, { useEffect, useMemo, useState } from "react";
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import type { LatLngBoundsExpression, LatLngExpression } from "leaflet";
 
 type SearchMapProps = {
   initial?: { lat: number; lng: number } | null;
   onChange?: (pos: { lat: number; lng: number } | null) => void;
   className?: string;
+  entries?: Array<{
+    id: string;
+    name: string;
+    ort: string;
+    plz?: string;
+    lat?: number;
+    lon?: number;
+  }>;
+  onSelectEntry?: (id: string) => void;
 };
 
 function MapClickHandler({ onChange }: { onChange?: (pos: { lat: number; lng: number } | null) => void }) {
@@ -21,9 +30,29 @@ function MapClickHandler({ onChange }: { onChange?: (pos: { lat: number; lng: nu
   return null;
 }
 
-export default function SearchMapClient({ initial = null, onChange, className = "h-72 w-full rounded-xl" }: SearchMapProps) {
+function FitEntriesBounds({ entries }: { entries: NonNullable<SearchMapProps["entries"]> }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const points = entries.filter((entry) => Number.isFinite(entry.lat) && Number.isFinite(entry.lon));
+    if (points.length === 0) return;
+
+    const bounds: LatLngBoundsExpression = points.map((entry) => [Number(entry.lat), Number(entry.lon)]);
+    if (points.length === 1) {
+      map.setView([Number(points[0].lat), Number(points[0].lon)], 11);
+      return;
+    }
+
+    map.fitBounds(bounds, { padding: [28, 28] });
+  }, [entries, map]);
+
+  return null;
+}
+
+export default function SearchMapClient({ initial = null, onChange, className = "h-72 w-full rounded-xl", entries = [], onSelectEntry }: SearchMapProps) {
   const [center, setCenter] = useState<LatLngExpression>(initial ? [initial.lat, initial.lng] : [51.1657, 10.4515]);
   const [marker, setMarker] = useState<{ lat: number; lng: number } | null>(initial);
+  const visibleEntries = useMemo(() => entries.filter((entry) => Number.isFinite(entry.lat) && Number.isFinite(entry.lon)), [entries]);
 
   useEffect(() => {
     if (initial) {
@@ -52,13 +81,26 @@ export default function SearchMapClient({ initial = null, onChange, className = 
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
-        <MapClickHandler
-          onChange={(pos) => {
-            setMarker(pos);
-            if (pos) onChange && onChange(pos);
-          }}
-        />
-        {marker && <Marker position={[marker.lat, marker.lng]} />}
+        {visibleEntries.length > 0 ? <FitEntriesBounds entries={visibleEntries} /> : <MapClickHandler onChange={(pos) => {
+          setMarker(pos);
+          if (pos) onChange && onChange(pos);
+        }} />}
+        {visibleEntries.length > 0
+          ? visibleEntries.map((entry) => (
+              <Marker
+                key={entry.id}
+                position={[Number(entry.lat), Number(entry.lon)]}
+                eventHandlers={onSelectEntry ? { click: () => onSelectEntry(entry.id) } : undefined}
+              >
+                <Popup>
+                  <div className="space-y-1">
+                    <p className="text-sm font-black uppercase tracking-widest">{entry.name}</p>
+                    <p className="text-xs text-slate-600">{entry.ort}{entry.plz ? ` · ${entry.plz}` : ""}</p>
+                  </div>
+                </Popup>
+              </Marker>
+            ))
+          : marker && <Marker position={[marker.lat, marker.lng]} />}
       </MapContainer>
     </div>
   );
