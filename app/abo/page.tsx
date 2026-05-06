@@ -9,6 +9,7 @@ import {
   getUserSubscriptionSettings,
   upsertUserSubscriptionSettings,
 } from "../actions";
+import LoggedInHeader from "../components/logged-in-header";
 
 type UserRole = "experte" | "nutzer";
 type PaymentMethod = "sepa" | "paypal";
@@ -190,30 +191,26 @@ const USER_PLAN_DEFAULTS: PlanConfig[] = [
 ];
 
 const EXPERT_COMPARISON_ROWS: ComparisonRow[] = [
-  { label: "Vergleich", values: ["leer", "Kostenlos", "Basic", "Premium"] },
-  { label: "Preis", values: ["leer", "kostenlos", "9,90 €/Monat", "19,90 €/Monat · Gründungsmitglieder: 16,00 €/Monat"] },
-  { label: "Automatisierte Rechnungen für Kunden", values: ["leer", "leer", "leer", "ja"] },
-  { label: "Zusätzliche Sichtbarkeit des Profils", values: ["leer", "leer", "Erhöhte Sichtbarkeit im Feed und in der Suche + 72h als Newcomer auf der Startseite", "Erhöhte Sichtbarkeit im Feed und in der Suche + 7 Tage als Newcomer auf der Startseite"] },
-  { label: "Laufende Anzeigen wieder nach oben bringen", values: ["leer", "leer", "1x im Monat inklusive, danach 1,49 €/Anzeige", "3x im Monat inklusive, danach 1,49 €/Anzeige"] },
-  { label: "Gruppenhosting", values: ["leer", "leer", "Ja - private oder öffentliche Gruppe für Trainer und Reitschüler", "Ja - private oder öffentliche Gruppe für Trainer und Reitschüler"] },
-  { label: "Beiträge", values: ["4 pro Monat", "4 pro Monat", "unbegrenzt", "unbegrenzt"] },
-  { label: "Anzeigen", values: ["2 pro Monat", "2 pro Monat", "unbegrenzt", "unbegrenzt"] },
-  { label: "FAQ Rückmeldung", values: ["nicht bevorzugt", "nicht bevorzugt", "Innerhalb 72 Stunden", "Innerhalb 72 Stunden"] },
-];
-
-const USER_COMPARISON_ROWS: ComparisonRow[] = [
-  { label: "Vergleich", values: ["leer", "Kostenlos", "Premium"] },
-  { label: "Preis", values: ["leer", "kostenlos", "5,99 €/Monat"] },
-  { label: "Erhöhte Sichtbarkeit", values: ["leer", "leer", "Erhöhte Sichtbarkeit im Feed und in der Suche"] },
-  { label: "Nachrichten an Experten/Anbieter", values: ["leer", "Deine Anzeige an einen Experten/Anbieter wird priorisiert im Postfach angezeigt", "Deine Anzeige an einen Experten/Anbieter wird priorisiert im Postfach angezeigt"] },
-  { label: "Laufende Suchen wieder an den Anfang setzen", values: ["leer", "1x im Monat inklusive, dann 1,49 €/Suche", "1x im Monat inklusive, dann 1,49 €/Suche"] },
-  { label: "Gruppenhosting", values: ["leer", "Ja", "Ja"] },
+  { label: "Automatisierte Rechnungen für Kunden", values: ["", "", "ja"] },
+  { label: "Zusätzliche Sichtbarkeit des Profils", values: ["", "Erhöhte Sichtbarkeit im Feed und in der Suche + 72h als Newcomer auf der Startseite", "Erhöhte Sichtbarkeit im Feed und in der Suche + 7 Tage als Newcomer auf der Startseite"] },
+  { label: "Laufende Anzeigen wieder nach oben bringen", values: ["", "1x im Monat inklusive, danach 1,49 €/Anzeige", "3x im Monat inklusive, danach 1,49 €/Anzeige"] },
+  { label: "Gruppenhosting", values: ["", "Ja - private oder öffentliche Gruppe für Trainer und Reitschüler", "Ja - private oder öffentliche Gruppe für Trainer und Reitschüler"] },
   { label: "Beiträge", values: ["4 pro Monat", "unbegrenzt", "unbegrenzt"] },
   { label: "Anzeigen", values: ["2 pro Monat", "unbegrenzt", "unbegrenzt"] },
   { label: "FAQ Rückmeldung", values: ["nicht bevorzugt", "Innerhalb 72 Stunden", "Innerhalb 72 Stunden"] },
 ];
 
-const ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
+const USER_COMPARISON_ROWS: ComparisonRow[] = [
+  { label: "Erhöhte Sichtbarkeit", values: ["", "Erhöhte Sichtbarkeit im Feed und in der Suche"] },
+  { label: "Nachrichten an Experten/Anbieter", values: ["Deine Anzeige an einen Experten/Anbieter wird priorisiert im Postfach angezeigt", "Deine Anzeige an einen Experten/Anbieter wird priorisiert im Postfach angezeigt"] },
+  { label: "Laufende Suchen wieder an den Anfang setzen", values: ["1x im Monat inklusive, dann 1,49 €/Suche", "1x im Monat inklusive, dann 1,49 €/Suche"] },
+  { label: "Gruppenhosting", values: ["Ja", "Ja"] },
+  { label: "Beiträge", values: ["4 pro Monat", "unbegrenzt"] },
+  { label: "Anzeigen", values: ["2 pro Monat", "unbegrenzt"] },
+  { label: "FAQ Rückmeldung", values: ["nicht bevorzugt", "Innerhalb 72 Stunden"] },
+];
+
+const EXPERT_ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
   {
     label: "Individuelle Werbung auf der Startseite für 14 Tage",
     price: "14,99 €",
@@ -224,41 +221,16 @@ const ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
   {
     label: "Anzeigen oben anheften",
     price: "5,99 €/Monat",
-    method: "PayPal",
-    href: `https://www.paypal.com/ncp/payment/${PAYPAL_ANZEIGE_OBEN_ANHEFTEN_PLAN_ID}`,
+    method: "GoCardless",
+    href: GOCARDLESS_ANZEIGE_OBEN_ANHEFTEN_URL,
     note: "Anzeige oben anheften",
   },
+];
+
+const USER_ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
   {
-    label: "Anzeige priorisieren für Experten",
-    price: "Sofort kaufen",
-    method: "PayPal",
-    href: `https://www.paypal.com/ncp/payment/${PAYPAL_ANZEIGE_PRIORISIEREN_PLAN_ID}`,
-    note: "Anzeige priorisieren (Experten)",
-  },
-  {
-    label: "Suche priorisieren für Nutzer",
-    price: "Sofort kaufen",
-    method: "PayPal",
-    href: `https://www.paypal.com/ncp/payment/${PAYPAL_SUCHE_PRIORISIEREN_PLAN_ID}`,
-    note: "Suche priorisieren (Nutzer)",
-  },
-  {
-    label: "Anzeige priorisieren (Experten) via GoCardless",
-    price: "Checkout",
-    method: "GoCardless",
-    href: GOCARDLESS_ANZEIGE_PRIORISIEREN_URL,
-    note: "Anzeige priorisieren",
-  },
-  {
-    label: "Suche priorisieren (Nutzer) via GoCardless",
-    price: "Checkout",
-    method: "GoCardless",
-    href: GOCARDLESS_SUCHE_PRIORISIEREN_URL,
-    note: "Suche priorisieren",
-  },
-  {
-    label: "Anzeige oben anheften via GoCardless",
-    price: "Checkout",
+    label: "Anzeigen oben anheften",
+    price: "5,99 €/Monat",
     method: "GoCardless",
     href: GOCARDLESS_ANZEIGE_OBEN_ANHEFTEN_URL,
     note: "Anzeige oben anheften",
@@ -272,6 +244,8 @@ function AboPageContent() {
 
   const [userId, setUserId] = useState<number | null>(null);
   const [role, setRole] = useState<UserRole>("nutzer");
+  const [userName, setUserName] = useState("Profil");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -296,6 +270,7 @@ function AboPageContent() {
   useEffect(() => {
     const sessionUserId = sessionStorage.getItem("userId");
     const sessionRole = sessionStorage.getItem("userRole");
+    const sessionUserName = sessionStorage.getItem("userName") || "Profil";
     const queryRole = searchParams.get("role");
 
     const parsedUserId = sessionUserId ? parseInt(sessionUserId, 10) : NaN;
@@ -308,6 +283,7 @@ function AboPageContent() {
 
     setUserId(parsedUserId);
     setRole(resolvedRole);
+    setUserName(sessionUserName);
 
     const load = async () => {
       setLoading(true);
@@ -345,7 +321,7 @@ function AboPageContent() {
     setGoCardlessHandled(true);
 
     if (!redirectFlowId || !sessionToken) {
-      setError("GoCardless-Rueckgabe unvollstaendig. Bitte erneut verbinden.");
+      setError("GoCardless-Rückgabe unvollständig. Bitte erneut verbinden.");
       return;
     }
 
@@ -415,6 +391,10 @@ function AboPageContent() {
     if (selectedPlan.key === "experte_pro") return GOCARDLESS_EXPERTE_PRO_CHECKOUT_URL;
     return "";
   }, [selectedPlan]);
+
+  const addonLinks = useMemo(() => {
+    return role === "experte" ? EXPERT_ADDON_CHECKOUT_LINKS : USER_ADDON_CHECKOUT_LINKS;
+  }, [role]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -565,6 +545,17 @@ function AboPageContent() {
     window.location.href = String(res.redirectUrl);
   };
 
+  const handleLogout = () => {
+    try {
+      sessionStorage.removeItem("userId");
+      sessionStorage.removeItem("userRole");
+      sessionStorage.removeItem("userName");
+    } catch {
+      // ignore session cleanup issues
+    }
+    router.push("/login");
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 p-8">
@@ -575,6 +566,43 @@ function AboPageContent() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      <LoggedInHeader
+        userId={userId}
+        role={role}
+        userName={userName}
+        onOpenSidebar={() => setSidebarOpen(true)}
+      />
+
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Menü schließen"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/30"
+        />
+      )}
+
+      {sidebarOpen && (
+        <aside className="fixed left-0 top-0 z-50 h-full w-72 border-r border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="mb-8 flex items-center justify-between">
+            <p className="text-sm font-black uppercase tracking-widest text-slate-900">Menü</p>
+            <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-full border border-slate-200 px-2 py-1 text-slate-500">
+              ×
+            </button>
+          </div>
+          <nav className="space-y-3 text-sm font-black uppercase tracking-widest text-slate-700">
+            <Link href="/" className="block">Startseite</Link>
+            <Link href="/suche" className="block">Suche</Link>
+            <Link href="/netzwerk" className="block">Netzwerk</Link>
+            <Link href="/nachrichten" className="block">Nachrichten</Link>
+            <Link href="/merkliste" className="block">Merkliste</Link>
+            <Link href="/einstellungen" className="block">Einstellungen</Link>
+            <Link href="/kontakt" className="block">Kontakt & FAQ</Link>
+            <button type="button" onClick={handleLogout} className="block text-left text-slate-400">Abmelden</button>
+          </nav>
+        </aside>
+      )}
+
       <main className="max-w-4xl mx-auto px-5 py-10 space-y-8">
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -587,7 +615,7 @@ function AboPageContent() {
                 Buchen Sie sich zusätzliche Sichtbarkeit, um einen schnelleren Erfolg auf Equily zu haben. Alle Vorteile im Überblick:
               </p>
               <p className="mt-2 text-sm font-bold text-slate-700">
-                Monatlich kuendigbar. Ohne Kuendigung verlaengert sich das Abo monatlich zum gleichen Kalendertag.
+                Monatlich kündigbar. Ohne Kündigung verlängert sich das Abo monatlich zum gleichen Kalendertag.
               </p>
             </div>
             {!onboarding && (
@@ -597,20 +625,12 @@ function AboPageContent() {
             )}
           </div>
 
-          <div className="mt-6 space-y-3">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Gruendungsmitglieder</p>
-              <p className="mt-2 text-sm font-bold text-slate-800">
-                Die ersten 100 Mitglieder erhalten dauerhaft Rabatt und die ersten 2 Monate kostenlos.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Website im Aufbau</p>
-              <p className="mt-2 text-sm text-slate-700">
-                Equily wird aktuell weiter ausgebaut, damit die Plattform bestmöglich zu euren Wünschen passt.
-                Fehler und Verbesserungsvorschläge bitte über das <Link href="/kontakt" className="font-black text-amber-700 hover:underline">Kontaktformular</Link> teilen.
-              </p>
-            </div>
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Website im Aufbau</p>
+            <p className="mt-2 text-sm text-slate-700">
+              Equily wird aktuell weiter ausgebaut, damit die Plattform bestmöglich zu euren Wünschen passt.
+              Fehler und Verbesserungsvorschläge bitte über das <Link href="/kontakt" className="font-black text-amber-700 hover:underline">Kontaktformular</Link> teilen.
+            </p>
           </div>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -625,11 +645,11 @@ function AboPageContent() {
                 >
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{plan.baseCents > 0 ? "Mit Abo" : "Ohne Abo"}</p>
                   <h2 className="mt-2 text-xl font-black italic uppercase text-slate-900">{plan.label}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{plan.audience}</p>
-                  <p className="mt-3 text-sm font-black text-emerald-700">
+                  <p className="mt-2 text-sm font-black uppercase tracking-widest text-slate-900">
                     {formatEuro(plan.baseCents)}{plan.baseCents > 0 ? " / Monat" : ""}
                     {plan.foundingMemberCents !== undefined && plan.foundingMemberCents !== null && plan.foundingMemberCents > 0 ? ` · Gründungsmitglieder: ${formatEuro(plan.foundingMemberCents)} / Monat` : ""}
                   </p>
+                  <p className="mt-1 text-sm text-slate-600">{plan.audience}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600">
                       Sichtbarkeit: {plan.visibilityLabel}
@@ -652,10 +672,15 @@ function AboPageContent() {
             <thead>
               <tr>
                 <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">leer</th>
                 <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Basic</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Premium</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <span className="block">Basic</span>
+                  <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">9,90 €/Monat · Gründungsmitglieder: 8,00 €/Monat</span>
+                </th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <span className="block">Premium</span>
+                  <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">19,90 €/Monat · Gründungsmitglieder: 16,00 €/Monat</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -663,7 +688,7 @@ function AboPageContent() {
                 <tr key={row.label}>
                   <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
                   {row.values.map((value, index) => (
-                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value || "leer"}</td>
+                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value}</td>
                   ))}
                 </tr>
               ))}
@@ -675,26 +700,22 @@ function AboPageContent() {
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zusatzangebote</p>
               <h3 className="mt-2 text-lg font-black italic uppercase text-slate-900">Exklusive Sichtbarkeit</h3>
               <div className="mt-4 space-y-3 text-sm text-slate-700">
-                {ADDON_CHECKOUT_LINKS.map((item) => (
+                {addonLinks.map((item) => (
                   <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3">
                     <p className="font-black text-slate-900">{item.label}</p>
-                    <p className="mt-1 text-emerald-700 font-bold">{item.price}</p>
+                    <p className="mt-1 font-bold text-slate-900">{item.price}</p>
                     <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
                     <a
                       href={item.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
+                      className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-slate-400 hover:bg-slate-100"
                     >
                       {item.method} öffnen
                     </a>
                   </div>
                 ))}
               </div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Hinweis</p>
-              <p className="mt-2 text-sm text-slate-700">Alle zusätzlichen Sichtbarkeits- und Rechnungsfunktionen werden nur über die hier verlinkten Checkout-Links angeboten.</p>
             </div>
           </div>
         </section>
@@ -710,9 +731,11 @@ function AboPageContent() {
             <thead>
               <tr>
                 <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">leer</th>
                 <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Premium</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <span className="block">Premium</span>
+                  <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">5,99 €/Monat</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -720,7 +743,7 @@ function AboPageContent() {
                 <tr key={row.label}>
                   <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
                   {row.values.map((value, index) => (
-                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value || "leer"}</td>
+                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value}</td>
                   ))}
                 </tr>
               ))}
@@ -755,160 +778,160 @@ function AboPageContent() {
                 {selectedPlan.offerPreviewHours > 0 && <p className="font-bold text-slate-800">Früherer Angebotszugriff: {selectedPlan.offerPreviewHours}h</p>}
               </div>
             </div>
-          </section>
-        )}
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-6">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zahlungsart</p>
-            <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">
-              {isPaidPlan ? "SEPA oder PayPal" : "Kostenloser Tarif"}
-            </h2>
-          </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Monatlicher Preis</p>
+              <p className="text-xl font-black italic uppercase text-slate-900">{formatEuro(monthlyPriceCents)}</p>
+            </div>
 
-          {isPaidPlan ? (
-            <>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("sepa")}
-                  className={`px-4 py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest ${paymentMethod === "sepa" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
-                >
-                  SEPA Lastschrift
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("paypal")}
-                  className={`px-4 py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest ${paymentMethod === "paypal" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
-                >
-                  PayPal
-                </button>
+            {isPaidPlan && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                <p className="font-black uppercase tracking-widest text-[10px]">Einzug</p>
+                <p className="mt-2 font-bold">Der erste Einzug (SEPA und PayPal) erfolgt erst in 2 Monaten.</p>
               </div>
+            )}
 
-              {paymentMethod === "sepa" ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      value={sepaAccountHolder}
-                      onChange={(e) => setSepaAccountHolder(e.target.value)}
-                      placeholder="Kontoinhaber"
-                      className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
-                    />
-                    <input
-                      type="text"
-                      value={sepaIban}
-                      onChange={(e) => setSepaIban(e.target.value.toUpperCase())}
-                      placeholder="IBAN"
-                      className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
-                    />
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">SEPA via GoCardless</p>
-                    {goCardlessMandateId ? (
-                      <p className="text-sm font-bold text-emerald-800">
-                        Verbunden. Mandat-ID: {goCardlessMandateId}
-                        {goCardlessConnectedAt ? ` · verbunden am ${new Date(goCardlessConnectedAt).toLocaleDateString("de-DE")}` : ""}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-slate-700">Verbinde dein SEPA-Mandat direkt mit GoCardless.</p>
-                    )}
-                    {goCardlessLastError && (
-                      <p className="text-xs font-bold text-red-700">Letzter GoCardless-Fehler: {goCardlessLastError}</p>
-                    )}
-                    {goCardlessCheckoutUrl && (
-                      <p className="text-xs text-slate-600">Für den gewählten Tarif wird der passende GoCardless-Checkout geöffnet.</p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleConnectGoCardless}
-                      disabled={goCardlessBusy || aboBlocked}
-                      className="px-5 py-3 rounded-xl border border-emerald-300 bg-white text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
-                    >
-                      {goCardlessBusy ? "Verbinde..." : goCardlessMandateId ? "GoCardless erneut verbinden" : "Mit GoCardless verbinden"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {paypalPlanConfig ? (
-                    <>
-                      <div id={paypalPlanConfig.containerId} className="min-h-[44px]" />
-                      {paypalButtonError && <p className="text-xs font-bold text-red-600">{paypalButtonError}</p>}
-                      {paypalSubscriptionId && (
-                        <p className="text-xs font-bold text-emerald-700">PayPal Subscription-ID: {paypalSubscriptionId}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-xs font-bold text-amber-700">PayPal ist für diesen Tarif aktuell deaktiviert.</p>
-                  )}
-
-                  <input
-                    type="email"
-                    value={paypalEmail}
-                    onChange={(e) => setPaypalEmail(e.target.value)}
-                    placeholder="PayPal E-Mail"
-                    className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-sm font-bold text-emerald-800">Für diesen Tarif sind keine Zahlungsdaten nötig.</p>
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Monatlicher Preis</p>
-            <p className="text-xl font-black italic uppercase text-slate-900">{formatEuro(monthlyPriceCents)}</p>
-          </div>
-
-          {isPaidPlan && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <p className="font-black uppercase tracking-widest text-[10px]">Einzug</p>
-              <p className="mt-2 font-bold">Der erste Einzug (SEPA und PayPal) erfolgt erst in 2 Monaten.</p>
+              <p className="font-black uppercase tracking-widest text-[10px]">Verlängerung</p>
+              <p className="mt-2 font-bold">Monatlich kündigbar. Der erste Einzug erfolgt in 2 Monaten, danach monatlich immer am gleichen Kalendertag wie beim Abschluss.</p>
+              <p className="mt-2 font-bold">Wichtig: Kündigungen müssen spätestens 3 Tage vor dem jeweiligen Abo-Ende eingehen.</p>
             </div>
-          )}
 
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            <p className="font-black uppercase tracking-widest text-[10px]">Verlängerung</p>
-            <p className="mt-2 font-bold">Monatlich kuendigbar. Der erste Einzug erfolgt in 2 Monaten, danach monatlich immer am gleichen Kalendertag wie beim Abschluss.</p>
-            <p className="mt-2 font-bold">Wichtig: Kündigungen müssen spätestens 3 Tage vor dem jeweiligen Abo-Ende eingehen.</p>
-          </div>
+            {aboBlocked && (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                <p className="font-black uppercase tracking-widest text-[10px]">Abo gesperrt</p>
+                <p className="mt-2 font-bold">Abo-Änderungen sind bis {new Date(String(aboBlockedUntil)).toLocaleDateString("de-DE")} gesperrt.</p>
+                {aboBlockedReason && <p className="mt-1">Grund: {aboBlockedReason}</p>}
+              </div>
+            )}
 
-          {aboBlocked && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-              <p className="font-black uppercase tracking-widest text-[10px]">Abo gesperrt</p>
-              <p className="mt-2 font-bold">Abo-Änderungen sind bis {new Date(String(aboBlockedUntil)).toLocaleDateString("de-DE")} gesperrt.</p>
-              {aboBlockedReason && <p className="mt-1">Grund: {aboBlockedReason}</p>}
-            </div>
-          )}
+            {error && <p className="text-[11px] font-bold uppercase tracking-widest text-red-600">{error}</p>}
+            {success && <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">{success}</p>}
 
-          {error && <p className="text-[11px] font-bold uppercase tracking-widest text-red-600">{error}</p>}
-          {success && <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">{success}</p>}
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || aboBlocked}
-              className="px-8 py-4 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-500 disabled:opacity-60"
-            >
-              {saving ? "Speichere..." : onboarding ? "Tarif speichern" : "Tarif aktualisieren"}
-            </button>
-            {onboarding && (
+            <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={() => router.push("/einstellungen")}
-                className="px-6 py-4 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600"
+                onClick={handleSave}
+                disabled={saving || aboBlocked}
+                className="px-8 py-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 disabled:opacity-60"
               >
-                Später in Einstellungen
+                {saving ? "Speichere..." : onboarding ? "Tarif speichern" : "Tarif aktualisieren"}
               </button>
-            )}
-          </div>
-        </section>
+              {onboarding && (
+                <button
+                  type="button"
+                  onClick={() => router.push("/einstellungen")}
+                  className="px-6 py-4 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600"
+                >
+                  Später in Einstellungen
+                </button>
+              )}
+            </div>
+
+            <div className="pt-2 space-y-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zahlungsart</p>
+                <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">
+                  {isPaidPlan ? "SEPA oder PayPal" : "Kostenloser Tarif"}
+                </h2>
+              </div>
+
+              {isPaidPlan ? (
+                <>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("sepa")}
+                      className={`px-4 py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest ${paymentMethod === "sepa" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
+                    >
+                      SEPA Lastschrift
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("paypal")}
+                      className={`px-4 py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest ${paymentMethod === "paypal" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
+                    >
+                      PayPal
+                    </button>
+                  </div>
+
+                  {paymentMethod === "sepa" ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input
+                          type="text"
+                          value={sepaAccountHolder}
+                          onChange={(e) => setSepaAccountHolder(e.target.value)}
+                          placeholder="Kontoinhaber"
+                          className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-slate-400"
+                        />
+                        <input
+                          type="text"
+                          value={sepaIban}
+                          onChange={(e) => setSepaIban(e.target.value.toUpperCase())}
+                          placeholder="IBAN"
+                          className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-slate-400"
+                        />
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">SEPA via GoCardless</p>
+                        {goCardlessMandateId ? (
+                          <p className="text-sm font-bold text-slate-900">
+                            Verbunden. Mandat-ID: {goCardlessMandateId}
+                            {goCardlessConnectedAt ? ` · verbunden am ${new Date(goCardlessConnectedAt).toLocaleDateString("de-DE")}` : ""}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-slate-700">Verbinde dein SEPA-Mandat direkt mit GoCardless.</p>
+                        )}
+                        {goCardlessLastError && (
+                          <p className="text-xs font-bold text-red-700">Letzter GoCardless-Fehler: {goCardlessLastError}</p>
+                        )}
+                        {goCardlessCheckoutUrl && (
+                          <p className="text-xs text-slate-600">Für den gewählten Tarif wird der passende GoCardless-Checkout geöffnet.</p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleConnectGoCardless}
+                          disabled={goCardlessBusy || aboBlocked}
+                          className="px-5 py-3 rounded-xl border border-slate-900 bg-white text-[10px] font-black uppercase tracking-widest text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          {goCardlessBusy ? "Verbinde..." : goCardlessMandateId ? "GoCardless erneut verbinden" : "Mit GoCardless verbinden"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {paypalPlanConfig ? (
+                        <>
+                          <div id={paypalPlanConfig.containerId} className="min-h-[44px]" />
+                          {paypalButtonError && <p className="text-xs font-bold text-red-600">{paypalButtonError}</p>}
+                          {paypalSubscriptionId && (
+                            <p className="text-xs font-bold text-slate-900">PayPal Subscription-ID: {paypalSubscriptionId}</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs font-bold text-amber-700">PayPal ist für diesen Tarif aktuell deaktiviert.</p>
+                      )}
+
+                      <input
+                        type="email"
+                        value={paypalEmail}
+                        onChange={(e) => setPaypalEmail(e.target.value)}
+                        placeholder="PayPal E-Mail"
+                        className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-slate-400"
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-bold text-slate-800">Für diesen Tarif sind keine Zahlungsdaten nötig.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
