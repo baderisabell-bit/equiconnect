@@ -302,13 +302,11 @@ export default function PublicProfilePage() {
         return;
       }
 
-      const viewerUserIdRaw = sessionStorage.getItem('userId');
-      const viewerUserId = viewerUserIdRaw ? parseInt(viewerUserIdRaw, 10) : 0;
-      const safeViewer = Number.isNaN(viewerUserId) ? 0 : viewerUserId;
+      // DIESE ZEILEN EINFÜGEN:
+      const safeViewer = viewerUserId; // Nutzt den State, der im neuen useEffect (siehe unten) gesetzt wird
       if (!isMounted) return;
-      setViewerUserId(safeViewer);
-      setViewerRole(sessionStorage.getItem('userRole'));
-      setViewerName(sessionStorage.getItem('userName') || 'Profil');
+
+      // Wir setzen hier nur die UI-Sperre zurück, die Daten kommen aus dem State
       setEditMode(false);
 
       const profileRes = await getStoredProfileData(profileUserId);
@@ -928,37 +926,17 @@ getWishlistedOfferIds(String(viewerUserId), String(profile.userId)).then((res) =
     };
   }, [isOwnProfile, profile]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const applyTabFromHash = () => {
-      const rawHash = window.location.hash.replace('#', '').trim().toLowerCase();
-      if (!rawHash) return;
-
-      if (rawHash === 'beitraege') {
-        setActiveTab('beitraege');
-        return;
-      }
-
-      if (rawHash === 'anzeigen') {
-        setActiveTab('anzeigen');
-        return;
-      }
-
-      if (rawHash === 'werbung' && profile?.role === 'experte') {
-        setActiveTab('werbung');
-        return;
-      }
-
-      if (rawHash === 'team' && profile?.role === 'experte' && (editMode || hasTeam)) {
-        setActiveTab('team');
-        return;
-      }
-
-      if (rawHash === 'schulpferde' && profile?.role === 'experte' && (editMode || hasSchulpferde)) {
-        setActiveTab('schulpferde');
-      }
-    };
+useEffect(() => {
+  if (typeof window !== "undefined") {
+    const rawId = sessionStorage.getItem('userId');
+    const role = sessionStorage.getItem('userRole');
+    const name = sessionStorage.getItem('userName');
+    
+    if (rawId) setViewerUserId(parseInt(rawId, 10));
+    if (role) setViewerRole(role);
+    if (name) setViewerName(name);
+  }
+}, []);
 
     applyTabFromHash();
     window.addEventListener('hashchange', applyTabFromHash);
