@@ -156,6 +156,7 @@ export default function PublicProfilePage() {
   const [lightboxItem, setLightboxItem] = useState<GalerieItem | null>(null);
   const [activeTab, setActiveTab] = useState<'beitraege' | 'anzeigen' | 'werbung' | 'team' | 'schulpferde'>('anzeigen');
   const [offerVisibilityFilter, setOfferVisibilityFilter] = useState<'public' | 'draft'>('public');
+  const [viewingDrafts, setViewingDrafts] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [contentBusy, setContentBusy] = useState(false);
@@ -3114,7 +3115,7 @@ useEffect(() => {
               <section className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm space-y-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <h2 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Users size={14} /> Angebote</h2>
-                  {isOwnProfile && editMode && (
+                  {isOwnProfile && (editMode || viewingDrafts) && (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -3130,20 +3131,43 @@ useEffect(() => {
                       >
                         Entwürfe
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('anzeigen');
-                          setEditMode(true);
-                          window.setTimeout(() => {
-                            document.getElementById('anzeige-formular')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }, 0);
-                        }}
-                        className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-200 bg-emerald-50 text-emerald-700"
-                      >
-                        Anzeige hinzufügen
-                      </button>
+                      {editMode && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('anzeigen');
+                            setEditMode(true);
+                            window.setTimeout(() => {
+                              document.getElementById('anzeige-formular')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 0);
+                          }}
+                          className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-200 bg-emerald-50 text-emerald-700"
+                        >
+                          Anzeige hinzufügen
+                        </button>
+                      )}
+                      {viewingDrafts && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingDrafts(false)}
+                          className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white text-slate-600"
+                        >
+                          Schließen
+                        </button>
+                      )}
                     </div>
+                  )}
+                  {isOwnProfile && !editMode && !viewingDrafts && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewingDrafts(true);
+                        setOfferVisibilityFilter('draft');
+                      }}
+                      className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    >
+                      Entwürfe ansehen
+                    </button>
                   )}
                 </div>
                 {isOwnProfile && (

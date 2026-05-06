@@ -661,95 +661,99 @@ function AboPageContent() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4 overflow-x-auto">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vergleich</p>
-            <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Tabelle für Experten</h2>
-            <p className="mt-2 text-sm text-slate-600">Kostenlos, Basic und Premium im direkten Vergleich.</p>
-          </div>
+        {role === "experte" && (
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4 overflow-x-auto">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vergleich</p>
+              <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Tabelle für Experten</h2>
+              <p className="mt-2 text-sm text-slate-600">Kostenlos, Basic und Premium im direkten Vergleich.</p>
+            </div>
 
-          <table className="min-w-[1120px] w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  <span className="block">Basic</span>
-                  <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">9,90 €/Monat · Gründungsmitglieder: 8,00 €/Monat</span>
-                </th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  <span className="block">Premium</span>
-                  <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">19,90 €/Monat · Gründungsmitglieder: 16,00 €/Monat</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {EXPERT_COMPARISON_ROWS.map((row) => (
-                <tr key={row.label}>
-                  <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
-                  {row.values.map((value, index) => (
-                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value}</td>
-                  ))}
+            <table className="min-w-[1120px] w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
+                  <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
+                  <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span className="block">Basic</span>
+                    <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">9,90 €/Monat · Gründungsmitglieder: 8,00 €/Monat</span>
+                  </th>
+                  <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span className="block">Premium</span>
+                    <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">19,90 €/Monat · Gründungsmitglieder: 16,00 €/Monat</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="grid gap-4 md:grid-cols-2 pt-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zusatzangebote</p>
-              <h3 className="mt-2 text-lg font-black italic uppercase text-slate-900">Exklusive Sichtbarkeit</h3>
-              <div className="mt-4 space-y-3 text-sm text-slate-700">
-                {addonLinks.map((item) => (
-                  <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3">
-                    <p className="font-black text-slate-900">{item.label}</p>
-                    <p className="mt-1 font-bold text-slate-900">{item.price}</p>
-                    <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
-                    <a
-                      href={item.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-slate-400 hover:bg-slate-100"
-                    >
-                      {item.method} öffnen
-                    </a>
-                  </div>
+              </thead>
+              <tbody>
+                {EXPERT_COMPARISON_ROWS.map((row) => (
+                  <tr key={row.label}>
+                    <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
+                    {row.values.map((value, index) => (
+                      <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value}</td>
+                    ))}
+                  </tr>
                 ))}
+              </tbody>
+            </table>
+
+            <div className="grid gap-4 md:grid-cols-2 pt-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zusatzangebote</p>
+                <h3 className="mt-2 text-lg font-black italic uppercase text-slate-900">Exklusive Sichtbarkeit</h3>
+                <div className="mt-4 space-y-3 text-sm text-slate-700">
+                  {addonLinks.map((item) => (
+                    <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="font-black text-slate-900">{item.label}</p>
+                      <p className="mt-1 font-bold text-slate-900">{item.price}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-slate-400 hover:bg-slate-100"
+                      >
+                        {item.method} öffnen
+                      </a>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4 overflow-x-auto">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vergleich</p>
-            <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Tabelle für Nutzer</h2>
-            <p className="mt-2 text-sm text-slate-600">Kostenlos und Premium im direkten Vergleich.</p>
-          </div>
+        {role === "nutzer" && (
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4 overflow-x-auto">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vergleich</p>
+              <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Tabelle für Nutzer</h2>
+              <p className="mt-2 text-sm text-slate-600">Kostenlos und Premium im direkten Vergleich.</p>
+            </div>
 
-          <table className="min-w-[980px] w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  <span className="block">Premium</span>
-                  <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">5,99 €/Monat</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {USER_COMPARISON_ROWS.map((row) => (
-                <tr key={row.label}>
-                  <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
-                  {row.values.map((value, index) => (
-                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value}</td>
-                  ))}
+            <table className="min-w-[980px] w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
+                  <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
+                  <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span className="block">Premium</span>
+                    <span className="block mt-1 text-[9px] font-medium normal-case tracking-normal text-slate-500">5,99 €/Monat</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+              </thead>
+              <tbody>
+                {USER_COMPARISON_ROWS.map((row) => (
+                  <tr key={row.label}>
+                    <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
+                    {row.values.map((value, index) => (
+                      <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
 
         {selectedPlan && (
           <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-6">
