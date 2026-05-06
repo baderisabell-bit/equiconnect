@@ -21,13 +21,25 @@ declare global {
 
 const PAYPAL_NUTZER_PLAN_ID = "P-4BA70283NU461601BNHOTAWQ";
 const PAYPAL_NUTZER_CONTAINER_ID = "paypal-button-container-P-4BA70283NU461601BNHOTAWQ";
-const PAYPAL_EXPERTE_PRO_PLAN_ID = "P-9AH431487G8106202NHPJ72Y";
-const PAYPAL_EXPERTE_PRO_CONTAINER_ID = "paypal-button-container-P-9AH431487G8106202NHPJ72Y";
+const PAYPAL_EXPERTE_BASIS_PLAN_ID = "P-1JB670593D6797842NHOTCVA";
+const PAYPAL_EXPERTE_BASIS_CONTAINER_ID = "paypal-button-container-P-1JB670593D6797842NHOTCVA";
+const PAYPAL_EXPERTE_PRO_PLAN_ID = "P-34J38897KA4374429NHOTDKA";
+const PAYPAL_EXPERTE_PRO_CONTAINER_ID = "paypal-button-container-P-34J38897KA4374429NHOTDKA";
+const PAYPAL_ANZEIGE_OBEN_ANHEFTEN_PLAN_ID = "P-4M379332PY811324WNH5ZKSI";
+const PAYPAL_ANZEIGE_OBEN_ANHEFTEN_CONTAINER_ID = "paypal-button-container-P-4M379332PY811324WNH5ZKSI";
+const PAYPAL_SUCHE_PRIORISIEREN_PLAN_ID = "EU3R4N5Z7ZGFQ";
+const PAYPAL_ANZEIGE_PRIORISIEREN_PLAN_ID = "5KMKM4JBJYEDE";
 const PAYPAL_CLIENT_ID = "AQpOYVsQ7pTH581EA9cjCORev9yOA-UWt6JpWJlGktk_z1sR16dUg012DaZtlozZgXldKHhOp3CQaGXR";
 
-const GOCARDLESS_NUTZER_PLUS_CHECKOUT_URL = "https://pay.gocardless.com/BRT0004YCE6DBXK";
-const GOCARDLESS_EXPERTE_ABO_CHECKOUT_URL = "https://pay.gocardless.com/BRT00050XX73395";
-const GOCARDLESS_EXPERTE_PRO_CHECKOUT_URL = "https://pay.gocardless.com/BRT00050XXTQ371";
+const GOCARDLESS_NUTZER_PLUS_CHECKOUT_URL = "https://pay.gocardless.com/BRT0004YCE006FB";
+const GOCARDLESS_EXPERTE_ABO_CHECKOUT_URL = "https://pay.gocardless.com/BRT0004YCE006FB";
+const GOCARDLESS_EXPERTE_PRO_CHECKOUT_URL = "https://pay.gocardless.com/BRT0004YCE9XBTE";
+const GOCARDLESS_EXPERTE_ABO_FOUNDER_CHECKOUT_URL = "https://pay.gocardless.com/BRT00050XX73395";
+const GOCARDLESS_EXPERTE_PRO_FOUNDER_CHECKOUT_URL = "https://pay.gocardless.com/BRT00050XXTQ371";
+const GOCARDLESS_STARTSEITE_WERBUNG_URL = "https://pay.gocardless.com/BRT01KQZBEE90VR95HFMCPJQWXV55";
+const GOCARDLESS_ANZEIGE_OBEN_ANHEFTEN_URL = "https://pay.gocardless.com/BRT01KQZBPS5PZGYKFACYF82Z6BTA";
+const GOCARDLESS_ANZEIGE_PRIORISIEREN_URL = "https://pay.gocardless.com/BRT01KQZCSP35V53C0DDNNRM0EVB1";
+const GOCARDLESS_SUCHE_PRIORISIEREN_URL = "https://pay.gocardless.com/BRT01KQZCRD1EQRZNYJRP5PQ8M052";
 
 type PlanConfig = {
   key: string;
@@ -35,6 +47,7 @@ type PlanConfig = {
   audience: string;
   benefits: string[];
   baseCents: number;
+  foundingMemberCents?: number | null;
   paypalFeeCents: number;
   providerCommissionBps: number;
   customerDiscountBps: number;
@@ -46,9 +59,211 @@ type PlanConfig = {
   offerPreviewHours: number;
 };
 
+type ComparisonRow = {
+  label: string;
+  values: string[];
+};
+
+type AddonCheckoutLink = {
+  label: string;
+  price: string;
+  method: string;
+  href: string;
+  note?: string;
+};
+
 function formatEuro(cents: number) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format((cents || 0) / 100);
 }
+
+const EXPERT_PLAN_DEFAULTS: PlanConfig[] = [
+  {
+    key: "free",
+    label: "Kostenlos",
+    audience: "Basiszugang für den Einstieg",
+    benefits: ["Beiträge: 4 pro Monat", "Anzeigen: 2 pro Monat", "FAQ-Rückmeldung: nicht bevorzugt"],
+    baseCents: 0,
+    foundingMemberCents: 0,
+    paypalFeeCents: 0,
+    providerCommissionBps: 0,
+    customerDiscountBps: 0,
+    visibilityLabel: "leer",
+    groupHostingEnabled: false,
+    calendarBookingEnabled: false,
+    horseLimit: 2,
+    teamLimit: 1,
+    offerPreviewHours: 0,
+  },
+  {
+    key: "experte_abo",
+    label: "Basic",
+    audience: "Erhöhte Sichtbarkeit im Feed und in der Suche",
+    benefits: [
+      "Erhöhte Sichtbarkeit im Feed und in der Suche",
+      "72h als Newcomer auf der Startseite",
+      "Laufende Anzeigen 1x im Monat hochbringen",
+      "Gruppenhosting inklusive",
+      "Beiträge: 4 pro Monat",
+      "Anzeigen: 2 pro Monat",
+    ],
+    baseCents: 990,
+    foundingMemberCents: 800,
+    paypalFeeCents: 0,
+    providerCommissionBps: 0,
+    customerDiscountBps: 0,
+    visibilityLabel: "Erhöhte Sichtbarkeit + Newcomer 72h",
+    groupHostingEnabled: true,
+    calendarBookingEnabled: true,
+    horseLimit: null,
+    teamLimit: null,
+    offerPreviewHours: 72,
+  },
+  {
+    key: "experte_pro",
+    label: "Premium",
+    audience: "Automatisierte Rechnungen für Kunden",
+    benefits: [
+      "Automatisierte Rechnungen für Kunden",
+      "Erhöhte Sichtbarkeit im Feed und in der Suche",
+      "7 Tage als Newcomer auf der Startseite",
+      "Laufende Anzeigen 3x im Monat hochbringen",
+      "Gruppenhosting inklusive",
+      "Beiträge: unbegrenzt",
+      "Anzeigen: unbegrenzt",
+    ],
+    baseCents: 1990,
+    foundingMemberCents: 1600,
+    paypalFeeCents: 0,
+    providerCommissionBps: 0,
+    customerDiscountBps: 0,
+    visibilityLabel: "Erhöhte Sichtbarkeit + Newcomer 7 Tage",
+    groupHostingEnabled: true,
+    calendarBookingEnabled: true,
+    horseLimit: null,
+    teamLimit: null,
+    offerPreviewHours: 168,
+  },
+];
+
+const USER_PLAN_DEFAULTS: PlanConfig[] = [
+  {
+    key: "free",
+    label: "Kostenlos",
+    audience: "Kostenloser Start",
+    benefits: ["Nachrichten an Experten/Anbieter", "Beiträge: 4 pro Monat", "Anzeigen: 2 pro Monat", "FAQ-Rückmeldung: nicht bevorzugt"],
+    baseCents: 0,
+    foundingMemberCents: 0,
+    paypalFeeCents: 0,
+    providerCommissionBps: 0,
+    customerDiscountBps: 0,
+    visibilityLabel: "leer",
+    groupHostingEnabled: false,
+    calendarBookingEnabled: false,
+    horseLimit: 2,
+    teamLimit: 0,
+    offerPreviewHours: 0,
+  },
+  {
+    key: "nutzer_plus",
+    label: "Premium",
+    audience: "Erhöhte Sichtbarkeit und priorisierte Nachrichten",
+    benefits: [
+      "Erhöhte Sichtbarkeit im Feed und in der Suche",
+      "Deine Anzeige an einen Experten/Anbieter wird priorisiert im Postfach angezeigt",
+      "Laufende Suchen 1x im Monat wieder nach oben setzen",
+      "Gruppenhosting inklusive",
+      "Beiträge: unbegrenzt",
+      "Anzeigen: unbegrenzt",
+    ],
+    baseCents: 599,
+    foundingMemberCents: 599,
+    paypalFeeCents: 0,
+    providerCommissionBps: 0,
+    customerDiscountBps: 0,
+    visibilityLabel: "Erhöhte Sichtbarkeit + priorisierte Nachrichten",
+    groupHostingEnabled: true,
+    calendarBookingEnabled: false,
+    horseLimit: 2,
+    teamLimit: 0,
+    offerPreviewHours: 24,
+  },
+];
+
+const EXPERT_COMPARISON_ROWS: ComparisonRow[] = [
+  { label: "Vergleich", values: ["leer", "Kostenlos", "Basic", "Premium"] },
+  { label: "Preis", values: ["leer", "kostenlos", "9,90 €/Monat", "19,90 €/Monat · Gründungsmitglieder: 16,00 €/Monat"] },
+  { label: "Automatisierte Rechnungen für Kunden", values: ["leer", "leer", "leer", "ja"] },
+  { label: "Zusätzliche Sichtbarkeit des Profils", values: ["leer", "leer", "Erhöhte Sichtbarkeit im Feed und in der Suche + 72h als Newcomer auf der Startseite", "Erhöhte Sichtbarkeit im Feed und in der Suche + 7 Tage als Newcomer auf der Startseite"] },
+  { label: "Laufende Anzeigen wieder nach oben bringen", values: ["leer", "leer", "1x im Monat inklusive, danach 1,49 €/Anzeige", "3x im Monat inklusive, danach 1,49 €/Anzeige"] },
+  { label: "Gruppenhosting", values: ["leer", "leer", "Ja - private oder öffentliche Gruppe für Trainer und Reitschüler", "Ja - private oder öffentliche Gruppe für Trainer und Reitschüler"] },
+  { label: "Beiträge", values: ["4 pro Monat", "4 pro Monat", "unbegrenzt", "unbegrenzt"] },
+  { label: "Anzeigen", values: ["2 pro Monat", "2 pro Monat", "unbegrenzt", "unbegrenzt"] },
+  { label: "FAQ Rückmeldung", values: ["nicht bevorzugt", "nicht bevorzugt", "Innerhalb 72 Stunden", "Innerhalb 72 Stunden"] },
+];
+
+const USER_COMPARISON_ROWS: ComparisonRow[] = [
+  { label: "Vergleich", values: ["leer", "Kostenlos", "Premium"] },
+  { label: "Preis", values: ["leer", "kostenlos", "5,99 €/Monat"] },
+  { label: "Erhöhte Sichtbarkeit", values: ["leer", "leer", "Erhöhte Sichtbarkeit im Feed und in der Suche"] },
+  { label: "Nachrichten an Experten/Anbieter", values: ["leer", "Deine Anzeige an einen Experten/Anbieter wird priorisiert im Postfach angezeigt", "Deine Anzeige an einen Experten/Anbieter wird priorisiert im Postfach angezeigt"] },
+  { label: "Laufende Suchen wieder an den Anfang setzen", values: ["leer", "1x im Monat inklusive, dann 1,49 €/Suche", "1x im Monat inklusive, dann 1,49 €/Suche"] },
+  { label: "Gruppenhosting", values: ["leer", "Ja", "Ja"] },
+  { label: "Beiträge", values: ["4 pro Monat", "unbegrenzt", "unbegrenzt"] },
+  { label: "Anzeigen", values: ["2 pro Monat", "unbegrenzt", "unbegrenzt"] },
+  { label: "FAQ Rückmeldung", values: ["nicht bevorzugt", "Innerhalb 72 Stunden", "Innerhalb 72 Stunden"] },
+];
+
+const ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
+  {
+    label: "Individuelle Werbung auf der Startseite für 14 Tage",
+    price: "14,99 €",
+    method: "GoCardless",
+    href: GOCARDLESS_STARTSEITE_WERBUNG_URL,
+    note: "Startseiten Werbung",
+  },
+  {
+    label: "Anzeigen oben anheften",
+    price: "5,99 €/Monat",
+    method: "PayPal",
+    href: `https://www.paypal.com/ncp/payment/${PAYPAL_ANZEIGE_OBEN_ANHEFTEN_PLAN_ID}`,
+    note: "Anzeige oben anheften",
+  },
+  {
+    label: "Anzeige priorisieren für Experten",
+    price: "Sofort kaufen",
+    method: "PayPal",
+    href: `https://www.paypal.com/ncp/payment/${PAYPAL_ANZEIGE_PRIORISIEREN_PLAN_ID}`,
+    note: "Anzeige priorisieren (Experten)",
+  },
+  {
+    label: "Suche priorisieren für Nutzer",
+    price: "Sofort kaufen",
+    method: "PayPal",
+    href: `https://www.paypal.com/ncp/payment/${PAYPAL_SUCHE_PRIORISIEREN_PLAN_ID}`,
+    note: "Suche priorisieren (Nutzer)",
+  },
+  {
+    label: "Anzeige priorisieren (Experten) via GoCardless",
+    price: "Checkout",
+    method: "GoCardless",
+    href: GOCARDLESS_ANZEIGE_PRIORISIEREN_URL,
+    note: "Anzeige priorisieren",
+  },
+  {
+    label: "Suche priorisieren (Nutzer) via GoCardless",
+    price: "Checkout",
+    method: "GoCardless",
+    href: GOCARDLESS_SUCHE_PRIORISIEREN_URL,
+    note: "Suche priorisieren",
+  },
+  {
+    label: "Anzeige oben anheften via GoCardless",
+    price: "Checkout",
+    method: "GoCardless",
+    href: GOCARDLESS_ANZEIGE_OBEN_ANHEFTEN_URL,
+    note: "Anzeige oben anheften",
+  },
+];
 
 function AboPageContent() {
   const router = useRouter();
@@ -99,8 +314,9 @@ function AboPageContent() {
       const res = await getUserSubscriptionSettings(parsedUserId);
       if (res.success && res.data) {
         setRole(String(res.data.role || resolvedRole) === "experte" ? "experte" : "nutzer");
-        setAvailablePlans(Array.isArray(res.data.available_plans) ? res.data.available_plans : []);
-        setSelectedPlanKey(String(res.data.plan_key || ""));
+        const fallbackPlans = String(res.data.role || resolvedRole) === "experte" ? EXPERT_PLAN_DEFAULTS : USER_PLAN_DEFAULTS;
+        setAvailablePlans(Array.isArray(res.data.available_plans) && res.data.available_plans.length > 0 ? res.data.available_plans : fallbackPlans);
+        setSelectedPlanKey(String(res.data.plan_key || fallbackPlans[0]?.key || ""));
         setPaymentMethod(res.data.payment_method === "paypal" ? "paypal" : "sepa");
         setSepaAccountHolder(String(res.data.sepa_account_holder || ""));
         setSepaIban(String(res.data.sepa_iban || ""));
@@ -165,18 +381,26 @@ function AboPageContent() {
     return availablePlans.find((plan) => plan.key === selectedPlanKey) || availablePlans[0] || null;
   }, [availablePlans, selectedPlanKey]);
 
+  const plansToRender = useMemo(() => {
+    if (availablePlans.length > 0) return availablePlans;
+    return role === "experte" ? EXPERT_PLAN_DEFAULTS : USER_PLAN_DEFAULTS;
+  }, [availablePlans, role]);
+
   const isPaidPlan = Boolean(selectedPlan && selectedPlan.baseCents > 0);
   const aboBlocked = Boolean(aboBlockedUntil);
 
   const monthlyPriceCents = useMemo(() => {
     if (!selectedPlan) return 0;
-    return paymentMethod === "paypal" ? selectedPlan.baseCents + selectedPlan.paypalFeeCents : selectedPlan.baseCents;
-  }, [paymentMethod, selectedPlan]);
+    return selectedPlan.baseCents;
+  }, [selectedPlan]);
 
   const paypalPlanConfig = useMemo(() => {
     if (!selectedPlan) return null;
     if (selectedPlan.key === "nutzer_plus") {
       return { planId: PAYPAL_NUTZER_PLAN_ID, containerId: PAYPAL_NUTZER_CONTAINER_ID };
+    }
+    if (selectedPlan.key === "experte_abo") {
+      return { planId: PAYPAL_EXPERTE_BASIS_PLAN_ID, containerId: PAYPAL_EXPERTE_BASIS_CONTAINER_ID };
     }
     if (selectedPlan.key === "experte_pro") {
       return { planId: PAYPAL_EXPERTE_PRO_PLAN_ID, containerId: PAYPAL_EXPERTE_PRO_CONTAINER_ID };
@@ -390,7 +614,7 @@ function AboPageContent() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {availablePlans.map((plan) => {
+            {plansToRender.map((plan) => {
               const active = selectedPlanKey === plan.key;
               return (
                 <button
@@ -403,8 +627,8 @@ function AboPageContent() {
                   <h2 className="mt-2 text-xl font-black italic uppercase text-slate-900">{plan.label}</h2>
                   <p className="mt-1 text-sm text-slate-600">{plan.audience}</p>
                   <p className="mt-3 text-sm font-black text-emerald-700">
-                    SEPA: {formatEuro(plan.baseCents)}{plan.baseCents > 0 ? " / Monat" : ""}
-                    {plan.paypalFeeCents > 0 ? ` · PayPal: ${formatEuro(plan.baseCents + plan.paypalFeeCents)} / Monat` : ""}
+                    {formatEuro(plan.baseCents)}{plan.baseCents > 0 ? " / Monat" : ""}
+                    {plan.foundingMemberCents !== undefined && plan.foundingMemberCents !== null && plan.foundingMemberCents > 0 ? ` · Gründungsmitglieder: ${formatEuro(plan.foundingMemberCents)} / Monat` : ""}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600">
@@ -420,42 +644,84 @@ function AboPageContent() {
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4 overflow-x-auto">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vergleich</p>
-            <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Tabelle</h2>
-            <p className="mt-2 text-sm text-slate-600">Leistungen und Konditionen im direkten Vergleich.</p>
+            <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Tabelle für Experten</h2>
+            <p className="mt-2 text-sm text-slate-600">Kostenlos, Basic und Premium im direkten Vergleich.</p>
           </div>
 
-          <table className="min-w-[1180px] w-full border-collapse text-sm">
+          <table className="min-w-[1120px] w-full border-collapse text-sm">
             <thead>
               <tr>
                 <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Experte ohne Abo</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Experten Abo (19,99)</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Experten Pro Abo (34,99)</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Nutzer ohne Abo</th>
-                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Nutzer mit Abo (7,99)</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">leer</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Basic</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Premium</th>
               </tr>
             </thead>
             <tbody>
-              {[
-                ["Verifikation", "-", "+", "+", "-", "+"],
-                ["Zusätzliche Sichtbarkeit", "-", "Automatisches Startseiten-Marketing im 1. Monat", "Priorisierte Sichtbarkeit", "-", "Priorisierte Nachrichten + 24h früher"],
-                ["Suche hochschieben", "-", "-", "-", "-", "1x kostenlos pro Suche, danach 0,50 €"],
-                ["Anzeige hochschieben", "-", "1x kostenlos pro Anzeige, danach 0,50 €", "1x kostenlos pro Anzeige, danach 0,50 €", "-", "-"],
-                ["Schüler / Kunden", "-", "-", "Kundenverwaltung, Rechnungen & Kalender", "-", "-"],
-                ["Anzeigen", "2 pro Monat", "unlimitiert", "unlimitiert", "2 pro Monat", "unlimitiert"],
-                ["Beiträge", "4 pro Monat", "unlimitiert", "unlimitiert", "4 pro Monat", "unlimitiert"],
-                ["Startseitenwerbung", "nein", "nein", "+", "nein", "nein"],
-                ["Unterstützung", "-", "Tipps zur besseren Sichtbarkeit", "Premium Support & Tipps", "-", "-"],
-                ["Gruppen", "kein Hosting", "Hosting + Moderation 72h", "Hosting + Moderation 72h", "-", "Beiträge innerhalb 72h"],
-                ["Pferde", "2 Pferde", "Unbegrenzt", "Unbegrenzt", "2 Pferde", "Unbegrenzt"],
-              ].map((row) => (
-                <tr key={row[0]}>
-                  <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row[0]}</td>
-                  <td className="p-3 border border-slate-200 text-slate-700">{row[1]}</td>
-                  <td className="p-3 border border-slate-200 text-slate-700">{row[2]}</td>
-                  <td className="p-3 border border-slate-200 text-slate-700">{row[3]}</td>
-                  <td className="p-3 border border-slate-200 text-slate-700">{row[4]}</td>
-                  <td className="p-3 border border-slate-200 text-slate-700">{row[5]}</td>
+              {EXPERT_COMPARISON_ROWS.map((row) => (
+                <tr key={row.label}>
+                  <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
+                  {row.values.map((value, index) => (
+                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value || "leer"}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="grid gap-4 md:grid-cols-2 pt-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zusatzangebote</p>
+              <h3 className="mt-2 text-lg font-black italic uppercase text-slate-900">Exklusive Sichtbarkeit</h3>
+              <div className="mt-4 space-y-3 text-sm text-slate-700">
+                {ADDON_CHECKOUT_LINKS.map((item) => (
+                  <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <p className="font-black text-slate-900">{item.label}</p>
+                    <p className="mt-1 text-emerald-700 font-bold">{item.price}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
+                    >
+                      {item.method} öffnen
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Hinweis</p>
+              <p className="mt-2 text-sm text-slate-700">Alle zusätzlichen Sichtbarkeits- und Rechnungsfunktionen werden nur über die hier verlinkten Checkout-Links angeboten.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4 overflow-x-auto">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vergleich</p>
+            <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Abo-Tabelle für Nutzer</h2>
+            <p className="mt-2 text-sm text-slate-600">Kostenlos und Premium im direkten Vergleich.</p>
+          </div>
+
+          <table className="min-w-[980px] w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kategorie</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">leer</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Kostenlos</th>
+                <th className="p-3 border border-slate-200 bg-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Premium</th>
+              </tr>
+            </thead>
+            <tbody>
+              {USER_COMPARISON_ROWS.map((row) => (
+                <tr key={row.label}>
+                  <td className="p-3 border border-slate-200 font-black text-slate-800 uppercase text-[11px]">{row.label}</td>
+                  {row.values.map((value, index) => (
+                    <td key={`${row.label}-${index}`} className="p-3 border border-slate-200 text-slate-700 align-top">{value || "leer"}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -515,7 +781,7 @@ function AboPageContent() {
                   onClick={() => setPaymentMethod("paypal")}
                   className={`px-4 py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest ${paymentMethod === "paypal" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200"}`}
                 >
-                  PayPal (mit Gebühr)
+                  PayPal
                 </button>
               </div>
 

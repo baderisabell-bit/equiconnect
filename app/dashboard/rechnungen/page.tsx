@@ -410,6 +410,29 @@ export default function RechnungenPage() {
           <p>Gesamt: <span className="font-black text-slate-900">{formatMoney(booking.total_cents)}</span></p>
         </div>
 
+        {/* Pricing Info Section */}
+        <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Leistungs-Preise</p>
+            <div className="group relative">
+              <button
+                type="button"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-white text-[10px] font-black text-slate-600 hover:border-slate-400"
+                title="Info zu Preisen"
+              >
+                i
+              </button>
+              <div className="invisible absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-slate-900 p-2 text-[11px] text-white shadow-lg group-hover:visible z-10">
+                Diese Angaben können bei Premium Nutzern im Rechnungsbereich aufgerufen werden.
+                <div className="absolute top-full right-4 -mt-1 border-4 border-transparent border-t-slate-900"></div>
+              </div>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-600 italic">
+            Preisdetails aus der Leistungsbeschreibung werden hier angezeigt.
+          </p>
+        </div>
+
         {/* Spezielle Info-Box für Abos */}
         {booking.price_type === 'abo' && (
           <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100">

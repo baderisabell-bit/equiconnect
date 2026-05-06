@@ -342,6 +342,18 @@ export default function PublicProfilePage() {
           profilData
         });
 
+        // If the viewer is the profile owner and there are draft offers, show drafts by default
+        try {
+          if (safeViewer > 0 && safeViewer === profileUserId) {
+            const offersRaw = Array.isArray(row?.profil_data?.angeboteAnzeigen) ? row.profil_data.angeboteAnzeigen : [];
+            if (offersRaw.some((o: any) => String(o?.visibility || '').trim() === 'draft')) {
+              setOfferVisibilityFilter('draft');
+            }
+          }
+        } catch (e) {
+          // ignore errors here, optional UX improvement only
+        }
+
         if (safeViewer > 0 && safeViewer === profileUserId && row.role) {
           const resolvedRole = String(row.role).trim().toLowerCase();
           setViewerRole(resolvedRole);
@@ -1897,7 +1909,8 @@ useEffect(() => {
   };
 
   const handleBoostOwnOffer = async (offerId: string) => {
-    if (!profile || !isOwnProfile || profile.role !== 'experte' || promotionSettings?.plan_key !== 'experte_pro' || boostBusyOfferId) return;
+    const planKey = String(promotionSettings?.plan_key || '').trim().toLowerCase();
+    if (!profile || !isOwnProfile || profile.role !== 'experte' || (planKey !== 'experte_abo' && planKey !== 'experte_pro' && !promotionSettings?.lifetime_free_access) || boostBusyOfferId) return;
 
     setBoostBusyOfferId(offerId);
     setPromotionError('');
@@ -2419,10 +2432,10 @@ useEffect(() => {
                       className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative hover:opacity-80 transition-opacity"
                     >
                       {item.type === 'image' ? (
-                        <img src={String(item.url).trim()} alt="" className="w-full h-full object-cover" />
+                        <img src={normalizeMediaUrl(String(item.url).trim())} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="relative w-full h-full">
-                          <video src={String(item.url).trim()} className="w-full h-full object-cover" muted preload="metadata" playsInline />
+                          <video src={normalizeMediaUrl(String(item.url).trim())} className="w-full h-full object-cover" muted preload="metadata" playsInline />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent flex items-center justify-center">
                             <span className="w-7 h-7 rounded-full bg-black/60 border border-white/50 text-white flex items-center justify-center">
                               <Play size={12} fill="currentColor" />
@@ -2844,10 +2857,10 @@ useEffect(() => {
                   className="group relative aspect-square overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-100 text-left"
                 >
                   {item.type === 'image' ? (
-                    <img src={String(item.url).trim()} alt={`Galerie ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                    <img src={normalizeMediaUrl(String(item.url).trim())} alt={`Galerie ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
                   ) : (
                     <div className="relative w-full h-full">
-                      <video src={String(item.url).trim()} className="w-full h-full object-cover" muted preload="metadata" playsInline />
+                      <video src={normalizeMediaUrl(String(item.url).trim())} className="w-full h-full object-cover" muted preload="metadata" playsInline />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent flex items-center justify-center">
                         <span className="w-12 h-12 rounded-full bg-black/65 border border-white/40 text-white flex items-center justify-center">
                           <Play size={18} fill="currentColor" />
@@ -3696,10 +3709,10 @@ useEffect(() => {
                               className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white"
                             >
                               {item.type === 'image' ? (
-                                <img src={String(item.url).trim()} alt="Beitragsbild" className="w-full h-full object-cover" />
+                                <img src={normalizeMediaUrl(String(item.url).trim())} alt="Beitragsbild" className="w-full h-full object-cover" />
                               ) : (
                                 <div className="relative w-full h-full">
-                                  <video src={String(item.url).trim()} className="w-full h-full object-cover" muted preload="metadata" playsInline />
+                                  <video src={normalizeMediaUrl(String(item.url).trim())} className="w-full h-full object-cover" muted preload="metadata" playsInline />
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent flex items-center justify-center">
                                     <span className="w-10 h-10 rounded-full bg-black/60 border border-white/40 text-white flex items-center justify-center">
                                       <Play size={16} fill="currentColor" />

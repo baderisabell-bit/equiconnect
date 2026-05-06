@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Filter, Heart, MapPin, Search, X } from "lucide-react";
 import NotificationBell from "../components/notification-bell";
+import SearchMap from "../components/search-map";
+import { ANGEBOT_KATEGORIEN } from "./kategorien-daten";
 import { safeToFixed } from '../lib/num';
 import { addWishlistItem, getSearchFeed, sendConnectionRequest } from "../actions";
 
@@ -202,20 +204,31 @@ export default function Suchseite() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {["Pferd", "Reiten", "Training", "Therapie"].map((kat) => {
+            {ANGEBOT_KATEGORIEN.map((c) => {
+              const kat = String(c.label || "");
               const active = selectedKategorien.includes(kat);
               return (
                 <button
                   key={kat}
                   type="button"
                   onClick={() => setSelectedKategorien((prev) => (active ? prev.filter((item) => item !== kat) : [...prev, kat]))}
-                  className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${active ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"}`}
-                >
+                  className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${active ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"}`}>
                   {kat}
                 </button>
               );
             })}
           </div>
+        </section>
+
+        <section className="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-xs font-black uppercase tracking-widest text-slate-400">Karte (Standort auswählen)</h3>
+          <SearchMap
+            initial={null}
+            onChange={(pos: { lat: number; lng: number } | null) => {
+              if (!pos) return;
+              setOrtFilter(`${pos.lat.toFixed(5)},${pos.lng.toFixed(5)}`);
+            }}
+          />
         </section>
 
         {(feedError || loading) && (
@@ -246,20 +259,12 @@ export default function Suchseite() {
                 ))}
               </div>
 
-              <div className="flex flex-wrap gap-2 pt-1">
-                <button type="button" onClick={() => addToWishlist(entry)} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700">
-                  <Heart size={12} /> Merken
-                </button>
-                {entry.userId && entry.userId !== userId && (
-                  <button type="button" onClick={() => connectToUser(entry)} className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                    Vernetzen
-                  </button>
-                )}
-                {entry.userId && (
-                  <Link href={`/profil/${entry.userId}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700">
-                    Profil
-                  </Link>
-                )}
+              <div className="flex flex-wrap gap-2">
+                {entry.kategorien.slice(0, 3).map((kat) => (
+                  <span key={`${entry.id}-${kat}`} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                    {kat}
+                  </span>
+                ))}
               </div>
             </article>
           ))}

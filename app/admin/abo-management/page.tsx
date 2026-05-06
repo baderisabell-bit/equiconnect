@@ -85,7 +85,7 @@ export default function AdminAboManagementPage() {
   const [bulkUsers, setBulkUsers] = useState<SubscriptionUserRow[]>([]);
   const [bulkUsersLoading, setBulkUsersLoading] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
-  const [bulkAction, setBulkAction] = useState<"founding" | "lifetime" | "">("founding");
+  const [bulkAction, setBulkAction] = useState<"founding-add" | "founding-revoke" | "lifetime" | "">("founding-add");
   const [bulkLifetimePlanKey, setBulkLifetimePlanKey] = useState<"auto" | "experte_abo" | "experte_pro" | "nutzer_plus">("auto");
   const [bulkActionBusy, setBulkActionBusy] = useState(false);
 
@@ -215,6 +215,36 @@ export default function AdminAboManagementPage() {
     setMessage(res.message || "Lebenszeit-Zugriff gewährt.");
     setAddSingleUserId("");
     await loadLifetimeAccessUsers(adminCode);
+    await loadAnalytics();
+  };
+
+  const markFoundingMemberMultiple = async () => {
+    if (selectedUserIds.length === 0) {
+      setError("Bitte mindestens einen Nutzer auswählen.");
+      return;
+    }
+
+    const proceed = window.confirm(
+      `Gründungsmitglied-Status für ${selectedUserIds.length} Nutzer setzen?`
+    );
+    if (!proceed) return;
+
+    setBulkActionBusy(true);
+    setError("");
+    setMessage("");
+
+    let ok = 0;
+    let failed = 0;
+    for (const userId of selectedUserIds) {
+      const res = await adminMarkAsFoundingMember(adminCode, userId, 30);
+      if (res.success) ok += 1;
+      else failed += 1;
+    }
+
+    setBulkActionBusy(false);
+    setMessage(`Abgeschlossen: ${ok} erfolgreich, ${failed} fehlgeschlagen.`);
+    setSelectedUserIds([]);
+    await loadFoundingMembers(adminCode);
     await loadAnalytics();
   };
 
@@ -450,6 +480,7 @@ export default function AdminAboManagementPage() {
                         <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-600">Kostenlos bis</th>
                         <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-600">Rabatt</th>
                         <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-600">Status</th>
+                        <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-600">Aktion</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -472,6 +503,30 @@ export default function AdminAboManagementPage() {
                             ) : (
                               <span className="text-slate-500">Abgelaufen</span>
                             )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const proceed = window.confirm(`Gründungsmitglied-Status für ${member.email} entfernen?`);
+                                if (!proceed) return;
+
+                                setError("");
+                                setMessage("");
+                                const res = await adminRevokeFoundingMember(adminCode, member.id);
+                                if (!res.success) {
+                                  setError(res.error || "Gründungsmitglied konnte nicht zurückgesetzt werden.");
+                                  return;
+                                }
+
+                                setMessage(`Gründungsmitglied-Status von ${member.email} entfernt.`);
+                                await loadFoundingMembers(adminCode);
+                                await loadAnalytics();
+                              }}
+                              className="px-3 py-2 rounded-lg bg-slate-900 text-white font-black uppercase text-[10px] hover:bg-slate-800"
+                            >
+                              Zu normal
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -623,7 +678,8 @@ export default function AdminAboManagementPage() {
                     className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-[10px] font-bold"
                   >
                     <option value="">— Aktion wählen —</option>
-                    <option value="founding">Als Gründungsmitglied markieren</option>
+                    <option value="founding-add">Als Gründungsmitglied markieren</option>
+                    <option value="founding-revoke">Gründungsmitglied zu normal zurücksetzen</option>
                     <option value="lifetime">Lebenszugriff gewähren</option>
                   </select>
 
@@ -642,7 +698,8 @@ export default function AdminAboManagementPage() {
 
                   <button
                     onClick={() => {
-                      if (bulkAction === "founding") revokeFoundingMemberMultiple();
+                      if (bulkAction === "founding-add") markFoundingMemberMultiple();
+                      else if (bulkAction === "founding-revoke") revokeFoundingMemberMultiple();
                       else if (bulkAction === "lifetime") grantLifetimeAccessMultiple();
                     }}
                     disabled={bulkActionBusy || !bulkAction || selectedUserIds.length === 0}

@@ -84,6 +84,15 @@ function getDisplayName(profileRow: any, fallback = 'Profil') {
   return fallback;
 }
 
+function normalizeMediaUrl(url?: string) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('//')) return `${window.location.protocol}${raw}`;
+  if (raw.startsWith('/')) return `${window.location.origin}${raw}`;
+  return raw;
+}
+
 export default function ProfileDetailPage() {
   const params = useParams<{ userId: string; kind: string; itemId: string }>();
   const searchParams = useSearchParams();
@@ -112,6 +121,7 @@ export default function ProfileDetailPage() {
     titleImageUrl: '',
     mediaItems: [] as MediaItem[],
   });
+  const [offerPreise, setOfferPreise] = useState<Array<{ preis: string; typ: 'pro-leistung' | 'monats'; anzahl: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const mainPanelRef = useRef<HTMLDivElement | null>(null);
@@ -264,6 +274,7 @@ export default function ProfileDetailPage() {
     if (kind === 'angebote') {
       if (itemId === 'new') {
         setOfferForm({ titel: '', kategorie: '', thema: '', beschreibung: '', titleImageUrl: '', mediaItems: [] });
+        setOfferPreise([]);
         return;
       }
 
@@ -277,6 +288,7 @@ export default function ProfileDetailPage() {
           titleImageUrl: String(offer.titleImageUrl || ''),
           mediaItems: Array.isArray(offer.mediaItems) ? offer.mediaItems.filter(Boolean) : [],
         });
+        setOfferPreise(Array.isArray(offer.preise) ? offer.preise : []);
       }
     }
   }, [currentOffer, currentPost, isEditMode, itemId, kind, postItems]);
@@ -491,9 +503,7 @@ export default function ProfileDetailPage() {
         url: String(item.url || '').trim(),
         mediaType: item.type === 'video' ? 'video' : 'image',
       })).filter((entry) => entry.url),
-      preise: Array.isArray((rawOffers.find((entry: any) => String(entry?.id || '') === itemId) || {})?.preise)
-        ? (rawOffers.find((entry: any) => String(entry?.id || '') === itemId) || {}).preise
-        : [],
+      preise: offerPreise.filter((p) => String(p.preis || '').trim()),
       visibility: itemId === 'new' ? 'draft' : ((rawOffers.find((entry: any) => String(entry?.id || '') === itemId) || {})?.visibility === 'draft' ? 'draft' : 'public'),
     };
 
@@ -554,9 +564,9 @@ export default function ProfileDetailPage() {
   const renderMediaItem = (item: MediaItem, key: string) => (
     <div key={key} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 aspect-square">
       {item.type === 'image' ? (
-        <img src={String(item.url).trim()} alt="Medieninhalt" className="w-full h-full object-cover" />
+        <img src={normalizeMediaUrl(String(item.url).trim())} alt="Medieninhalt" className="w-full h-full object-cover" />
       ) : (
-        <video src={String(item.url).trim()} className="w-full h-full object-cover" controls playsInline />
+        <video src={normalizeMediaUrl(String(item.url).trim())} className="w-full h-full object-cover" controls playsInline />
       )}
     </div>
   );
@@ -721,9 +731,9 @@ export default function ProfileDetailPage() {
                         {postMediaItems.map((item, index) => (
                           <div key={`${item.url}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 aspect-square">
                             {item.type === 'image' ? (
-                              <img src={String(item.url).trim()} alt="Beitragsmedium" className="w-full h-full object-cover" />
+                              <img src={normalizeMediaUrl(String(item.url).trim())} alt="Beitragsmedium" className="w-full h-full object-cover" />
                             ) : (
-                              <video src={String(item.url).trim()} className="w-full h-full object-cover" controls playsInline />
+                              <video src={normalizeMediaUrl(String(item.url).trim())} className="w-full h-full object-cover" controls playsInline />
                             )}
                             <button
                               type="button"
@@ -836,6 +846,98 @@ export default function ProfileDetailPage() {
                       placeholder="Beschreibung"
                       className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm"
                     />
+
+                    {/* Pricing Section */}
+                    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-400">Preise & Leistungen</p>
+                          <div className="group relative">
+                            <button
+                              type="button"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-[10px] font-black text-slate-600 hover:border-slate-400"
+                              title="Info zu Preisen"
+                            >
+                              i
+                            </button>
+                            <div className="invisible absolute bottom-full right-0 mb-2 w-48 rounded-lg bg-slate-900 p-2 text-[11px] text-white shadow-lg group-hover:visible z-10">
+                              Diese Angaben können bei Premium Nutzern im Rechnungsbereich aufgerufen werden.
+                              <div className="absolute top-full right-4 -mt-1 border-4 border-transparent border-t-slate-900"></div>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setOfferPreise((prev) => [...prev, { preis: '', typ: 'pro-leistung' as const, anzahl: '' }])}
+                          className="inline-flex items-center gap-1 rounded-full border border-emerald-500 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100"
+                        >
+                          <Plus size={12} /> Zeile hinzufügen
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {offerPreise.map((preis, index) => (
+                          <div key={`preis-${index}`} className="flex gap-2 items-start flex-wrap md:flex-nowrap">
+                            <div className="flex-1 min-w-[120px]">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={preis.preis}
+                                onChange={(e) => setOfferPreise((prev) => [
+                                  ...prev.slice(0, index),
+                                  { ...preis, preis: e.target.value },
+                                  ...prev.slice(index + 1),
+                                ])}
+                                placeholder="Preis"
+                                className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-[140px]">
+                              <select
+                                value={preis.typ}
+                                onChange={(e) => setOfferPreise((prev) => [
+                                  ...prev.slice(0, index),
+                                  { ...preis, typ: e.target.value as 'pro-leistung' | 'monats', anzahl: e.target.value === 'monats' ? preis.anzahl : '' },
+                                  ...prev.slice(index + 1),
+                                ])}
+                                className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm"
+                              >
+                                <option value="pro-leistung">Pro Leistung</option>
+                                <option value="monats">Monats-Abo</option>
+                              </select>
+                            </div>
+                            {preis.typ === 'monats' && (
+                              <div className="flex-1 min-w-[140px]">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={preis.anzahl}
+                                  onChange={(e) => setOfferPreise((prev) => [
+                                    ...prev.slice(0, index),
+                                    { ...preis, anzahl: e.target.value },
+                                    ...prev.slice(index + 1),
+                                  ])}
+                                  placeholder="Anzahl der Leistungen"
+                                  className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm"
+                                />
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setOfferPreise((prev) => prev.filter((_, i) => i !== index))}
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {offerPreise.length === 0 && (
+                        <p className="text-[11px] text-slate-500 italic">Keine Preise hinzugefügt. Klicken Sie auf "+ Zeile hinzufügen", um eine Preiszeile zu erstellen.</p>
+                      )}
+                    </div>
+
                     <MediaDropzone
                       title="Titelbild hochladen"
                       description="Ein Bild fuer die Anzeige auswaehlen."
@@ -865,9 +967,9 @@ export default function ProfileDetailPage() {
                         {offerForm.mediaItems.map((item, index) => (
                           <div key={`${item.url}-${index}`} className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 aspect-square">
                             {item.type === 'image' ? (
-                              <img src={String(item.url).trim()} alt="Anzeigenmedium" className="w-full h-full object-cover" />
+                              <img src={normalizeMediaUrl(String(item.url).trim())} alt="Anzeigenmedium" className="w-full h-full object-cover" />
                             ) : (
-                              <video src={String(item.url).trim()} className="w-full h-full object-cover" controls playsInline />
+                              <video src={normalizeMediaUrl(String(item.url).trim())} className="w-full h-full object-cover" controls playsInline />
                             )}
                             <button
                               type="button"
