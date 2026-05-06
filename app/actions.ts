@@ -736,15 +736,161 @@ export async function getPublicProfileMeta(userIdOrObj: number | { profileUserId
 }
 
 export async function getStoredProfileData(userId: number): Promise<ProfileResponse> {
-  return { success: true, data: {} } as any;
+  try {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, error: 'Ungültige User-ID' };
+    }
+
+    // Query user_profiles und users tables
+    const result = await pool.query(
+      `SELECT 
+        u.id,
+        u.display_name,
+        u.email,
+        u.role,
+        u.created_at,
+        up.role as profile_role,
+        up.display_name as profile_display_name,
+        up.ort,
+        up.plz,
+        up.kategorien,
+        up.zertifikate,
+        up.angebot_text,
+        up.suche_text,
+        up.gesuche,
+        up.profil_data
+      FROM users u
+      LEFT JOIN user_profiles up ON u.id = up.user_id
+      WHERE u.id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return { 
+        success: false, 
+        error: 'Benutzer nicht gefunden',
+        data: null 
+      };
+    }
+
+    const row = result.rows[0];
+    
+    // Merge Daten aus beiden Tabellen
+    const profileData = {
+      ...((row.profil_data as any) || {}),
+      gesuche: (row.gesuche as any) || []
+    };
+
+    return {
+      success: true,
+      data: {
+        id: row.id,
+        user_id: row.id,
+        role: row.profile_role || row.role || 'nutzer',
+        display_name: row.profile_display_name || row.display_name || `Benutzer ${row.id}`,
+        ort: row.ort || '',
+        plz: row.plz || '',
+        kategorien: row.kategorien || [],
+        zertifikate: row.zertifikate || [],
+        angebot_text: row.angebot_text || '',
+        suche_text: row.suche_text || '',
+        profil_data: profileData,
+        user_verifiziert: Boolean(row.user_verifiziert),
+        created_at: row.created_at,
+        gesuche: row.gesuche || []
+      }
+    };
+  } catch (error: any) {
+    console.error('Error in getStoredProfileData:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Fehler beim Laden des Profils' 
+    };
+  }
 }
 
 export async function saveExpertProfileData(userId: number, data: any): Promise<any> {
-  return { success: true, error: null } as any;
+  try {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, error: 'Ungültige User-ID' };
+    }
+
+    // Upsert in user_profiles table
+    const result = await pool.query(
+      `INSERT INTO user_profiles (user_id, role, display_name, ort, plz, kategorien, zertifikate, angebot_text, profil_data, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         role = $2,
+         display_name = $3,
+         ort = $4,
+         plz = $5,
+         kategorien = $6,
+         zertifikate = $7,
+         angebot_text = $8,
+         profil_data = $9,
+         updated_at = NOW()
+       RETURNING user_id`,
+      [
+        userId,
+        'experte',
+        data.name || '',
+        data.ort || '',
+        data.plz || '',
+        data.angebote || [],
+        data.zertifikate || [],
+        data.angebotText || '',
+        data
+      ]
+    );
+
+    return { success: true, error: null };
+  } catch (error: any) {
+    console.error('Error in saveExpertProfileData:', error);
+    return { success: false, error: error.message || 'Fehler beim Speichern des Profils' };
+  }
 }
 
 export async function saveUserProfileData(userId: number, data: any): Promise<any> {
-  return { success: true, error: null } as any;
+  try {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, error: 'Ungültige User-ID' };
+    }
+
+    // Upsert in user_profiles table
+    const result = await pool.query(
+      `INSERT INTO user_profiles (user_id, role, display_name, ort, plz, kategorien, zertifikate, suche_text, gesuche, profil_data, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         role = $2,
+         display_name = $3,
+         ort = $4,
+         plz = $5,
+         kategorien = $6,
+         zertifikate = $7,
+         suche_text = $8,
+         gesuche = $9,
+         profil_data = $10,
+         updated_at = NOW()
+       RETURNING user_id`,
+      [
+        userId,
+        'nutzer',
+        data.profilName || '',
+        data.ort || '',
+        data.plz || '',
+        data.kategorien || [],
+        data.zertifikate || [],
+        data.sucheText || '',
+        data.gesuche || [],
+        data
+      ]
+    );
+
+    return { success: true, error: null };
+  } catch (error: any) {
+    console.error('Error in saveUserProfileData:', error);
+    return { success: false, error: error.message || 'Fehler beim Speichern des Profils' };
+  }
 }
 
 export async function getPrivateSettingsData(userId: number): Promise<any> {
