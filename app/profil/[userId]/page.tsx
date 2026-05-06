@@ -303,8 +303,9 @@ export default function PublicProfilePage() {
         return;
       }
 
-      // DIESE ZEILEN EINFÜGEN:
-      const safeViewer = viewerUserId; // Nutzt den State, der im neuen useEffect (siehe unten) gesetzt wird
+      // Warte bis viewerUserId gesetzt ist (von sessionStorage)
+      // Dies sollte schnell passieren, aber wir müssen es sicherstellen
+      const safeViewer = viewerUserId;
       if (!isMounted) return;
 
       // Wir setzen hier nur die UI-Sperre zurück, die Daten kommen aus dem State
