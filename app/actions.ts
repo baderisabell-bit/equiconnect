@@ -745,12 +745,11 @@ export async function getStoredProfileData(userId: number): Promise<ProfileRespo
     const result = await pool.query(
       `SELECT 
         u.id,
-        u.display_name,
         u.email,
         u.role,
         u.created_at,
         up.role as profile_role,
-        up.display_name as profile_display_name,
+        up.display_name,
         up.ort,
         up.plz,
         up.kategorien,
@@ -787,7 +786,7 @@ export async function getStoredProfileData(userId: number): Promise<ProfileRespo
         id: row.id,
         user_id: row.id,
         role: row.profile_role || row.role || 'nutzer',
-        display_name: row.profile_display_name || row.display_name || `Benutzer ${row.id}`,
+        display_name: row.display_name || `Benutzer ${row.id}`,
         ort: row.ort || '',
         plz: row.plz || '',
         kategorien: row.kategorien || [],
