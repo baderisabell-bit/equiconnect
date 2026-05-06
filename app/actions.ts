@@ -98,13 +98,14 @@ async function persistUploadedFile(params: {
   let finalUrl = '';
 
   if (blobToken) {
+    // Production: Upload to Vercel Blob
     const blob = await put(`${folder}/${fileName}`, file, {
       access: 'public',
       addRandomSuffix: false,
       contentType: String(file.type || '').trim() || undefined,
       token: blobToken,
     });
-    console.log('Blob uploaded to Vercel:', blob.url);
+    console.log('✓ Blob uploaded to Vercel:', blob.url);
     finalUrl = blob.url;
   } else {
     // Dev fallback: use local filesystem
@@ -115,36 +116,24 @@ async function persistUploadedFile(params: {
     const filePath = path.join(uploadDir, fileName);
     await writeFile(filePath, buffer);
     finalUrl = `/${folder}/${fileName}`;
-    console.log('File uploaded to local storage:', finalUrl);
+    console.log('✓ File uploaded to local storage:', finalUrl);
   }
 
-  // --- NEU: HIER WIRD DIE DATENBANK AKTUALISIERT ---
+  // Update database only for profile folder
   if (finalUrl && folder === 'uploads/profile') {
     try {
       await pool.query(
         'UPDATE users SET image_url = $1 WHERE id = $2',
         [finalUrl, userId]
       );
-      console.log('Datenbank erfolgreich aktualisiert für User:', userId);
+      console.log('✓ Database updated for profile image:', userId);
     } catch (dbError) {
-      console.error('Fehler beim Speichern der Bild-URL in Neon:', dbError);
-      // Wir werfen keinen Fehler, damit der Upload an sich nicht als "gescheitert" gilt, 
-      // aber wir loggen es extrem deutlich.
+      console.error('✗ Failed to save profile image URL to database:', dbError);
+      // Continue anyway - the file was uploaded successfully
     }
   }
 
-  // Dev fallback: use local filesystem
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  const uploadDir = path.join(process.cwd(), 'public', ...folder.split('/'));
-  await mkdir(uploadDir, { recursive: true });
-  const filePath = path.join(uploadDir, fileName);
-  await writeFile(filePath, buffer);
-  const localUrl = `/${folder}/${fileName}`;
-  console.log('File uploaded to local storage:', {
-    path: filePath,
-    url: localUrl,
-  });
+  console.log(`Upload complete: ${folder}/${fileName} -> ${finalUrl}`);
   return finalUrl;
 }
 
