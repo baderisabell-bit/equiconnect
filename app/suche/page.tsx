@@ -12,7 +12,7 @@ import { getSearchFeed, addWishlistItem, sendConnectionRequest } from "../action
 type SuchEintrag = {
   id: string;
   userId: number | null;
-  typ: "experte" | "nutzer" | "beitrag" | "gruppe";
+  typ: "experte" | "nutzer" | "beitrag" | "gruppe" | "angebot";
   name: string;
   ort: string;
   plz?: string;
@@ -357,7 +357,7 @@ export default function SearchPage() {
             <SearchMap
               entries={mapEntries}
               searchTerm={searchTerm}
-              onSelectEntry={(id) => {
+              onSelectEntry={(id: string) => {
                 const entry = filteredEntries.find((e) => e.id === id);
                 if (entry?.userId) {
                   router.push(`/profil/${entry.userId}`);
@@ -382,7 +382,7 @@ export default function SearchPage() {
               <SearchMap
                 entries={mapEntries}
                 searchTerm={searchTerm}
-                onSelectEntry={(id) => {
+                onSelectEntry={(id: string) => {
                   const entry = filteredEntries.find((e) => e.id === id);
                   if (entry?.userId) {
                     setShowMap(false);
