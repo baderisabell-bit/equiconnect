@@ -842,6 +842,18 @@ export async function saveExpertProfileData(userId: number, data: any): Promise<
       return { success: false, error: 'Ungültige User-ID' };
     }
 
+    const existingResult = await pool.query(
+      'SELECT profil_data FROM user_profiles WHERE user_id = $1 LIMIT 1',
+      [userId]
+    );
+    const existingProfileData = existingResult.rows[0]?.profil_data && typeof existingResult.rows[0].profil_data === 'object'
+      ? existingResult.rows[0].profil_data
+      : {};
+    const mergedProfileData = {
+      ...existingProfileData,
+      ...data
+    };
+
     // Upsert in user_profiles table
     const result = await pool.query(
       `INSERT INTO user_profiles (user_id, role, display_name, ort, plz, kategorien, zertifikate, angebot_text, profil_data, updated_at)
@@ -866,7 +878,7 @@ export async function saveExpertProfileData(userId: number, data: any): Promise<
         data.angebote || [],
         data.zertifikate || [],
         data.angebotText || '',
-        data
+        mergedProfileData
       ]
     );
 
@@ -882,6 +894,18 @@ export async function saveUserProfileData(userId: number, data: any): Promise<an
     if (!Number.isInteger(userId) || userId <= 0) {
       return { success: false, error: 'Ungültige User-ID' };
     }
+
+    const existingResult = await pool.query(
+      'SELECT profil_data FROM user_profiles WHERE user_id = $1 LIMIT 1',
+      [userId]
+    );
+    const existingProfileData = existingResult.rows[0]?.profil_data && typeof existingResult.rows[0].profil_data === 'object'
+      ? existingResult.rows[0].profil_data
+      : {};
+    const mergedProfileData = {
+      ...existingProfileData,
+      ...data
+    };
 
     // Upsert in user_profiles table
     const result = await pool.query(
@@ -909,7 +933,7 @@ export async function saveUserProfileData(userId: number, data: any): Promise<an
         data.zertifikate || [],
         data.sucheText || '',
         data.gesuche || [],
-        data
+        mergedProfileData
       ]
     );
 
@@ -930,19 +954,145 @@ export async function updatePrivateSettingsData(userIdOrObj: number | { userId?:
   return { success: true } as any;
 }
 
+async function getUserProfileSnapshot(userId: number) {
+  const result = await pool.query(
+    `SELECT
+      u.id as user_id,
+      u.role as user_role,
+      up.role as profile_role,
+      up.display_name,
+      up.profil_data
+     FROM users u
+     LEFT JOIN user_profiles up ON up.user_id = u.id
+     WHERE u.id = $1
+     LIMIT 1`,
+    [userId]
+  );
+  return result.rows[0] || null;
+}
+
+function normalizeStoredMediaItems(items: any): Array<{ type: 'image' | 'video'; url: string }> {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item: any) => ({
+      type: (String(item?.mediaType || item?.type || 'image') === 'video' ? 'video' : 'image') as 'image' | 'video',
+      url: String(item?.url || '').trim()
+    }))
+    .filter((item) => item.url.length > 0);
+}
+
+function normalizeStoredPosts(items: any): Array<{ id: number; title: string; content: string; created_at: string; media_items: Array<{ type: 'image' | 'video'; url: string }> }> {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((post: any) => ({
+      id: Number(post?.id || 0),
+      title: String(post?.title || '').trim(),
+      content: String(post?.content || '').trim(),
+      created_at: String(post?.created_at || new Date().toISOString()),
+      media_items: normalizeStoredMediaItems(post?.media_items)
+    }))
+    .filter((post) => Number.isInteger(post.id) && post.id > 0);
+}
+
+async function persistProfileJson(userId: number, nextProfileData: any, roleFallback: string, displayNameFallback?: string) {
+  const snapshot = await getUserProfileSnapshot(userId);
+  const existingProfileData = snapshot?.profil_data && typeof snapshot.profil_data === 'object' ? snapshot.profil_data : {};
+  const mergedProfileData = { ...existingProfileData, ...nextProfileData };
+  const role = String(snapshot?.profile_role || snapshot?.user_role || roleFallback || 'nutzer').trim() || 'nutzer';
+  const displayName = String(snapshot?.display_name || displayNameFallback || '').trim() || null;
+
+  if (snapshot) {
+    await pool.query(
+      `UPDATE user_profiles
+       SET role = $2,
+           display_name = $3,
+           profil_data = $4,
+           updated_at = NOW()
+       WHERE user_id = $1`,
+      [userId, role, displayName, mergedProfileData]
+    );
+    return mergedProfileData;
+  }
+
+  await pool.query(
+    `INSERT INTO user_profiles (user_id, role, display_name, profil_data, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())`,
+    [userId, role, displayName, mergedProfileData]
+  );
+  return mergedProfileData;
+}
+
 export async function getProfileAnalytics(userId: number): Promise<any> {
   return { success: true, data: {} } as any;
 }
 
 // ==================== NETWORK POSTS ====================
 export async function createNetworkPost(userIdOrObj: number | any, data?: any): Promise<any> {
-  const payload = typeof userIdOrObj === "object" && userIdOrObj.userId ? userIdOrObj : { userId: userIdOrObj, ...(data || {}) };
-  return { success: true, postId: 0, moderationStatus: "approved" } as any;
+  const payload = typeof userIdOrObj === 'object' && userIdOrObj.userId ? userIdOrObj : { userId: userIdOrObj, ...(data || {}) };
+  const userId = Number(payload.userId);
+
+  try {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, error: 'Ungültige User-ID' } as any;
+    }
+
+    const title = String(payload.title || '').trim();
+    const content = String(payload.content || '').trim();
+    const mediaItems = normalizeStoredMediaItems(payload.mediaItems);
+    if (!title && !content && mediaItems.length === 0) {
+      return { success: false, error: 'Beitrag ist leer.' } as any;
+    }
+
+    const snapshot = await getUserProfileSnapshot(userId);
+    const existingProfileData = snapshot?.profil_data && typeof snapshot.profil_data === 'object' ? snapshot.profil_data : {};
+    const existingPosts = normalizeStoredPosts(existingProfileData.beitraege);
+    let postId = Date.now();
+    while (existingPosts.some((post) => Number(post.id) === postId)) {
+      postId += 1;
+    }
+
+    const nextPosts = [
+      {
+        id: postId,
+        title,
+        content,
+        created_at: new Date().toISOString(),
+        media_items: mediaItems
+      },
+      ...existingPosts
+    ];
+
+    await persistProfileJson(userId, { beitraege: nextPosts }, String(snapshot?.profile_role || snapshot?.user_role || 'nutzer'), `Profil ${userId}`);
+
+    return { success: true, postId, moderationStatus: 'approved' } as any;
+  } catch (error: any) {
+    console.error('Error in createNetworkPost:', error);
+    return { success: false, error: error.message || 'Beitrag konnte nicht erstellt werden.' } as any;
+  }
 }
 
 export async function getProfilePosts(userIdOrObj: number | { userId?: number; viewerId?: number; limit?: number }, viewerId?: number, limit?: number): Promise<any> {
-  const userId = typeof userIdOrObj === "object" ? userIdOrObj.userId : userIdOrObj;
-  return { success: true, posts: [] } as any;
+  const userId = Number(typeof userIdOrObj === 'object' ? userIdOrObj.userId : userIdOrObj);
+  const requestedLimit = Number(typeof userIdOrObj === 'object' ? userIdOrObj.limit : limit || 0);
+  try {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, error: 'Ungültige User-ID', posts: [] } as any;
+    }
+
+    const snapshot = await getUserProfileSnapshot(userId);
+    const profileData = snapshot?.profil_data && typeof snapshot.profil_data === 'object' ? snapshot.profil_data : {};
+    const posts = normalizeStoredPosts(profileData.beitraege).sort((a, b) => {
+      const aTime = new Date(a.created_at).getTime();
+      const bTime = new Date(b.created_at).getTime();
+      if (!Number.isFinite(aTime) || !Number.isFinite(bTime)) return 0;
+      return bTime - aTime;
+    });
+
+    return { success: true, posts: requestedLimit > 0 ? posts.slice(0, requestedLimit) : posts } as any;
+  } catch (error: any) {
+    console.error('Error in getProfilePosts:', error);
+    return { success: false, error: error.message || 'Beitraege konnten nicht geladen werden.', posts: [] } as any;
+  }
 }
 
 export async function getNetworkFeed(userId: number, limit?: number) {
@@ -963,14 +1113,62 @@ export async function addNetworkPostComment(arg1: number | { postId?: number; us
 }
 
 export async function removeProfilePost(arg1: number | { userId?: number; postId?: number }): Promise<any> {
-  const postId = typeof arg1 === 'object' ? arg1.postId : arg1;
-  return { success: true, error: null } as any;
+  const userId = Number(typeof arg1 === 'object' ? arg1.userId : 0);
+  const postId = Number(typeof arg1 === 'object' ? arg1.postId : arg1);
+  try {
+    if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(postId) || postId <= 0) {
+      return { success: false, error: 'Ungültige Daten.' } as any;
+    }
+
+    const snapshot = await getUserProfileSnapshot(userId);
+    if (!snapshot) {
+      return { success: false, error: 'Profil nicht gefunden.' } as any;
+    }
+
+    const profileData = snapshot.profil_data && typeof snapshot.profil_data === 'object' ? snapshot.profil_data : {};
+    const posts = normalizeStoredPosts(profileData.beitraege);
+    const nextPosts = posts.filter((post) => Number(post.id) !== postId);
+
+    await persistProfileJson(userId, { beitraege: nextPosts }, String(snapshot.profile_role || snapshot.user_role || 'nutzer'), snapshot.display_name || `Profil ${userId}`);
+    return { success: true, error: null } as any;
+  } catch (error: any) {
+    console.error('Error in removeProfilePost:', error);
+    return { success: false, error: error.message || 'Beitrag konnte nicht geloescht werden.' } as any;
+  }
 }
 
 export async function updateProfilePost(arg1: number | { postId?: number; data?: any; userId?: number | string; title?: string; content?: string; offering?: any; [key: string]: any }, data?: any): Promise<any> {
-  const postId = typeof arg1 === 'object' ? arg1.postId : arg1;
-  const payload = typeof arg1 === 'object' ? arg1.data : data;
-  return { success: true, error: null } as any;
+  const userId = Number(typeof arg1 === 'object' ? arg1.userId : 0);
+  const postId = Number(typeof arg1 === 'object' ? arg1.postId : arg1);
+  const payload = typeof arg1 === 'object' ? (arg1.data || arg1) : data;
+  try {
+    if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(postId) || postId <= 0) {
+      return { success: false, error: 'Ungültige Daten.' } as any;
+    }
+
+    const snapshot = await getUserProfileSnapshot(userId);
+    if (!snapshot) {
+      return { success: false, error: 'Profil nicht gefunden.' } as any;
+    }
+
+    const profileData = snapshot.profil_data && typeof snapshot.profil_data === 'object' ? snapshot.profil_data : {};
+    const posts = normalizeStoredPosts(profileData.beitraege);
+    const nextPosts = posts.map((post) => {
+      if (Number(post.id) !== postId) return post;
+      return {
+        ...post,
+        title: String(payload?.title ?? post.title ?? '').trim(),
+        content: String(payload?.content ?? post.content ?? '').trim(),
+        media_items: normalizeStoredMediaItems(payload?.mediaItems ?? payload?.media_items ?? post.media_items)
+      };
+    });
+
+    await persistProfileJson(userId, { beitraege: nextPosts }, String(snapshot.profile_role || snapshot.user_role || 'nutzer'), snapshot.display_name || `Profil ${userId}`);
+    return { success: true, error: null } as any;
+  } catch (error: any) {
+    console.error('Error in updateProfilePost:', error);
+    return { success: false, error: error.message || 'Beitrag konnte nicht gespeichert werden.' } as any;
+  }
 }
 
 export async function toggleNetworkPostLike(arg1: number | { userId?: number; postId?: number }, arg2?: number): Promise<any> {
@@ -1315,30 +1513,24 @@ export async function getPublicOfferDetails(params: {
   viewerUserId: number | null; 
 }) {
   try {
-    // Wir holen die Anzeige aus Neon. 
-    // Ich caste offerId zu Integer, da deine Tabelle 'id' wahrscheinlich ein Serial/Integer ist.
-    const result = await pool.query(
-      `SELECT * FROM advertising_submissions 
-       WHERE id = $1 AND user_id = $2 AND status = 'approved' 
-       LIMIT 1`,
-      [Number(params.offerId), params.profileUserId]
-    );
-
-    const offer = result.rows[0];
+    const snapshot = await getUserProfileSnapshot(params.profileUserId);
+    const profileData = snapshot?.profil_data && typeof snapshot.profil_data === 'object' ? snapshot.profil_data : {};
+    const offers = Array.isArray(profileData.angeboteAnzeigen) ? profileData.angeboteAnzeigen : [];
+    const offer = offers.find((entry: any) => String(entry?.id || '').trim() === String(params.offerId || '').trim());
 
     if (!offer) {
       return { success: false, error: 'Anzeige nicht gefunden oder noch nicht freigegeben.' };
     }
 
-    // Optional: Tracking, wenn ein eingeloggter Nutzer die Anzeige sieht
     if (params.viewerUserId) {
-      await pool.query(
-        `INSERT INTO offer_views (offer_id, viewer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [params.offerId, params.viewerUserId]
-      );
+      await trackProfileOfferViews({
+        viewerUserId: params.viewerUserId,
+        profileUserId: params.profileUserId,
+        offerIds: [String(params.offerId)]
+      });
     }
 
-    return { success: true, data: offer }; 
+    return { success: true, data: { offer, profile: snapshot } } as any; 
     
   } catch (error: any) {
     console.error('Fehler in getPublicOfferDetails:', error);
