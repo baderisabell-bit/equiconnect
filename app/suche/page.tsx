@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Filter, Heart, MapPin, Search, X } from "lucide-react";
 import NotificationBell from "../components/notification-bell";
+import { safeToFixed } from '../lib/num';
 import { addWishlistItem, getSearchFeed, sendConnectionRequest } from "../actions";
 
 type SuchEintrag = {
@@ -232,7 +233,7 @@ export default function Suchseite() {
                   <h3 className="mt-1 text-lg font-black italic uppercase text-slate-900">{entry.name}</h3>
                   <p className="text-xs text-slate-500">{entry.ort}{entry.plz ? ` · ${entry.plz}` : ""}</p>
                 </div>
-                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{entry.rating.toFixed(1)}</div>
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{safeToFixed(entry.rating, 1)}</div>
               </div>
 
               <p className="text-sm text-slate-600 line-clamp-3">{entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar."}</p>

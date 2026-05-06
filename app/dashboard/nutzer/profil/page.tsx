@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Camera, ChevronLeft, ChevronRight, ImagePlus, MapPin, Play, User } from "lucide-react";
+import { safeToFixed } from '../../../../lib/num';
 import { ANGEBOT_KATEGORIEN } from "../../../suche/kategorien-daten";
 import LoggedInHeader from "../../../components/logged-in-header";
 import MediaDropzone from "../../../components/media-dropzone";
@@ -860,7 +861,7 @@ export default function NutzerProfilAnpassen() {
 
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center">
                 <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Bewertung</p>
-                <p className="mt-1 text-xl font-black text-amber-900">{profileStats.ratingAvg.toFixed(1)} ({profileStats.ratingCount})</p>
+                <p className="mt-1 text-xl font-black text-amber-900">{safeToFixed(profileStats.ratingAvg, 1)} ({profileStats.ratingCount})</p>
               </div>
 
               <button type="button" onClick={handleAddToWishlist} className="w-full px-4 py-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600">

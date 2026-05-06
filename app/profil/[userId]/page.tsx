@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { safeToFixed } from '../../lib/num';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Eye, Heart, Home, MapPin, Play, Share2, Star, User, Users, ShieldCheck, Info, CheckCircle2, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
@@ -2474,7 +2475,7 @@ useEffect(() => {
                       {profile.verifiziert ? 'Verifiziert' : 'Wartet auf Prüfung'}
                     </span>
                     <span className="px-3 py-1 rounded-xl text-[10px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-100">
-                      Bewertung {stats.ratingAvg.toFixed(1)} ({stats.ratingCount})
+                      Bewertung {safeToFixed(stats.ratingAvg, 1)} ({stats.ratingCount})
                     </span>
                   </div>
                   {(has(profile.plz) || has(profile.ort)) && (
@@ -2592,7 +2593,7 @@ useEffect(() => {
                 </div>
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
                   <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Bewertung</p>
-                  <p className="text-sm font-black text-amber-900 mt-1">{stats.ratingAvg.toFixed(1)} ({stats.ratingCount})</p>
+                  <p className="text-sm font-black text-amber-900 mt-1">{safeToFixed(stats.ratingAvg, 1)} ({stats.ratingCount})</p>
                 </div>
               </div>
 

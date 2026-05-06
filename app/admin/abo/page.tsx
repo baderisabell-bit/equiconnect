@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { safeToFixed } from '../../lib/num';
 import Link from "next/link";
 import {
   adminGetSubscriptionInvoicePdf,
@@ -356,7 +357,7 @@ export default function AdminAboPage() {
     }
 
     const customCents = Math.round(parsed * 100);
-    const proceed = window.confirm(`Custom-Preis ${parsed.toFixed(2)} EUR für ${selectedSubscriptionUserIds.length} Nutzer speichern?`);
+    const proceed = window.confirm(`Custom-Preis ${safeToFixed(parsed, 2)} EUR für ${selectedSubscriptionUserIds.length} Nutzer speichern?`);
     if (!proceed) return;
 
     setCustomPriceBusy(true);
@@ -646,38 +647,28 @@ export default function AdminAboPage() {
     return { hasTimingIssue, cancelPendingWithoutDate, cancelEffectivePast };
   };
 
- const displayedSubscriptionUsers = useMemo(() => {
-    return subscriptionUsers.filter((user) => {
-      // 1. Suche via Textfeld (Name/E-Mail) bleibt erhalten
-      const matchesSearch = 
-        user.email.toLowerCase().includes(subSearch.toLowerCase()) ||
-        user.display_name.toLowerCase().includes(subSearch.toLowerCase());
+  const displayedSubscriptionUsers = useMemo(() => {
+  return subscriptionUsers.filter((user) => {
+    // 1. Suche/Search Filter
+    const matchesSearch = 
+      user.email.toLowerCase().includes(subSearch.toLowerCase()) ||
+      user.display_name.toLowerCase().includes(subSearch.toLowerCase());
 
-      if (!matchesSearch) return false;
+    if (!matchesSearch) return false;
 
-      // 2. AUTOMATISCHE ROLLEN-TRENNUNG (Ohne Buttons)
-      // Ein Experte wird NUR angezeigt, wenn sein Plan ein Experten-Plan ist.
-      if (user.role === "experte") {
-        return user.plan_key.toLowerCase().includes("experte");
-      } 
-      
-      // Ein Nutzer wird NUR angezeigt, wenn sein Plan ein Nutzer-Plan oder 'free' ist.
-      if (user.role === "nutzer") {
-        return user.plan_key.toLowerCase().includes("nutzer") || user.plan_key === "free";
-      }
+    // 2. Rollen-Trennung: 
+    // Experten sehen nur Experten-Pläne, Nutzer nur Nutzer-Pläne
+    if (user.role === "experte") {
+      // Zeige nur Zeilen, die zum Experten-Bereich gehören
+      return user.plan_key.includes("experte");
+    } else if (user.role === "nutzer") {
+      // Zeige nur Zeilen, die zum Nutzer-Bereich gehören
+      return user.plan_key.includes("nutzer") || user.plan_key === "free";
+    }
 
-      // Falls es Rollen gibt, die weder Experte noch Nutzer sind, werden sie hier abgefangen
-      return true;
-    });
-    // subRoleFilter aus den Abhängigkeiten entfernen, da wir keine Buttons mehr nutzen
-  }, [subscriptionUsers, subSearch]);
-
-  const getPlanLabel = (planKey: string) => {
-  if (planKey === 'free') return "kostenlos";
-  if (planKey.includes('nutzer')) return "Premium";
-  if (planKey.includes('experte')) return "Experte";
-  return planKey;
-};
+    return true;
+  });
+}, [subscriptionUsers, subSearch]);
 
   const dryRunStatus =
     dryRunData === null
@@ -1033,7 +1024,7 @@ export default function AdminAboPage() {
                     item.custom_monthly_price_cents !== null && item.custom_monthly_price_cents !== undefined
                       ? Number(item.custom_monthly_price_cents)
                       : (item.monthly_price_cents === null || item.monthly_price_cents === undefined ? 0 : Number(item.monthly_price_cents));
-                  const effectivePrice = (effectiveCents / 100).toFixed(2).replace(".", ",");
+                  const effectivePrice = safeToFixed(effectiveCents / 100, 2).replace(".", ",");
                   const { hasTimingIssue, cancelPendingWithoutDate, cancelEffectivePast } = getSubscriptionIssueFlags(item);
 
                   return (
@@ -1212,7 +1203,7 @@ export default function AdminAboPage() {
                       <td className="p-3 text-slate-700">{item.invoice_number}</td>
                       <td className="p-3 text-slate-700">{item.plan_label} · {item.invoice_month}</td>
                       <td className="p-3 text-slate-600">{formatDateTime(item.due_at)}</td>
-                      <td className="p-3 text-slate-700">{(Number(item.amount_cents || 0) / 100).toFixed(2).replace('.', ',')} EUR</td>
+                      <td className="p-3 text-slate-700">{safeToFixed(Number(item.amount_cents || 0) / 100, 2).replace('.', ',')} EUR</td>
                       <td className="p-3 text-slate-700 uppercase">{item.status}</td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-2">
@@ -1285,11 +1276,11 @@ export default function AdminAboPage() {
                     const oldPrice =
                       entry.previous_effective_monthly_price_cents === null || entry.previous_effective_monthly_price_cents === undefined
                         ? "-"
-                        : `${(Number(entry.previous_effective_monthly_price_cents) / 100).toFixed(2).replace(".", ",")} EUR`;
+                        : `${safeToFixed(Number(entry.previous_effective_monthly_price_cents) / 100, 2).replace('.', ',')} EUR`;
                     const newPrice =
                       entry.new_effective_monthly_price_cents === null || entry.new_effective_monthly_price_cents === undefined
                         ? "-"
-                        : `${(Number(entry.new_effective_monthly_price_cents) / 100).toFixed(2).replace(".", ",")} EUR`;
+                        : `${safeToFixed(Number(entry.new_effective_monthly_price_cents) / 100, 2).replace('.', ',')} EUR`;
 
                     return (
                       <tr key={`price-history-${entry.id}`} className="border-t border-slate-100">

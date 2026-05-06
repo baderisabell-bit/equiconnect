@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
+import { safeToFixed } from '../../lib/num';
 import { getExpertDashboardAnalytics } from "../../actions";
 
 type DashboardSeriesPoint = {
@@ -689,7 +690,7 @@ function CombinedReachGraphCard({
         const x = points.length === 1 ? width / 2 : paddingX + (index / (points.length - 1)) * usableWidth;
         const rawValue = Number(point[seriesKey] || 0);
         const y = height - paddingY - Math.max(0, Math.min(usableHeight, (rawValue / Math.max(1, peak)) * usableHeight));
-        return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+        return `${index === 0 ? 'M' : 'L'} ${safeToFixed(x, 1)} ${safeToFixed(y, 1)}`;
       })
       .join(' ');
   };

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../../components/logged-in-header";
+import { safeToFixed } from '../../../lib/num';
 import {
   getMyStudents,
   addStudent,
@@ -152,7 +153,7 @@ const INVOICE_TEMPLATES = [
 // ─────────────────────────────────────── Utility ────────────────────────────
 const eur = (cents: number | null | undefined) => {
   if (cents === null || cents === undefined) return "–";
-  return `${(cents / 100).toFixed(2).replace(".", ",")} €`;
+  return `${safeToFixed(cents / 100, 2).replace(".", ",")} €`;
 };
 
 const formatDate = (val: string | null | undefined) => {
@@ -477,7 +478,7 @@ export default function SchuelerPage() {
         ...prev,
         serviceTitle: prev.serviceTitle || nextPlan.service_title || "",
         durationMinutes: prev.durationMinutes || String(nextPlan.duration_minutes || 60),
-        unitPriceEuro: prev.unitPriceEuro || (nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : ""),
+        unitPriceEuro: prev.unitPriceEuro || (nextPlan.unit_price_cents ? String(safeToFixed(Number(nextPlan.unit_price_cents) / 100, 2).replace('.', ',')) : ""),
       }));
       await refreshInvoiceCancellationCount(userId, s.student_id, invoiceMonth, nextPlan);
     } catch {
@@ -835,7 +836,7 @@ export default function SchuelerPage() {
         ...prev,
         serviceTitle: nextPlan.service_title || prev.serviceTitle,
         durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
-        unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
+        unitPriceEuro: nextPlan.unit_price_cents ? String(safeToFixed(Number(nextPlan.unit_price_cents) / 100, 2).replace('.', ',')) : prev.unitPriceEuro,
       }));
       await refreshInvoiceCancellationCount(userId, quickInvoiceStudentId, quickInvoiceMonth, nextPlan);
     } catch {
@@ -886,7 +887,7 @@ export default function SchuelerPage() {
         ...prev,
         serviceTitle: nextPlan.service_title || prev.serviceTitle,
         durationMinutes: nextPlan.duration_minutes ? String(nextPlan.duration_minutes) : prev.durationMinutes,
-        unitPriceEuro: nextPlan.unit_price_cents ? String((Number(nextPlan.unit_price_cents) / 100).toFixed(2).replace(".", ",")) : prev.unitPriceEuro,
+        unitPriceEuro: nextPlan.unit_price_cents ? String(safeToFixed(Number(nextPlan.unit_price_cents) / 100, 2).replace('.', ',')) : prev.unitPriceEuro,
       }));
       await refreshInvoiceCancellationCount(userId, archiveItem.student_id, archiveItem.invoice_month, nextPlan);
     } catch {
@@ -1245,7 +1246,7 @@ export default function SchuelerPage() {
                               <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase ${b.status === "bezahlt" ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : b.status === "storniert" ? "bg-red-50 text-red-500 border border-red-200" : "bg-amber-50 text-amber-600 border border-amber-200"}`}>
                                 {b.status}
                               </span>
-                              <span className="font-black text-slate-700 text-sm">{b.total_euro != null ? `${Number(b.total_euro).toFixed(2).replace(".", ",")} €` : b.unit_price_euro != null ? `${Number(b.unit_price_euro).toFixed(2).replace(".", ",")} €` : "–"}</span>
+                              <span className="font-black text-slate-700 text-sm">{b.total_euro != null ? `${safeToFixed(Number(b.total_euro), 2).replace('.', ',')} €` : b.unit_price_euro != null ? `${safeToFixed(Number(b.unit_price_euro), 2).replace('.', ',')} €` : "–"}</span>
                               <select
                                 value={['offen','bestaetigt','abgerechnet','storniert'].includes(b.status) ? b.status : 'offen'}
                                 onChange={(e) => doChangeBookingStatus(b.id, e.target.value as 'offen' | 'bestaetigt' | 'abgerechnet' | 'storniert')}
@@ -1603,8 +1604,8 @@ export default function SchuelerPage() {
                                 )}
                               </div>
                               <p className="text-right font-bold text-slate-600">{b.quantity ?? 1}</p>
-                              <p className="text-right font-bold text-slate-600">{b.unit_price_euro != null ? `${Number(b.unit_price_euro).toFixed(2).replace(".", ",")} €` : "–"}</p>
-                              <p className="text-right font-black text-slate-800">{b.total_euro != null ? `${Number(b.total_euro).toFixed(2).replace(".", ",")} €` : "–"}</p>
+                              <p className="text-right font-bold text-slate-600">{b.unit_price_euro != null ? `${safeToFixed(Number(b.unit_price_euro), 2).replace('.', ',')} €` : "–"}</p>
+                              <p className="text-right font-black text-slate-800">{b.total_euro != null ? `${safeToFixed(Number(b.total_euro), 2).replace('.', ',')} €` : "–"}</p>
                             </div>
                           ))}
 
@@ -1618,28 +1619,28 @@ export default function SchuelerPage() {
                                 <>
                                   <div className="flex justify-end gap-6 text-sm">
                                     <span className="font-bold text-slate-500">Nettobetrag</span>
-                                    <span className="font-black text-slate-800 w-24 text-right">{totalEuro.toFixed(2).replace(".", ",")} €</span>
+                                    <span className="font-black text-slate-800 w-24 text-right">{safeToFixed(totalEuro, 2).replace('.', ',')} €</span>
                                   </div>
                                   {invoiceData.totals?.protection_fee_cents > 0 && (
                                     <div className="flex justify-end gap-6 text-sm">
                                       <span className="font-bold text-slate-500">Kaeufer- & Anbieterschutz</span>
-                                      <span className="font-black text-slate-800 w-24 text-right">{(Number(invoiceData.totals.protection_fee_cents || 0) / 100).toFixed(2).replace(".", ",")} €</span>
+                                      <span className="font-black text-slate-800 w-24 text-right">{safeToFixed(Number(invoiceData.totals.protection_fee_cents || 0) / 100, 2).replace('.', ',')} €</span>
                                     </div>
                                   )}
                                   {!isKlein && mwst > 0 && (
                                     <div className="flex justify-end gap-6 text-sm">
                                       <span className="font-bold text-slate-500">MwSt. {mwst}%</span>
-                                      <span className="font-black text-slate-800 w-24 text-right">{mwstEuro.toFixed(2).replace(".", ",")} €</span>
+                                      <span className="font-black text-slate-800 w-24 text-right">{safeToFixed(mwstEuro, 2).replace('.', ',')} €</span>
                                     </div>
                                   )}
                                   <div className="flex justify-end gap-6 text-base border-t border-slate-200 pt-2 mt-2">
                                     <span className="font-black uppercase text-slate-800">Gesamtbetrag</span>
-                                    <span className="font-black w-24 text-right" style={{ color: activeTemplateId === 1 ? "#0f172a" : activeBrandColor }}>{(((Number(invoiceData.totals?.customer_total_cents || 0) / 100) || totalEuro) + mwstEuro).toFixed(2).replace(".", ",")} €</span>
+                                    <span className="font-black w-24 text-right" style={{ color: activeTemplateId === 1 ? "#0f172a" : activeBrandColor }}>{safeToFixed((((Number(invoiceData.totals?.customer_total_cents || 0) / 100) || totalEuro) + mwstEuro), 2).replace('.', ',')} €</span>
                                   </div>
                                   {invoiceData.totals?.expert_payout_cents > 0 && (
                                     <div className="flex justify-end gap-6 text-sm">
                                       <span className="font-bold text-slate-500">Auszahlung an Experten</span>
-                                      <span className="font-black text-slate-800 w-24 text-right">{(Number(invoiceData.totals.expert_payout_cents || 0) / 100).toFixed(2).replace(".", ",")} €</span>
+                                      <span className="font-black text-slate-800 w-24 text-right">{safeToFixed(Number(invoiceData.totals.expert_payout_cents || 0) / 100, 2).replace('.', ',')} €</span>
                                     </div>
                                   )}
                                   {isKlein && (

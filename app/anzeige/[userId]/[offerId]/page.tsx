@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { MapPin, Star } from "lucide-react";
+import { safeToFixed } from '../../../lib/num';
 import { getPublicOfferDetails } from "../../../actions";
 
 type OfferPrice = {
@@ -165,7 +166,7 @@ export default function OfferDetailPage() {
             </div>
             <div className="flex items-center gap-2 text-amber-500">
               <Star size={16} fill="currentColor" />
-              <p className="text-sm font-black text-slate-900">{details.ratingAvg.toFixed(1)} ({details.ratingCount})</p>
+              <p className="text-sm font-black text-slate-900">{safeToFixed(details.ratingAvg, 1)} ({details.ratingCount})</p>
             </div>
           </div>
 
@@ -278,7 +279,7 @@ export default function OfferDetailPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{item.vorname} {item.nachname}</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">{item.rating.toFixed(1)} ★</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">{safeToFixed(item.rating, 1)} ★</p>
                       <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${item.is_verified_booking ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
                         {item.is_verified_booking ? 'Verifiziert' : 'Nicht verifiziert'}
                       </span>

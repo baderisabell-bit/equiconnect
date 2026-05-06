@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
+import { safeToFixed } from '../../lib/num';
 import { getInvoiceData, getMyStudents, getOwnSubscriptionInvoicePdf, getOwnSubscriptionInvoices, getUserBookings } from "../../actions";
 
 type BookingItem = {
@@ -93,7 +94,7 @@ const formatDate = (value: string | null | undefined) => {
 
 const formatMoney = (cents: number | null | undefined) => {
   const value = Number(cents || 0) / 100;
-  return `${value.toFixed(2).replace(".", ",")} €`;
+  return `${safeToFixed(value, 2).replace(".", ",")} €`;
 };
 
 const formatTitle = (value: string | null | undefined) => {

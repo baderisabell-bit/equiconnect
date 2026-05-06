@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import NotificationBell from './components/notification-bell';
+import { safeToFixed } from './lib/num';
 import { getHomeHubData, rateUser, submitAnimalWelfareStatement, submitAnimalWelfareVote, trackAdvertisingViews } from './actions';
 
 type HomePerson = {
@@ -446,7 +447,7 @@ export default function Startseite() {
                 </p>
                 {typeof nearbyDistancesKm[item.id] === 'number' ? (
                   <p className="inline-flex px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-700">
-                    {nearbyDistancesKm[item.id]!.toFixed(1)} km entfernt
+                    {safeToFixed(nearbyDistancesKm[item.id], 1)} km entfernt
                   </p>
                 ) : null}
               </div>
