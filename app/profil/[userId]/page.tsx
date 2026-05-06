@@ -931,19 +931,51 @@ useEffect(() => {
     const rawId = sessionStorage.getItem('userId');
     const role = sessionStorage.getItem('userRole');
     const name = sessionStorage.getItem('userName');
-    
+
     if (rawId) setViewerUserId(parseInt(rawId, 10));
     if (role) setViewerRole(role);
     if (name) setViewerName(name);
   }
 }, []);
 
-    applyTabFromHash();
-    window.addEventListener('hashchange', applyTabFromHash);
-    return () => {
-      window.removeEventListener('hashchange', applyTabFromHash);
-    };
-  }, [editMode, hasSchulpferde, hasTeam, profile?.role]);
+useEffect(() => {
+  if (typeof window === 'undefined') return;
+
+  const applyTabFromHash = () => {
+    const rawHash = window.location.hash.replace('#', '').trim().toLowerCase();
+    if (!rawHash) return;
+
+    if (rawHash === 'beitraege') {
+      setActiveTab('beitraege');
+      return;
+    }
+
+    if (rawHash === 'anzeigen') {
+      setActiveTab('anzeigen');
+      return;
+    }
+
+    if (rawHash === 'werbung' && profile?.role === 'experte') {
+      setActiveTab('werbung');
+      return;
+    }
+
+    if (rawHash === 'team' && profile?.role === 'experte' && (editMode || hasTeam)) {
+      setActiveTab('team');
+      return;
+    }
+
+    if (rawHash === 'schulpferde' && profile?.role === 'experte' && (editMode || hasSchulpferde)) {
+      setActiveTab('schulpferde');
+    }
+  };
+
+  applyTabFromHash();
+  window.addEventListener('hashchange', applyTabFromHash);
+  return () => {
+    window.removeEventListener('hashchange', applyTabFromHash);
+  };
+}, [editMode, hasSchulpferde, hasTeam, profile?.role]);
 
   useEffect(() => {
     if (!profile || isOwnProfile || viewerUserId <= 0 || profile.role !== 'experte') return;
