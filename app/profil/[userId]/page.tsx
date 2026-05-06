@@ -2369,16 +2369,7 @@ useEffect(() => {
                         </p>
                       </>
                     )}
-                    {isOwnProfile && (
-                      <button
-                        type="button"
-                        onClick={() => setImageEditMode((prev) => !prev)}
-                        className="absolute right-3 top-3 z-20 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-xs font-black uppercase text-slate-700 border border-slate-200"
-                        title={imageEditMode ? 'Bildbearbeitung schließen' : 'Profilbild bearbeiten'}
-                      >
-                        {imageEditMode ? '✓ Fertig' : '✏️ Bearbeiten'}
-                      </button>
-                    )}
+
                   </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-center">

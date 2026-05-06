@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowLeftCircle,
   ArrowRightCircle,
+  CheckCircle,
   ChevronDown,
   ChevronUp,
   Edit3,
@@ -470,7 +471,7 @@ export default function ProfileDetailPage() {
     router.push(`/profil/${profileUserId}`);
   };
 
-  const handleSaveOffer = async () => {
+  const handleSaveOffer = async (publishIntent: 'draft' | 'publish' = 'draft') => {
     if (!profileRow || !viewerUserId || !isOwnProfile || !isExpertProfile) return;
 
     const titel = String(offerForm.titel || '').trim();
@@ -504,7 +505,7 @@ export default function ProfileDetailPage() {
         mediaType: item.type === 'video' ? 'video' : 'image',
       })).filter((entry) => entry.url),
       preise: offerPreise.filter((p) => String(p.preis || '').trim()),
-      visibility: itemId === 'new' ? 'draft' : ((rawOffers.find((entry: any) => String(entry?.id || '') === itemId) || {})?.visibility === 'draft' ? 'draft' : 'public'),
+      visibility: publishIntent === 'publish' ? 'public' : 'draft',
     };
 
     const nextOffers = itemId === 'new'
@@ -985,11 +986,19 @@ export default function ProfileDetailPage() {
                     <div className="flex flex-wrap gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={handleSaveOffer}
+                        onClick={() => handleSaveOffer('draft')}
                         disabled={busy}
-                        className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-60"
+                        className="inline-flex items-center gap-2 rounded-full bg-slate-400 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-60 hover:bg-slate-500"
                       >
-                        <Save size={14} /> Speichern
+                        <Save size={14} /> Entwurf speichern
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveOffer('publish')}
+                        disabled={busy}
+                        className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-60 hover:bg-emerald-700"
+                      >
+                        <CheckCircle size={14} /> Veröffentlichen
                       </button>
                       {itemId !== 'new' && (
                         <button
