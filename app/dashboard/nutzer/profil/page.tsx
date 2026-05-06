@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Camera, ChevronLeft, ChevronRight, ImagePlus, MapPin, Play, User } from "lucide-react";
-import { safeToFixed } from '../../../../lib/num';
+import { safeToFixed } from '../../../lib/num';
 import { ANGEBOT_KATEGORIEN } from "../../../suche/kategorien-daten";
 import LoggedInHeader from "../../../components/logged-in-header";
 import MediaDropzone from "../../../components/media-dropzone";
