@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
+import DashboardSidebar from "../../components/dashboard-sidebar";
 import { getExpertDashboardAnalytics } from "../../actions";
 
 // Sub-Komponente für die Metriken
@@ -68,24 +69,19 @@ export default function ExpertDashboardPage() {
                      (analytics?.posts?.viewsTotal || 0) + 
                      (analytics?.ads?.viewsTotal || 0);
 
+  const openProfile = () => {
+    if (userId && userId > 0) {
+      window.location.href = `/profil/${userId}`;
+      return;
+    }
+    window.location.href = '/login';
+  };
+
   return (
     <div className="min-h-screen bg-[#fbfcfd] text-slate-900 font-sans text-sm">
-      
-      {/* Sidebar (Full Navigation) */}
-      <aside className={`fixed left-0 top-0 h-full w-72 bg-white z-[70] shadow-2xl transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} p-6 flex flex-col`}>
-        <div className="flex justify-between items-center mb-8 text-lg font-black italic uppercase">
-          <h2>Menü</h2>
-          <button onClick={() => setSidebarOpen(false)}>✕</button>
-        </div>
-        <nav className="space-y-1 flex-grow">
-          {['Dashboard', 'Netzwerk', 'Anzeigen', 'Beiträge', 'Merkliste', 'Postfach', 'Einstellungen'].map((item) => (
-            <button key={item} onClick={() => { setSidebarOpen(false); router.push(`/dashboard/experte/${item.toLowerCase()}`); }} className="w-full text-left p-3 rounded-xl font-black uppercase text-[10px] hover:bg-slate-50 transition-all">{item}</button>
-          ))}
-        </nav>
-        <button onClick={() => { sessionStorage.clear(); router.push('/login'); }} className="p-3 bg-red-50 text-red-600 rounded-xl font-black uppercase text-[9px]">Abmelden</button>
-      </aside>
+      <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={openProfile} role="experte" />
 
-      <LoggedInHeader userId={userId} role={role === "experte" ? "experte" : "nutzer"} userName={userName} onOpenSidebar={() => setSidebarOpen(true)} brandText="Expert Intelligence" />
+      <LoggedInHeader userId={userId} role="experte" userName={userName} onOpenSidebar={() => setSidebarOpen(true)} brandText="Expert Intelligence" />
 
       <main className="max-w-[1400px] mx-auto px-4 py-6">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
@@ -181,14 +177,6 @@ export default function ExpertDashboardPage() {
              <StatTile label="Kommentare" value={analytics?.posts?.commentsTotal} />
              <StatTile label="Merkliste" value={(analytics?.profile?.wishlistTotal || 0) + (analytics?.ads?.wishlistTotal || 0)} />
              <StatTile label="Bewertungen" value={analytics?.ads?.ratingsTotal} />
-          </div>
-
-          {/* Quick Actions (Unten) */}
-          <div className="md:col-span-12 grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
-            <button onClick={() => router.push('/inserieren')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Werbung →</button>
-            <button onClick={() => router.push('/profil/detail/angebot')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Angebot →</button>
-            <button onClick={() => router.push('/profil/detail/beitrag')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Beitrag →</button>
-            <button onClick={() => router.push('/dashboard/experte/schueler')} className="p-4 bg-emerald-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">Schüler und Kunden →</button>
           </div>
 
         </div>
