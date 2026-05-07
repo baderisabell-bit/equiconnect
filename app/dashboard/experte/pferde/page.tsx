@@ -365,15 +365,7 @@ export default function ExpertHorsesPage() {
         </div>
       </div>
 
-      {/* ── Sidebar overlay ── */}
-      <div
-        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] transition-opacity ${sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-
-      {/* ── Slide-in sidebar ── */}
-      <aside className={`fixed left-0 top-0 h-full w-72 bg-white z-[70] shadow-2xl transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} p-6 flex flex-col`}>
-        <div className="flex justify-between items-center mb-8 text-emerald-600 font-black italic tracking-tighter">
-          MENÜ
-          <button onClick={() => setSidebarOpen(false)} className="text-slate-300 text-xl leading-none">×</button>
-        <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={openProfile} role={isExpertRole ? "experte" : null} />
+      <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={openProfile} role={isExpertRole ? "experte" : null} />
+    </div>
+  );
+}

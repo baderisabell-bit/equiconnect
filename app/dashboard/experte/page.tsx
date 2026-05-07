@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
+import DashboardSidebar from "../../components/dashboard-sidebar";
 import { getExpertDashboardAnalytics } from "../../actions";
 
 
@@ -181,30 +182,7 @@ export default function ExpertDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
-      {sidebarOpen && (
-        <>
-          <button type="button" aria-label="Menü schließen" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm" />
-          <aside className="fixed left-0 top-0 z-[70] h-full w-72 bg-white shadow-2xl transition-transform duration-300 p-6 flex flex-col">
-            <div className="flex justify-between items-center mb-8 text-emerald-600 font-black italic tracking-tighter">
-              MENÜ
-              <button onClick={() => setSidebarOpen(false)} className="text-slate-300 text-xl leading-none">×</button>
-            </div>
-            <nav className="space-y-5 flex-grow">
-              <Link href="/" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Startseite</Link>
-              <Link href="/dashboard/experte" className="block text-left text-lg font-black italic uppercase text-emerald-600">Dashboard</Link>
-              <button type="button" onClick={openProfile} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Profil</button>
-              <Link href="/dashboard/experte/schueler" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Schüler &amp; Kunden</Link>
-              <Link href="/suche" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Suche</Link>
-              <Link href="/netzwerk" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Netzwerk</Link>
-              <Link href="/nachrichten" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Nachrichten</Link>
-              <Link href="/merkliste" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Merkliste</Link>
-              <Link href="/einstellungen" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Einstellungen</Link>
-              <Link href="/kontakt" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Kontakt &amp; FAQ</Link>
-            </nav>
-            <button onClick={handleLogout} className="mt-auto p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">Abmelden</button>
-          </aside>
-        </>
-      )}
+      <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={openProfile} role="experte" />
 
       <LoggedInHeader
         userId={userId}
