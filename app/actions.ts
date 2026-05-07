@@ -2207,17 +2207,96 @@ export async function runSubscriptionInvoiceAutomation(params: {
 
 // ==================== WISHLIST HELPERS ====================
 export async function addWishlistItem(userId: number, dataOrOfferId: string | any): Promise<any> {
-  return { success: true, wishlisted: true, wishlistCount: 1 } as any;
+  try {
+    const rawItem = typeof dataOrOfferId === 'object' ? dataOrOfferId : { id: dataOrOfferId };
+    const sourceId = String(rawItem?.id || rawItem?.sourceId || rawItem?.source_id || '').trim();
+    if (!Number.isInteger(Number(userId)) || Number(userId) <= 0 || !sourceId) {
+      return { success: false, error: 'Ungültige Merkliste-Daten.' } as any;
+    }
+
+    const typ = String(rawItem?.typ || rawItem?.type || '').trim().toLowerCase();
+    const itemType = typ === 'angebot' ? 'anzeige' : typ === 'post' || typ === 'beitrag' ? 'beitrag' : typ === 'gruppe' ? 'gruppe' : 'person';
+    const profileType = typ === 'nutzer' ? 'nutzer' : 'experte';
+    const name = String(rawItem?.name || rawItem?.partnerName || rawItem?.title || '').trim() || sourceId;
+    const ort = String(rawItem?.ort || '').trim() || null;
+    const plz = String(rawItem?.plz || '').trim() || null;
+    const categoryText = Array.isArray(rawItem?.kategorien) ? rawItem.kategorien.map((entry: any) => String(entry || '').trim()).filter(Boolean).join(', ') : String(rawItem?.kategorieText || rawItem?.kategorie_text || '').trim() || null;
+    const content = String(rawItem?.angebotText || rawItem?.sucheText || rawItem?.content || '').trim() || null;
+
+    await pool.query(
+      `INSERT INTO wishlist_items (user_id, item_type, profile_type, source_id, name, ort, plz, kategorie_text, content, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       ON CONFLICT (user_id, item_type, source_id)
+       DO UPDATE SET
+         profile_type = EXCLUDED.profile_type,
+         name = EXCLUDED.name,
+         ort = EXCLUDED.ort,
+         plz = EXCLUDED.plz,
+         kategorie_text = EXCLUDED.kategorie_text,
+         content = EXCLUDED.content,
+         created_at = NOW()`,
+      [Number(userId), itemType, profileType, sourceId, name, ort, plz, categoryText, content]
+    );
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id = $1`,
+      [Number(userId)]
+    );
+
+    return { success: true, wishlisted: true, wishlistCount: Number(countRes.rows[0]?.count || 0) } as any;
+  } catch (error: any) {
+    return { success: false, error: 'Merkliste konnte nicht gespeichert werden.' } as any;
+  }
 }
 
 export async function removeWishlistItem(userIdOrObj: number | { userId?: number; offerId?: string | number }, offerId?: string | number): Promise<any> {
-  const userId = typeof userIdOrObj === 'object' ? userIdOrObj.userId : userIdOrObj;
-  const id = typeof userIdOrObj === 'object' ? userIdOrObj.offerId : offerId;
-  return { success: true, wishlisted: false, wishlistCount: 0 } as any;
+  try {
+    const userId = Number(typeof userIdOrObj === 'object' ? userIdOrObj.userId : userIdOrObj);
+    const id = String(typeof userIdOrObj === 'object' ? userIdOrObj.offerId : offerId || '').trim();
+    if (!Number.isInteger(userId) || userId <= 0 || !id) {
+      return { success: false, error: 'Ungültige Merkliste-Daten.' } as any;
+    }
+
+    await pool.query(
+      `DELETE FROM wishlist_items WHERE user_id = $1 AND source_id = $2`,
+      [userId, id]
+    );
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id = $1`,
+      [userId]
+    );
+
+    return { success: true, wishlisted: false, wishlistCount: Number(countRes.rows[0]?.count || 0) } as any;
+  } catch (error: any) {
+    return { success: false, error: 'Merkliste konnte nicht entfernt werden.' } as any;
+  }
 }
 
 export async function getWishlistItems(userId: number) {
-  return { success: true, items: [] };
+  try {
+    const result = await pool.query(
+      `SELECT * FROM wishlist_items WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    );
+
+    const items = result.rows.map((row) => ({
+      id: row.id,
+      sourceId: String(row.source_id || ''),
+      typ: row.item_type === 'anzeige' ? 'anzeige' : 'person',
+      profilTyp: row.profile_type === 'nutzer' ? 'nutzer' : 'experte',
+      name: String(row.name || ''),
+      ort: String(row.ort || ''),
+      plz: String(row.plz || ''),
+      kategorieText: String(row.kategorie_text || ''),
+      content: String(row.content || ''),
+      createdAt: row.created_at,
+    }));
+
+    return { success: true, items };
+  } catch (error: any) {
+    return { success: false, items: [], error: 'Merkliste konnte nicht geladen werden.' };
+  }
 }
 
 // Additional missing exports

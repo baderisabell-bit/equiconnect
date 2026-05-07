@@ -172,9 +172,10 @@ export default function MerklistePage() {
     if (!userIdRaw) return;
 
     const userId = parseInt(userIdRaw, 10);
-    const numericId = Number(id);
-    if (!Number.isNaN(userId) && !Number.isNaN(numericId)) {
-      await removeWishlistItem(userId, numericId);
+    const targetItem = items.find((item) => String(item.id) === String(id));
+    const sourceId = String(targetItem?.sourceId || id || '').trim();
+    if (!Number.isNaN(userId) && sourceId) {
+      await removeWishlistItem(userId, sourceId);
     }
 
     const next = items.filter((item) => item.id !== id);
@@ -232,9 +233,9 @@ export default function MerklistePage() {
   const writeMessageTo = (item: WishlistItem) => {
     const params = new URLSearchParams();
     params.set('target', item.name);
-    params.set('targetType', item.profilTyp);
+    params.set('targetType', item.typ === 'anzeige' ? 'anzeige' : 'person');
 
-    const match = String(item.sourceId || '').match(/db-(\d+)/);
+    const match = String(item.sourceId || '').match(/(\d+)$/);
     if (match?.[1]) {
       params.set('targetUserId', match[1]);
     }

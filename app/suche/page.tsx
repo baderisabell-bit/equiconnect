@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Heart, MapPin, Search, MessageSquare, User, Star, X } from "lucide-react";
@@ -8,7 +8,7 @@ import LoggedInHeader from "../components/logged-in-header";
 import SearchMap from "../components/search-map";
 import { ANGEBOT_KATEGORIEN } from "./kategorien-daten";
 import { safeToFixed } from "../lib/num";
-import { addWishlistItem, getSearchFeed, rateUser, sendConnectionRequest } from "../actions";
+import { addWishlistItem, getSearchFeed, getWishlistItems, rateUser, removeWishlistItem, sendConnectionRequest } from "../actions";
 
 type FilterType = "all" | "profile" | "groups" | "posts" | "offers";
 
@@ -32,6 +32,8 @@ type CategoryOption = {
   label: string;
   themen: string[];
 };
+
+const RADIUS_OPTIONS_KM = [5, 10, 20, 30, 50, 75, 100];
 
 const FILTER_TYPES: { value: FilterType; label: string }[] = [
   { value: "all", label: "Alle" },
@@ -61,6 +63,20 @@ function displayText(value: string) {
     .replace(/ue/g, "ü");
 }
 
+function distanceKmBetween(from: { lat: number; lon: number }, to: { lat: number; lon: number }) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRad(to.lat - from.lat);
+  const dLon = toRad(to.lon - from.lon);
+  const lat1 = toRad(from.lat);
+  const lat2 = toRad(to.lat);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function buildSearchLocationKey(ort: string, plz: string) {
+  return String([ort, plz].filter(Boolean).join(" ")).trim().toLowerCase();
+}
+
 function buildCategoryOptions(): CategoryOption[] {
   return ANGEBOT_KATEGORIEN.map((category) => ({
     label: String(category.label || "").trim(),
@@ -75,9 +91,48 @@ function buildCategoryOptions(): CategoryOption[] {
   }));
 }
 
+async function resolveSearchCoordinates(location: string, cacheRef: React.MutableRefObject<Map<string, { lat: number; lon: number } | null>>) {
+  const key = String(location || "").trim().toLowerCase();
+  if (!key) return null;
+  if (cacheRef.current.has(key)) return cacheRef.current.get(key) || null;
+
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=de&q=${encodeURIComponent(location)}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const first = Array.isArray(data) ? data[0] : null;
+      const lat = Number(first?.lat);
+      const lon = Number(first?.lon);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        const coords = { lat, lon };
+        cacheRef.current.set(key, coords);
+        return coords;
+      }
+    }
+  } catch {
+    // ignore geocode failures
+  }
+
+  cacheRef.current.set(key, null);
+  return null;
+}
+
 // Detail Modal Component
-function DetailModal({ entry, onClose, userId }: { entry: SearchEntry | null; onClose: () => void; userId: number | null }) {
-  const [isWishlisted, setIsWishlisted] = useState(false);
+function DetailModal({
+  entry,
+  onClose,
+  userId,
+  isWishlisted,
+  onWishlistToggle,
+}: {
+  entry: SearchEntry | null;
+  onClose: () => void;
+  userId: number | null;
+  isWishlisted: boolean;
+  onWishlistToggle: (entry: SearchEntry) => Promise<void>;
+}) {
   const [comments, setComments] = useState<Array<{ user: string; text: string; likes: number }>>([]);
   const [newComment, setNewComment] = useState("");
   const [currentRating, setCurrentRating] = useState(0);
@@ -89,16 +144,17 @@ function DetailModal({ entry, onClose, userId }: { entry: SearchEntry | null; on
 
   if (!entry) return null;
 
-  const handleWishlist = () => {
-    setIsWishlisted(!isWishlisted);
-    if (userId) {
-      void addWishlistItem(userId, entry.id);
-    }
+  const handleWishlist = async () => {
+    await onWishlistToggle(entry);
   };
 
   const handleSendMessage = () => {
     if (entry.userId) {
-      router.push(`/nachrichten?userId=${entry.userId}`);
+      const params = new URLSearchParams();
+      params.set("target", displayText(entry.name));
+      params.set("targetType", entry.typ === "angebot" ? "anzeige" : "person");
+      params.set("targetUserId", String(entry.userId));
+      router.push(`/nachrichten?${params.toString()}`);
     }
   };
 
@@ -185,12 +241,12 @@ function DetailModal({ entry, onClose, userId }: { entry: SearchEntry | null; on
           {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-3 pt-4">
             <button
-              onClick={handleWishlist}
+              onClick={() => void handleWishlist()}
               className={`flex items-center justify-center gap-2 rounded-xl py-3 font-black uppercase text-[10px] tracking-widest transition ${
                 isWishlisted ? "bg-red-100 text-red-600 border border-red-200" : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
               }`}
             >
-              <Heart size={14} /> Merken
+              <Heart size={14} fill={isWishlisted ? "currentColor" : "none"} /> {isWishlisted ? "Gemerkt" : "Merken"}
             </button>
 
             {entry.userId && (
@@ -287,6 +343,10 @@ function SuchseiteContent() {
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState("");
   const [selectedEntry, setSelectedEntry] = useState<SearchEntry | null>(null);
+  const [selectedRadiusKm, setSelectedRadiusKm] = useState("");
+  const [wishlistIds, setWishlistIds] = useState<Set<string>>(new Set());
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const searchGeoCacheRef = useRef<Map<string, { lat: number; lon: number } | null>>(new Map());
 
   const activeCategory = useMemo(() => categoryOptions.find((category) => category.label === selectedCategory) || null, [categoryOptions, selectedCategory]);
   const selectedThemeSet = useMemo(() => new Set(selectedThemes), [selectedThemes]);
@@ -308,9 +368,36 @@ function SuchseiteContent() {
       } else {
         setFeedError("Feed konnte nicht geladen werden");
       }
+
+      if (parsedUserId) {
+        const wishlistRes = await getWishlistItems(parsedUserId);
+        if (wishlistRes.success && Array.isArray(wishlistRes.items)) {
+          setWishlistIds(new Set((wishlistRes.items as Array<{ sourceId?: string }>).map((item) => String(item.sourceId || "").trim()).filter(Boolean)));
+        }
+      }
     };
     init();
   }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const updateCoords = async () => {
+      const key = buildSearchLocationKey(ortFilter, "");
+      if (!key) {
+        if (isActive) setLocationCoords(null);
+        return;
+      }
+
+      const coords = await resolveSearchCoordinates(key, searchGeoCacheRef);
+      if (!isActive) return;
+      setLocationCoords(coords);
+    };
+
+    void updateCoords();
+    return () => {
+      isActive = false;
+    };
+  }, [ortFilter]);
 
   const filteredEntries = useMemo(() => {
     let result = entries;
@@ -336,12 +423,32 @@ function SuchseiteContent() {
       result = result.filter((entry) => normalizeText(entry.ort).includes(normalized));
     }
 
+    const radiusValue = Number(selectedRadiusKm || 0);
+    if (radiusValue > 0 && locationCoords) {
+      result = result.filter((entry) => {
+        if (!entry.lat || !entry.lon) return false;
+        return distanceKmBetween(locationCoords, { lat: entry.lat, lon: entry.lon }) <= radiusValue;
+      });
+    }
+
     if (selectedThemes.length > 0) {
       result = result.filter((entry) => entry.kategorien.some((cat) => selectedThemeSet.has(cat)));
     }
 
     return result;
-  }, [entries, filterType, searchTerm, ortFilter, selectedThemes, selectedThemeSet]);
+  }, [entries, filterType, searchTerm, ortFilter, selectedThemes, selectedThemeSet, selectedRadiusKm, locationCoords]);
+
+  const entryDistanceKm = useMemo(() => {
+    if (!locationCoords) return {} as Record<string, number | null>;
+    return filteredEntries.reduce<Record<string, number | null>>((acc, entry) => {
+      if (!entry.lat || !entry.lon) {
+        acc[entry.id] = null;
+        return acc;
+      }
+      acc[entry.id] = distanceKmBetween(locationCoords, { lat: entry.lat, lon: entry.lon });
+      return acc;
+    }, {});
+  }, [filteredEntries, locationCoords]);
 
   const mapEntries = useMemo(() => filteredEntries.filter((e) => e.lat && e.lon), [filteredEntries]);
 
@@ -363,6 +470,29 @@ function SuchseiteContent() {
     setOrtFilter("");
     setSelectedCategory("");
     setSelectedThemes([]);
+    setSelectedRadiusKm("");
+    setLocationCoords(null);
+  };
+
+  const toggleWishlist = async (entry: SearchEntry) => {
+    if (!userId) return;
+
+    const sourceId = String(entry.id || "").trim();
+    if (!sourceId) return;
+
+    const currentlyWishlisted = wishlistIds.has(sourceId);
+    const res = currentlyWishlisted
+      ? await removeWishlistItem(userId, sourceId)
+      : await addWishlistItem(userId, entry);
+
+    if (!res.success) return;
+
+    setWishlistIds((prev) => {
+      const next = new Set(prev);
+      if (currentlyWishlisted) next.delete(sourceId);
+      else next.add(sourceId);
+      return next;
+    });
   };
 
   return (
@@ -447,6 +577,19 @@ function SuchseiteContent() {
                 placeholder="Ort oder PLZ"
                 className="w-full bg-transparent text-sm font-bold text-slate-900 outline-none placeholder-slate-400"
               />
+            </div>
+            <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="text-slate-400 text-sm font-black uppercase tracking-widest">km</span>
+              <select
+                value={selectedRadiusKm}
+                onChange={(e) => setSelectedRadiusKm(e.target.value)}
+                className="w-full bg-transparent text-sm font-bold text-slate-900 outline-none"
+              >
+                <option value="">Umkreis wählen</option>
+                {RADIUS_OPTIONS_KM.map((radius) => (
+                  <option key={radius} value={String(radius)}>{radius} km</option>
+                ))}
+              </select>
             </div>
           </>
         }
@@ -561,6 +704,12 @@ function SuchseiteContent() {
 
                     <p className="mt-3 text-sm text-slate-600 line-clamp-3">{displayText(entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar.")}</p>
 
+                    {typeof entryDistanceKm[entry.id] === "number" && (
+                      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                        {safeToFixed(entryDistanceKm[entry.id], 1)} km entfernt
+                      </p>
+                    )}
+
                     <div className="mt-3 flex flex-wrap gap-2">
                       {entry.kategorien.slice(0, 4).map((category) => (
                         <span key={`${entry.id}-${category}`} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600">
@@ -569,9 +718,9 @@ function SuchseiteContent() {
                       ))}
                     </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2 pointer-events-none opacity-60">
-                      <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700">
-                        <Heart size={14} /> Merken
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${wishlistIds.has(entry.id) ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-700"}`}>
+                        <Heart size={14} fill={wishlistIds.has(entry.id) ? "currentColor" : "none"} /> {wishlistIds.has(entry.id) ? "Gemerkt" : "Merken"}
                       </button>
                     </div>
                   </article>
@@ -608,7 +757,13 @@ function SuchseiteContent() {
         </div>
       </main>
 
-      <DetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} userId={userId} />
+      <DetailModal
+        entry={selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        userId={userId}
+        isWishlisted={selectedEntry ? wishlistIds.has(selectedEntry.id) : false}
+        onWishlistToggle={toggleWishlist}
+      />
     </div>
   );
 }
