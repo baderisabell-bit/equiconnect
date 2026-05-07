@@ -185,10 +185,10 @@ export default function ExpertDashboardPage() {
 
           {/* Quick Actions (Unten) */}
           <div className="md:col-span-12 grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
-            <button onClick={() => router.push('/werbung-buchen')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Werbung →</button>
-            <button onClick={() => router.push('/inserieren')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Inserieren →</button>
-            <button onClick={() => router.push('/beitrag-erstellen')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Beitrag →</button>
-            <button onClick={() => router.push('/dashboard/experte/schueler')} className="p-4 bg-emerald-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">Schüler →</button>
+            <button onClick={() => router.push('/inserieren')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Werbung →</button>
+            <button onClick={() => router.push('/profil/detail/angebot')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Angebot →</button>
+            <button onClick={() => router.push('/profil/detail/beitrag')} className="p-4 bg-white border border-slate-100 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Beitrag →</button>
+            <button onClick={() => router.push('/dashboard/experte/schueler')} className="p-4 bg-emerald-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all">Schüler und Kunden →</button>
           </div>
 
         </div>
