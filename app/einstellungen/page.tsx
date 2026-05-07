@@ -933,6 +933,9 @@ export default function EinstellungenPage() {
                     <Link href="/abo" className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700">
                       Abo vollständig verwalten
                     </Link>
+                    <Link href="/widerrufsformular" className="px-4 py-2 rounded-xl border border-amber-300 bg-white text-[10px] font-black uppercase tracking-widest text-amber-700 hover:bg-amber-50">
+                      Abo kündigen
+                    </Link>
                   </div>
                   {subscription.monthly_price_cents > 0 && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">

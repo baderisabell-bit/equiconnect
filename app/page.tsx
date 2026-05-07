@@ -752,6 +752,8 @@ function FooterLinks() {
   return (
     <footer className="bg-white border-t p-10 flex flex-col md:flex-row justify-center gap-10 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
       <Link href="/agb">AGB</Link>
+      <Link href="/widerrufsbelehrung">Wiederrufsbelehrung</Link>
+      <Link href="/zahlung-und-versand">Zahlung und Versand</Link>
       <Link href="/datenschutz">Datenschutz</Link>
       <Link href="/cookies">Cookies</Link>
       <Link href="/impressum">Impressum</Link>

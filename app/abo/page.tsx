@@ -276,6 +276,7 @@ function AboPageContent() {
   const [paypalSubscriptionId, setPaypalSubscriptionId] = useState("");
   const [paypalButtonError, setPaypalButtonError] = useState("");
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [acceptedCheckoutLegal, setAcceptedCheckoutLegal] = useState(false);
 
   useEffect(() => {
     const sessionUserId = sessionStorage.getItem("userId");
@@ -432,6 +433,10 @@ function AboPageContent() {
 
   const saveSubscription = async (options?: { paypalSubscriptionIdOverride?: string }) => {
     if (!userId || !selectedPlan) return;
+    if (selectedPlan.baseCents > 0 && !acceptedCheckoutLegal) {
+      setError("Bitte akzeptiere AGB und Widerrufsbelehrung, bevor du kostenpflichtig buchst.");
+      return;
+    }
     if (aboBlocked) {
       setError(`Abo-Änderungen sind bis ${new Date(String(aboBlockedUntil)).toLocaleDateString("de-DE")} gesperrt.`);
       return;
@@ -830,6 +835,23 @@ function AboPageContent() {
                       {paypalSubscriptionId && <p className="text-[11px] font-bold text-emerald-700">PayPal-Abo erstellt: {paypalSubscriptionId}</p>}
                     </div>
                   )}
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                    <label className="flex items-start gap-3 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={acceptedCheckoutLegal}
+                        onChange={(e) => setAcceptedCheckoutLegal(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
+                      />
+                      <span>
+                        Ich akzeptiere die <Link href="/agb" className="font-black underline">AGB</Link> und habe die <Link href="/widerrufsbelehrung" className="font-black underline">Wiederrufsbelehrung</Link> zur Kenntnis genommen.
+                      </span>
+                    </label>
+                    <p className="text-xs text-slate-600 pl-7">
+                      Informationen zur Verarbeitung Ihrer Daten finden Sie in unserer <Link href="/datenschutz" className="font-black underline">Datenschutzerklärung</Link>.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -837,7 +859,7 @@ function AboPageContent() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || aboBlocked}
+                  disabled={saving || aboBlocked || (isPaidPlan && !acceptedCheckoutLegal)}
                   className="px-8 py-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 disabled:opacity-60"
                 >
                   {saving ? "Speichere..." : isPaidPlan ? "Jetzt kostenpflichtig speichern" : "Kostenlos übernehmen"}
@@ -940,6 +962,23 @@ function AboPageContent() {
               </p>
             </div>
 
+            <div className="rounded-2xl border border-emerald-300 bg-white p-4 space-y-2">
+              <label className="flex items-start gap-3 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={acceptedCheckoutLegal}
+                  onChange={(e) => setAcceptedCheckoutLegal(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300"
+                />
+                <span>
+                  Ich akzeptiere die <Link href="/agb" className="font-black underline">AGB</Link> und habe die <Link href="/widerrufsbelehrung" className="font-black underline">Wiederrufsbelehrung</Link> zur Kenntnis genommen.
+                </span>
+              </label>
+              <p className="text-xs text-slate-600 pl-7">
+                Informationen zur Verarbeitung Ihrer Daten finden Sie in unserer <Link href="/datenschutz" className="font-black underline">Datenschutzerklärung</Link>.
+              </p>
+            </div>
+
             <div className="flex flex-wrap gap-3">
               {addonLinks
                 .filter(addon => selectedAddons.includes(addon.label))
@@ -949,7 +988,14 @@ function AboPageContent() {
                     href={addon.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex px-6 py-4 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-700 transition"
+                    onClick={(event) => {
+                      if (!acceptedCheckoutLegal) {
+                        event.preventDefault();
+                        setError("Bitte akzeptiere AGB und Widerrufsbelehrung, bevor du Zusätze kaufst.");
+                      }
+                    }}
+                    aria-disabled={!acceptedCheckoutLegal}
+                    className={`inline-flex px-6 py-4 rounded-xl text-white text-[10px] font-black uppercase tracking-[0.2em] transition ${acceptedCheckoutLegal ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-400 cursor-not-allowed"}`}
                   >
                     {addon.label} kaufen
                   </a>

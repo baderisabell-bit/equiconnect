@@ -1,8 +1,8 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import GlobalConsentNewsletterBanners from "./components/global-consent-newsletter-banners";
 import 'leaflet/dist/leaflet.css';
 import LeafletClient from './components/leaflet-client';
+import FoundingMembersInfoBanner from "./components/founding-members-info-banner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
-        <GlobalConsentNewsletterBanners />
+        <FoundingMembersInfoBanner />
         <LeafletClient />
       </body>
     </html>
