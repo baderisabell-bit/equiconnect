@@ -1404,6 +1404,9 @@ export async function getSearchFeed(userId: number | null, filters: any): Promis
 
       const offers = Array.isArray(profileData.angeboteAnzeigen) ? profileData.angeboteAnzeigen : [];
       for (const offer of offers) {
+        if (String(offer?.visibility || '').trim().toLowerCase() === 'draft') {
+          continue;
+        }
         const offerName = String(offer?.titel || offer?.title || offer?.name || offer?.label || offer?.bezeichnung || 'Anzeige').trim();
         const offerText = String(offer?.text || offer?.content || offer?.beschreibung || offer?.description || '').trim();
         const offerCategories = uniqueStrings([

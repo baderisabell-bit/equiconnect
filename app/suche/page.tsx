@@ -2,13 +2,13 @@
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, Filter, Heart, MapPin, Search, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, Heart, MapPin, Search, MessageSquare, User, Star, X } from "lucide-react";
 import LoggedInHeader from "../components/logged-in-header";
 import SearchMap from "../components/search-map";
 import { ANGEBOT_KATEGORIEN } from "./kategorien-daten";
 import { safeToFixed } from "../lib/num";
-import { addWishlistItem, getSearchFeed, sendConnectionRequest } from "../actions";
+import { addWishlistItem, getSearchFeed, rateUser, sendConnectionRequest } from "../actions";
 
 type FilterType = "all" | "profile" | "groups" | "posts" | "offers";
 
@@ -75,9 +75,200 @@ function buildCategoryOptions(): CategoryOption[] {
   }));
 }
 
-function SuchseiteContent() {
+// Detail Modal Component
+function DetailModal({ entry, onClose, userId }: { entry: SearchEntry | null; onClose: () => void; userId: number | null }) {
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [comments, setComments] = useState<Array<{ user: string; text: string; likes: number }>>([]);
+  const [newComment, setNewComment] = useState("");
+  const [currentRating, setCurrentRating] = useState(0);
   const router = useRouter();
-  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    setCurrentRating(Number(entry?.rating || 0));
+  }, [entry]);
+
+  if (!entry) return null;
+
+  const handleWishlist = () => {
+    setIsWishlisted(!isWishlisted);
+    if (userId) {
+      void addWishlistItem(userId, entry.id);
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (entry.userId) {
+      router.push(`/nachrichten?userId=${entry.userId}`);
+    }
+  };
+
+  const handleOpenProfile = () => {
+    if (entry.userId) {
+      router.push(`/profil/${entry.userId}`);
+    }
+  };
+
+
+  const handleConnect = () => {
+    if (entry.userId && userId) {
+      void sendConnectionRequest({ requesterId: userId, targetUserId: entry.userId });
+    }
+  };
+  const handleAddComment = () => {
+    if (newComment.trim()) {
+      setComments([...comments, { user: "Du", text: newComment, likes: 0 }]);
+      setNewComment("");
+    }
+  };
+
+  const handleRating = async (stars: number) => {
+    setCurrentRating(stars);
+    if (entry.userId && userId) {
+      await rateUser({ raterUserId: userId, ratedUserId: entry.userId, rating: stars });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-slate-200 bg-white shadow-2xl">
+        <div className="sticky top-0 flex items-center justify-between border-b border-slate-200 bg-white p-6">
+          <h2 className="text-2xl font-black italic uppercase text-slate-900">{displayText(entry.name)}</h2>
+          <button onClick={onClose} className="text-slate-300 hover:text-slate-600">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Image */}
+          {entry.imageUrl && (
+            <div className="rounded-2xl overflow-hidden border border-slate-200">
+              <img src={entry.imageUrl} alt={entry.name} className="w-full h-64 object-cover" />
+            </div>
+          )}
+
+          {/* Basic Info */}
+          <div className="space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {entry.typ === "experte" ? "Experte" : entry.typ === "nutzer" ? "Nutzer" : entry.typ === "angebot" ? "Anzeige" : entry.typ === "gruppe" ? "Gruppe" : "Beitrag"}
+            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">{displayText(entry.ort)}{entry.plz ? ` · ${entry.plz}` : ""}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button key={star} onClick={() => void handleRating(star)} className={`text-lg ${star <= Math.round(currentRating) ? "text-yellow-400" : "text-slate-200"}`}>
+                    ★
+                  </button>
+                ))}
+                <span className="ml-2 text-sm font-bold text-slate-700">({safeToFixed(currentRating, 1)})</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-700">{displayText(entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar.")}</p>
+          </div>
+
+          {/* Categories */}
+          {entry.kategorien.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {entry.kategorien.map((cat) => (
+                <span key={cat} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black uppercase text-slate-600">
+                  {displayText(cat)}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-2 gap-3 pt-4">
+            <button
+              onClick={handleWishlist}
+              className={`flex items-center justify-center gap-2 rounded-xl py-3 font-black uppercase text-[10px] tracking-widest transition ${
+                isWishlisted ? "bg-red-100 text-red-600 border border-red-200" : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <Heart size={14} /> Merken
+            </button>
+
+            {entry.userId && (
+              <>
+                <button
+                  onClick={handleSendMessage}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 font-black uppercase text-[10px] text-slate-700 tracking-widest hover:bg-slate-50 transition"
+                >
+                  <MessageSquare size={14} /> Nachricht
+                </button>
+
+                {entry.typ !== "gruppe" && entry.typ !== "beitrag" && (
+                  <>
+                    <button
+                      onClick={handleOpenProfile}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 font-black uppercase text-[10px] text-slate-700 tracking-widest hover:bg-slate-50 transition"
+                    >
+                      <User size={14} /> Profil
+                    </button>
+
+                    {entry.typ === "experte" && (
+                      <button
+                        onClick={handleConnect}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white py-3 font-black uppercase text-[10px] tracking-widest hover:bg-emerald-700 transition"
+                      >
+                        Vernetzen
+                      </button>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Comments Section (für Beiträge) */}
+          {entry.typ === "beitrag" && (
+            <div className="space-y-4 border-t border-slate-200 pt-6">
+              <h3 className="font-black uppercase text-slate-900">Kommentare</h3>
+
+              {/* Comment Input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Kommentar schreiben..."
+                  className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none focus:border-slate-400"
+                  onKeyPress={(e) => e.key === "Enter" && handleAddComment()}
+                />
+                <button onClick={handleAddComment} className="rounded-xl bg-emerald-600 text-white px-4 py-2 font-black text-[10px] hover:bg-emerald-700">
+                  Senden
+                </button>
+              </div>
+
+              {/* Comments List */}
+              <div className="space-y-3">
+                {comments.map((comment, i) => (
+                  <div key={i} className="rounded-xl bg-slate-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="font-black text-slate-900">{comment.user}</p>
+                      <button className="text-slate-400 hover:text-red-600">
+                        <Heart size={14} />
+                      </button>
+                    </div>
+                    <p className="text-sm text-slate-700 mt-1">{comment.text}</p>
+                    <p className="text-xs text-slate-400 mt-2">{comment.likes} Likes</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SuchseiteContent() {
   const categoryOptions = useMemo(buildCategoryOptions, []);
 
   const [role, setRole] = useState<string | null>(null);
@@ -95,127 +286,64 @@ function SuchseiteContent() {
   const [entries, setEntries] = useState<SearchEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState("");
+  const [selectedEntry, setSelectedEntry] = useState<SearchEntry | null>(null);
 
   const activeCategory = useMemo(() => categoryOptions.find((category) => category.label === selectedCategory) || null, [categoryOptions, selectedCategory]);
   const selectedThemeSet = useMemo(() => new Set(selectedThemes), [selectedThemes]);
 
   useEffect(() => {
-    const rawUserId = sessionStorage.getItem("userId");
-    const parsedUserId = rawUserId ? parseInt(rawUserId, 10) : NaN;
-    setRole(sessionStorage.getItem("userRole"));
-    setUserName(sessionStorage.getItem("userName") || "Profil");
-    if (!Number.isNaN(parsedUserId) && parsedUserId > 0) {
+    const init = async () => {
+      const userIdRaw = sessionStorage.getItem("userId");
+      const roleRaw = sessionStorage.getItem("role");
+      const name = sessionStorage.getItem("userName");
+      const parsedUserId = userIdRaw ? parseInt(userIdRaw, 10) : null;
       setUserId(parsedUserId);
-    }
+      setRole(roleRaw);
+      setUserName(name);
+      setLoading(false);
+
+      const res = await getSearchFeed(parsedUserId, {});
+      if (res.success) {
+        setEntries(res.data || res.items || res.feed || []);
+      } else {
+        setFeedError("Feed konnte nicht geladen werden");
+      }
+    };
+    init();
   }, []);
 
-  useEffect(() => {
-    const q = searchParams.get("q") || "";
-    const ort = searchParams.get("ort") || "";
-    const kategorie = searchParams.get("kategorie") || "";
-    const thema = searchParams.get("thema") || "";
-
-    if (q) setSearchTerm(q);
-    if (ort) setOrtFilter(ort);
-    if (kategorie) setSelectedCategory(kategorie);
-    if (thema) setSelectedThemes([thema]);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const res = await getSearchFeed(userId, {
-        kategorien: selectedCategory ? [selectedCategory] : [],
-        themen: selectedThemes,
-        zertifikate: [],
-        ort: ortFilter,
-        q: searchTerm,
-      });
-
-      if (!res.success) {
-        setFeedError(String(res.error || "Suche konnte nicht geladen werden."));
-        setEntries([]);
-        setLoading(false);
-        return;
-      }
-
-      setFeedError("");
-      setEntries(Array.isArray(res.items) ? res.items : []);
-      setLoading(false);
-    };
-
-    load();
-  }, [ortFilter, searchTerm, selectedCategory, selectedThemes, userId]);
-
   const filteredEntries = useMemo(() => {
-    const query = normalizeText(searchTerm);
-    const locationQuery = normalizeText(ortFilter);
-    const categoryQuery = normalizeText(selectedCategory);
+    let result = entries;
 
-    return entries.filter((entry) => {
-      const entryText = normalizeText([
-        entry.name,
-        entry.ort,
-        entry.plz || "",
-        entry.angebotText,
-        entry.sucheText,
-        entry.kategorien.join(" "),
-      ].join(" "));
-
-      const matchesQuery = !query || entryText.includes(query);
-      const matchesLocation = !locationQuery || normalizeText([entry.ort, entry.plz || ""].join(" ")).includes(locationQuery);
-      const matchesCategory = !categoryQuery || entry.kategorien.some((item) => normalizeText(item).includes(categoryQuery));
-      const matchesThemes = selectedThemes.length === 0 || selectedThemes.some((theme) => entryText.includes(normalizeText(theme)));
-      const matchesType =
-        filterType === "all" ||
-        (filterType === "profile" && (entry.typ === "experte" || entry.typ === "nutzer")) ||
-        (filterType === "groups" && entry.typ === "gruppe") ||
-        (filterType === "posts" && entry.typ === "beitrag") ||
-        (filterType === "offers" && entry.typ === "angebot");
-
-      return matchesQuery && matchesLocation && matchesCategory && matchesThemes && matchesType;
-    });
-  }, [entries, filterType, ortFilter, searchTerm, selectedCategory, selectedThemes]);
-
-  const mapEntries = useMemo(
-    () => filteredEntries.filter((entry) => (entry.typ === "experte" || entry.typ === "nutzer" || entry.typ === "angebot") && Number.isFinite(entry.lat) && Number.isFinite(entry.lon)),
-    [filteredEntries]
-  );
-
-  const addToWishlist = async (entry: SearchEntry) => {
-    if (!userId) {
-      alert("Bitte zuerst einloggen, um zur Merkliste hinzuzufügen.");
-      return;
+    if (filterType !== "all") {
+      const typeMap: Record<FilterType, string[]> = {
+        all: [],
+        profile: ["experte", "nutzer"],
+        groups: ["gruppe"],
+        posts: ["beitrag"],
+        offers: ["angebot"],
+      };
+      result = result.filter((entry) => typeMap[filterType].includes(entry.typ));
     }
 
-    const res = await addWishlistItem(userId, {
-      typ: "person",
-      profilTyp: entry.typ,
-      sourceId: `${entry.typ}-${entry.id}`,
-      name: entry.name,
-      ort: entry.ort,
-      plz: entry.plz || "",
-      kategorieText: entry.kategorien.join(", "),
-      content: entry.typ === "angebot" ? entry.angebotText : entry.sucheText || entry.angebotText,
-    });
-
-    if (!res.success) {
-      alert(res.error || "Merkliste konnte nicht gespeichert werden.");
-      return;
+    if (searchTerm) {
+      const normalized = normalizeText(searchTerm);
+      result = result.filter((entry) => normalizeText(entry.name).includes(normalized) || normalizeText(entry.sucheText).includes(normalized));
     }
 
-    alert(res.inserted ? "Zur Merkliste hinzugefügt." : "Bereits in der Merkliste.");
-  };
-
-  const connectToUser = async (entry: SearchEntry) => {
-    if (!userId || !entry.userId || entry.userId === userId) return;
-    const res = await sendConnectionRequest({ requesterId: userId, targetUserId: entry.userId });
-    if (!res.success) {
-      alert(res.error || "Vernetzungsanfrage fehlgeschlagen.");
-      return;
+    if (ortFilter) {
+      const normalized = normalizeText(ortFilter);
+      result = result.filter((entry) => normalizeText(entry.ort).includes(normalized));
     }
-    alert(res.status === "accepted" ? "Ihr seid jetzt vernetzt." : "Vernetzungsanfrage gesendet.");
-  };
+
+    if (selectedThemes.length > 0) {
+      result = result.filter((entry) => entry.kategorien.some((cat) => selectedThemeSet.has(cat)));
+    }
+
+    return result;
+  }, [entries, filterType, searchTerm, ortFilter, selectedThemes, selectedThemeSet]);
+
+  const mapEntries = useMemo(() => filteredEntries.filter((e) => e.lat && e.lon), [filteredEntries]);
 
   const openProfile = () => {
     if (userId && userId > 0) {
@@ -225,227 +353,170 @@ function SuchseiteContent() {
     window.location.href = "/login";
   };
 
+  const handleLogout = () => {
+    sessionStorage.clear();
+    window.location.href = "/";
+  };
+
   const clearFilters = () => {
     setSearchTerm("");
     setOrtFilter("");
-    setFilterType("all");
     setSelectedCategory("");
     setSelectedThemes([]);
   };
 
-  const searchHeaderContent = (
-    <div className="flex w-full items-center gap-2">
-      <div className="relative flex-1">
-        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Suche nach Namen, Angebot oder Thema"
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-emerald-400 focus:bg-white"
-        />
-      </div>
-      <div className="relative w-64">
-        <MapPin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          value={ortFilter}
-          onChange={(event) => setOrtFilter(event.target.value)}
-          placeholder="Ort oder PLZ"
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-emerald-400 focus:bg-white"
-        />
-      </div>
-      <button
-        type="button"
-        onClick={clearFilters}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-      >
-        <Filter size={14} /> Filter löschen
-      </button>
-    </div>
-  );
-
-  const themeOptions = activeCategory?.themen || [];
-
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.08),_transparent_42%),linear-gradient(180deg,_#f8fafc_0%,_#f8fafc_55%,_#eef2f7_100%)] text-slate-900">
-      <LoggedInHeader
-        userId={userId}
-        role={role}
-        userName={userName || "Profil"}
-        onOpenSidebar={() => setSidebarOpen(true)}
-        onOpenProfile={openProfile}
-        brandText="Suche"
-        searchContent={searchHeaderContent}
-      />
-
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900">
       {sidebarOpen && (
         <>
-          <button
-            type="button"
-            aria-label="Menü schließen"
-            onClick={() => setSidebarOpen(false)}
-            className="fixed inset-0 z-[90] bg-slate-900/30 backdrop-blur-[1px]"
-          />
-          <aside className="fixed left-0 top-0 z-[100] h-full w-72 border-r border-slate-200 bg-white p-6 shadow-2xl">
-            <div className="mb-8 flex items-center justify-between">
-              <p className="text-sm font-black uppercase tracking-widest text-slate-900">Menü</p>
-              <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-full border border-slate-200 px-2 py-1 text-slate-500">
-                <X size={14} />
+          <button type="button" aria-label="Menü schließen" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm" />
+          <aside className="fixed left-0 top-0 z-[70] h-full w-72 bg-white shadow-2xl transition-transform duration-300 p-6 flex flex-col">
+            <div className="flex justify-between items-center mb-8 text-emerald-600 font-black italic tracking-tighter">
+              MENÜ
+              <button onClick={() => setSidebarOpen(false)} className="text-slate-300 text-xl leading-none">
+                ×
               </button>
             </div>
-            <nav className="space-y-3 text-sm font-black uppercase tracking-widest text-slate-700">
-              <Link href="/" className="block">
+            <nav className="space-y-5 flex-grow">
+              <Link href="/" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
                 Startseite
               </Link>
-              <Link href="/netzwerk" className="block">
-                Netzwerk
-              </Link>
-              <Link href="/nachrichten" className="block">
-                Nachrichten
-              </Link>
-              <Link href="/merkliste" className="block">
-                Merkliste
-              </Link>
-              <button type="button" onClick={openProfile} className="block text-left">
+              {role === "experte" ? (
+                <Link href="/dashboard/experte" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                  Dashboard
+                </Link>
+              ) : null}
+              <button type="button" onClick={openProfile} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
                 Mein Profil
               </button>
+              {role === "experte" ? (
+                <Link href="/dashboard/experte/schueler" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                  Schüler &amp; Kunden
+                </Link>
+              ) : null}
+              <Link href="/suche" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                Suche
+              </Link>
+              <Link href="/netzwerk" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                Netzwerk
+              </Link>
+              <Link href="/nachrichten" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                Nachrichten
+              </Link>
+              <Link href="/merkliste" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                Merkliste
+              </Link>
+              <Link href="/einstellungen" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                Einstellungen
+              </Link>
+              <Link href="/kontakt" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">
+                Kontakt &amp; FAQ
+              </Link>
             </nav>
+            <button onClick={handleLogout} className="mt-auto p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">
+              Abmelden
+            </button>
           </aside>
         </>
       )}
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 space-y-6">
-        <section className="rounded-[1.5rem] border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur-sm">
-          <div className="grid gap-3 lg:grid-cols-[auto_1fr_auto] lg:items-start">
+      <LoggedInHeader userId={userId} role={role === "experte" ? "experte" : "nutzer"} userName={userName || "Gast"} onOpenSidebar={() => setSidebarOpen(true)} onOpenProfile={openProfile} searchContent={<div className="flex flex-1 items-center gap-3" />} />
+
+      <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
+        {/* Filter Header */}
+        <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <div className="flex w-full items-center gap-2">
+            <Search size={18} className="text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Name, Kategorie, Stichwort..."
+              className="w-full bg-transparent outline-none text-slate-900 font-bold placeholder-slate-400"
+            />
+          </div>
+          <div className="flex w-full items-center gap-2">
+            <MapPin size={18} className="text-slate-400" />
+            <input
+              type="text"
+              value={ortFilter}
+              onChange={(e) => setOrtFilter(e.target.value)}
+              placeholder="Ort oder PLZ"
+              className="w-full bg-transparent outline-none text-slate-900 font-bold placeholder-slate-400"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-4">
             <div className="relative">
               <button
                 type="button"
-                onClick={() => {
-                  setTypeDropdownOpen((prev) => !prev);
-                  setCategoryDropdownOpen(false);
-                }}
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700"
+                onClick={() => setTypeDropdownOpen(!typeDropdownOpen)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                Typ: {FILTER_TYPES.find((type) => type.value === filterType)?.label} <ChevronDown size={16} />
+                {FILTER_TYPES.find((t) => t.value === filterType)?.label} <ChevronDown size={14} />
               </button>
               {typeDropdownOpen && (
-                <div className="absolute left-0 top-full z-20 mt-2 w-52 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                <div className="absolute top-12 left-0 z-20 rounded-2xl border border-slate-200 bg-white shadow-lg">
                   {FILTER_TYPES.map((type) => (
                     <button
                       key={type.value}
-                      type="button"
                       onClick={() => {
                         setFilterType(type.value);
                         setTypeDropdownOpen(false);
                       }}
-                      className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-bold transition ${filterType === type.value ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-50"}`}
+                      className="block w-full px-4 py-2 text-left text-sm font-bold hover:bg-slate-50"
                     >
-                      <span>{type.label}</span>
-                      {filterType === type.value ? <span>•</span> : null}
+                      {type.label}
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCategoryDropdownOpen((prev) => !prev);
-                    setTypeDropdownOpen(false);
-                  }}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700"
-                >
-                  Kategorie: {selectedCategory ? displayText(selectedCategory) : "Alle"} <ChevronDown size={16} />
-                </button>
-
-                {selectedCategory && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                {selectedCategory || "Kategorien"} <ChevronDown size={14} />
+              </button>
+              {categoryDropdownOpen && (
+                <div className="absolute top-12 left-0 z-20 max-h-64 w-48 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
                   <button
-                    type="button"
                     onClick={() => {
                       setSelectedCategory("");
                       setSelectedThemes([]);
+                      setCategoryDropdownOpen(false);
                     }}
-                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500"
+                    className="block w-full px-4 py-2 text-left text-sm font-bold hover:bg-slate-50"
                   >
-                    Kategorie zurücksetzen
+                    Alle
                   </button>
-                )}
-              </div>
-
-              {categoryDropdownOpen && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                  <div className="flex flex-wrap gap-2">
-                    {categoryOptions.map((category) => {
-                      const active = selectedCategory === category.label;
-                      return (
-                        <button
-                          key={category.label}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCategory(active ? "" : category.label);
-                            setSelectedThemes([]);
-                          }}
-                          className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition ${active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
-                        >
-                          {displayText(category.label)}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {activeCategory && themeOptions.length > 0 && (
-                    <div className="mt-3 border-t border-slate-100 pt-3">
-                      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Unterkategorien</p>
-                      <div className="flex flex-wrap gap-2">
-                        {themeOptions.map((theme) => {
-                          const active = selectedThemeSet.has(theme);
-                          return (
-                            <button
-                              key={theme}
-                              type="button"
-                              onClick={() => {
-                                setSelectedThemes((prev) => (prev.includes(theme) ? prev.filter((item) => item !== theme) : [...prev, theme]));
-                              }}
-                              className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition ${active ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
-                            >
-                              {displayText(theme)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  {categoryOptions.map((category) => (
+                    <button key={category.label} onClick={() => { setSelectedCategory(category.label); setCategoryDropdownOpen(false); }} className="block w-full px-4 py-2 text-left text-sm font-bold hover:bg-slate-50">
+                      {category.label}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowMap((prev) => !prev)}
-              className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition ${showMap ? "border border-slate-900 bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-            >
-              Karte {showMap ? "ausblenden" : "anzeigen"}
+            <button onClick={clearFilters} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+              Filter zurücksetzen
             </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
-            {selectedCategory ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2">{displayText(selectedCategory)}</span> : null}
-            {selectedThemes.map((theme) => (
-              <span key={theme} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2">
-                {displayText(theme)}
-              </span>
-            ))}
-          </div>
-        </section>
+          <button
+            type="button"
+            onClick={() => setShowMap(!showMap)}
+            className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition ${showMap ? "border border-slate-900 bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+          >
+            Karte {showMap ? "verbergen" : "anzeigen"}
+          </button>
+        </div>
 
-        {(feedError || loading) && (
-          <div className={`rounded-2xl border p-4 text-sm ${feedError ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
-            {feedError || "Lade Treffer..."}
-          </div>
-        )}
-
+        {/* Results */}
         <div className={showMap ? "grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]" : "block"}>
           <section className="space-y-4">
             {filteredEntries.length === 0 && !loading ? (
@@ -455,15 +526,14 @@ function SuchseiteContent() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {filteredEntries.map((entry) => (
-                  <article key={entry.id} className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                  <article
+                    key={entry.id}
+                    onClick={() => setSelectedEntry(entry)}
+                    className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                  >
                     {entry.imageUrl ? (
                       <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-                        <img
-                          src={entry.imageUrl}
-                          alt={entry.name}
-                          className="h-44 w-full object-cover"
-                          loading="lazy"
-                        />
+                        <img src={entry.imageUrl} alt={entry.name} className="h-44 w-full object-cover" loading="lazy" />
                       </div>
                     ) : null}
                     <div className="flex items-start justify-between gap-3">
@@ -480,9 +550,7 @@ function SuchseiteContent() {
                       <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{safeToFixed(entry.rating, 1)}</div>
                     </div>
 
-                    <p className="mt-3 text-sm text-slate-600 line-clamp-3">
-                      {displayText(entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar.")}
-                    </p>
+                    <p className="mt-3 text-sm text-slate-600 line-clamp-3">{displayText(entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar.")}</p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       {entry.kategorien.slice(0, 4).map((category) => (
@@ -492,21 +560,8 @@ function SuchseiteContent() {
                       ))}
                     </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {(entry.typ === "experte" || entry.typ === "angebot") && entry.userId ? (
-                        <button
-                          type="button"
-                          onClick={() => connectToUser(entry)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700"
-                        >
-                          Vernetzen
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => addToWishlist(entry)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700"
-                      >
+                    <div className="mt-4 flex flex-wrap gap-2 pointer-events-none opacity-60">
+                      <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700">
                         <Heart size={14} /> Merken
                       </button>
                     </div>
@@ -533,8 +588,8 @@ function SuchseiteContent() {
                   entries={mapEntries}
                   onSelectEntry={(id: string) => {
                     const entry = filteredEntries.find((item) => item.id === id);
-                    if (entry?.userId) {
-                      router.push(`/profil/${entry.userId}`);
+                    if (entry) {
+                      setSelectedEntry(entry);
                     }
                   }}
                 />
@@ -543,19 +598,15 @@ function SuchseiteContent() {
           )}
         </div>
       </main>
+
+      <DetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} userId={userId} />
     </div>
   );
 }
 
-export default function Suchseite() {
+export default function SearchPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-slate-50 p-8 text-slate-500">
-          Suche wird geladen...
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="p-8">Suche wird geladen...</div>}>
       <SuchseiteContent />
     </Suspense>
   );
