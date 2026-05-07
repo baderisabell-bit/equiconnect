@@ -1594,7 +1594,7 @@ export async function saveStudentServicePlan(studentId: number, dataOrStudentId:
 export async function getUserSubscriptionSettings(userId: number) {
   try {
     const result = await pool.query(
-      `SELECT * FROM user_subscription_settings WHERE user_id = $1`,
+      `SELECT * FROM user_subscriptions WHERE user_id = $1`,
       [userId]
     );
     return { success: true, data: result.rows[0] || null };
@@ -1606,14 +1606,50 @@ export async function getUserSubscriptionSettings(userId: number) {
 export async function upsertUserSubscriptionSettings(data: any) {
   try {
     const userId = Number(data.userId);
-    await pool.query(
-      `INSERT INTO user_subscription_settings (user_id, plan_key, payment_method, role)
-       VALUES ($1, $2, $3, $4)
+    const planKey = String(data.planKey || 'nutzer_free');
+    const paymentMethod = String(data.payment_method || data.paymentMethod || 'sepa');
+    const role = String(data.role || 'nutzer');
+    const monthlyPriceCents = Number.isFinite(Number(data.monthlyPriceCents)) ? Number(data.monthlyPriceCents) : null;
+    const status = String(data.status || '').trim() || 'active';
+    const sepaAccountHolder = String(data.sepaAccountHolder || '').trim() || null;
+    const sepaIban = String(data.sepaIban || '').trim() || null;
+    const paypalEmail = String(data.paypalEmail || '').trim() || null;
+
+    const result = await pool.query(
+      `INSERT INTO user_subscriptions (
+         user_id,
+         role,
+         plan_key,
+         payment_method,
+         monthly_price_cents,
+         status,
+         sepa_account_holder,
+         sepa_iban,
+         paypal_email,
+         started_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, COALESCE($5, 0), $6, $7, $8, $9, COALESCE((SELECT started_at FROM user_subscriptions WHERE user_id = $1), NOW()), NOW())
        ON CONFLICT (user_id) DO UPDATE
-       SET plan_key = $2, payment_method = $3, role = $4`,
-      [userId, data.planKey, data.payment_method || data.paymentMethod, data.role]
+       SET role = EXCLUDED.role,
+           plan_key = EXCLUDED.plan_key,
+           payment_method = EXCLUDED.payment_method,
+           monthly_price_cents = COALESCE(EXCLUDED.monthly_price_cents, user_subscriptions.monthly_price_cents),
+           status = COALESCE(EXCLUDED.status, user_subscriptions.status),
+           sepa_account_holder = COALESCE(EXCLUDED.sepa_account_holder, user_subscriptions.sepa_account_holder),
+           sepa_iban = COALESCE(EXCLUDED.sepa_iban, user_subscriptions.sepa_iban),
+           paypal_email = COALESCE(EXCLUDED.paypal_email, user_subscriptions.paypal_email),
+           started_at = COALESCE(user_subscriptions.started_at, EXCLUDED.started_at),
+           updated_at = NOW()
+       RETURNING *`,
+      [userId, role, planKey, paymentMethod, monthlyPriceCents, status, sepaAccountHolder, sepaIban, paypalEmail]
     );
-    return { success: true };
+    return {
+      success: true,
+      data: result.rows[0] || null,
+      paymentMethod,
+      monthlyPriceCents: Number(result.rows[0]?.monthly_price_cents || monthlyPriceCents || 0),
+    };
   } catch (error: any) {
     return { success: false, error: 'Einstellungen konnten nicht gespeichert werden.' };
   }

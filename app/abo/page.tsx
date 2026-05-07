@@ -4,8 +4,6 @@ import React, { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  completeGoCardlessRedirectFlow,
-  createGoCardlessRedirectFlow,
   getUserSubscriptionSettings,
   upsertUserSubscriptionSettings,
 } from "../actions";
@@ -36,8 +34,6 @@ const PAYPAL_CLIENT_ID = "AQpOYVsQ7pTH581EA9cjCORev9yOA-UWt6JpWJlGktk_z1sR16dUg0
 const GOCARDLESS_NUTZER_PLUS_CHECKOUT_URL = "https://pay.gocardless.com/BRT0004YCE006FB";
 const GOCARDLESS_EXPERTE_ABO_CHECKOUT_URL = "https://pay.gocardless.com/BRT0004YCE006FB";
 const GOCARDLESS_EXPERTE_PRO_CHECKOUT_URL = "https://pay.gocardless.com/BRT0004YCE9XBTE";
-const GOCARDLESS_EXPERTE_ABO_FOUNDER_CHECKOUT_URL = "https://pay.gocardless.com/BRT00050XX73395";
-const GOCARDLESS_EXPERTE_PRO_FOUNDER_CHECKOUT_URL = "https://pay.gocardless.com/BRT00050XXTQ371";
 const GOCARDLESS_STARTSEITE_WERBUNG_URL = "https://pay.gocardless.com/BRT01KQZBEE90VR95HFMCPJQWXV55";
 const GOCARDLESS_ANZEIGE_OBEN_ANHEFTEN_URL = "https://pay.gocardless.com/BRT01KQZBPS5PZGYKFACYF82Z6BTA";
 const GOCARDLESS_ANZEIGE_PRIORISIEREN_URL = "https://pay.gocardless.com/BRT01KQZCSP35V53C0DDNNRM0EVB1";
@@ -77,6 +73,19 @@ type AddonCheckoutLink = {
 
 function formatEuro(cents: number) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format((cents || 0) / 100);
+}
+
+function getGoCardlessCheckoutUrl(planKey: string, role: UserRole) {
+  if (role === "experte") {
+    if (planKey === "experte_pro") return GOCARDLESS_EXPERTE_PRO_CHECKOUT_URL;
+    if (planKey === "experte_abo") return GOCARDLESS_EXPERTE_ABO_CHECKOUT_URL;
+  }
+
+  if (role === "nutzer" && planKey === "nutzer_plus") {
+    return GOCARDLESS_NUTZER_PLUS_CHECKOUT_URL;
+  }
+
+  return "";
 }
 
 const EXPERT_PLAN_DEFAULTS: PlanConfig[] = [
@@ -259,11 +268,6 @@ function AboPageContent() {
   const [selectedPlanKey, setSelectedPlanKey] = useState("");
   const [aboBlockedUntil, setAboBlockedUntil] = useState<string | null>(null);
   const [aboBlockedReason, setAboBlockedReason] = useState<string | null>(null);
-  const [goCardlessBusy, setGoCardlessBusy] = useState(false);
-  const [goCardlessHandled, setGoCardlessHandled] = useState(false);
-  const [goCardlessMandateId, setGoCardlessMandateId] = useState<string | null>(null);
-  const [goCardlessConnectedAt, setGoCardlessConnectedAt] = useState<string | null>(null);
-  const [goCardlessLastError, setGoCardlessLastError] = useState<string | null>(null);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("sepa");
   const [sepaAccountHolder, setSepaAccountHolder] = useState("");
@@ -305,59 +309,12 @@ function AboPageContent() {
         setPaypalEmail(String(res.data.paypal_email || ""));
         setAboBlockedUntil(res.data.abo_blocked_until ? String(res.data.abo_blocked_until) : null);
         setAboBlockedReason(res.data.abo_blocked_reason ? String(res.data.abo_blocked_reason) : null);
-        setGoCardlessMandateId(res.data.gocardless_mandate_id ? String(res.data.gocardless_mandate_id) : null);
-        setGoCardlessConnectedAt(res.data.gocardless_connected_at ? String(res.data.gocardless_connected_at) : null);
-        setGoCardlessLastError(res.data.gocardless_last_error ? String(res.data.gocardless_last_error) : null);
       }
       setLoading(false);
     };
 
     load();
   }, [router, searchParams]);
-
-  useEffect(() => {
-    if (!userId || goCardlessHandled) return;
-
-    const flowState = String(searchParams.get("gocardless") || "").trim().toLowerCase();
-    if (flowState !== "success") return;
-
-    const redirectFlowId = String(searchParams.get("redirect_flow_id") || "").trim();
-    const sessionToken = String(searchParams.get("session_token") || "").trim();
-
-    setGoCardlessHandled(true);
-
-    if (!redirectFlowId || !sessionToken) {
-      setError("GoCardless-Rückgabe unvollständig. Bitte erneut verbinden.");
-      return;
-    }
-
-    const completeFlow = async () => {
-      setGoCardlessBusy(true);
-      setError("");
-      const completeRes = await completeGoCardlessRedirectFlow(userId, redirectFlowId, sessionToken);
-      if (!completeRes.success) {
-        setGoCardlessBusy(false);
-        setError(completeRes.error || "GoCardless konnte nicht abgeschlossen werden.");
-        return;
-      }
-
-      const reloadRes = await getUserSubscriptionSettings(userId);
-      if (reloadRes.success && reloadRes.data) {
-        setPaymentMethod(reloadRes.data.payment_method === "paypal" ? "paypal" : "sepa");
-        setSepaAccountHolder(String(reloadRes.data.sepa_account_holder || ""));
-        setSepaIban(String(reloadRes.data.sepa_iban || ""));
-        setPaypalEmail(String(reloadRes.data.paypal_email || ""));
-        setGoCardlessMandateId(reloadRes.data.gocardless_mandate_id ? String(reloadRes.data.gocardless_mandate_id) : null);
-        setGoCardlessConnectedAt(reloadRes.data.gocardless_connected_at ? String(reloadRes.data.gocardless_connected_at) : null);
-        setGoCardlessLastError(reloadRes.data.gocardless_last_error ? String(reloadRes.data.gocardless_last_error) : null);
-      }
-
-      setGoCardlessBusy(false);
-      setSuccess("GoCardless erfolgreich verbunden. SEPA-Mandat ist aktiv.");
-    };
-
-    completeFlow();
-  }, [goCardlessHandled, searchParams, userId]);
 
   const selectedPlan = useMemo(() => {
     return availablePlans.find((plan) => plan.key === selectedPlanKey) || availablePlans[0] || null;
@@ -433,7 +390,7 @@ function AboPageContent() {
             const subscriptionId = String(data?.subscriptionID || "").trim();
             setPaypalSubscriptionId(subscriptionId);
             setError("");
-            setSuccess(subscriptionId ? `PayPal-Abo erfolgreich erstellt (${subscriptionId}). Bitte Tarif jetzt speichern.` : "PayPal-Abo erfolgreich erstellt. Bitte Tarif jetzt speichern.");
+            void saveSubscription({ paypalSubscriptionIdOverride: subscriptionId });
           },
           onError: function () {
             setPaypalButtonError("PayPal Checkout ist fehlgeschlagen. Bitte erneut versuchen.");
@@ -471,9 +428,9 @@ function AboPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [paymentMethod, selectedPlan]);
+  }, [paymentMethod, selectedPlan, userId, role, paypalEmail, sepaAccountHolder, sepaIban, paypalSubscriptionId, aboBlocked, aboBlockedUntil, paypalPlanConfig]);
 
-  const handleSave = async () => {
+  const saveSubscription = async (options?: { paypalSubscriptionIdOverride?: string }) => {
     if (!userId || !selectedPlan) return;
     if (aboBlocked) {
       setError(`Abo-Änderungen sind bis ${new Date(String(aboBlockedUntil)).toLocaleDateString("de-DE")} gesperrt.`);
@@ -481,6 +438,16 @@ function AboPageContent() {
     }
     if (paymentMethod === "paypal" && !paypalPlanConfig) {
       setError("PayPal ist für diesen Tarif aktuell noch nicht verfügbar.");
+      return;
+    }
+    const checkoutUrl = getGoCardlessCheckoutUrl(selectedPlan.key, role);
+    const effectivePaypalSubscriptionId = String(options?.paypalSubscriptionIdOverride || paypalSubscriptionId || "").trim();
+    if (paymentMethod === "paypal" && selectedPlan.baseCents > 0 && !effectivePaypalSubscriptionId) {
+      setError("Bitte den PayPal-Checkout zuerst abschließen.");
+      return;
+    }
+    if (paymentMethod === "sepa" && selectedPlan.baseCents > 0 && !checkoutUrl) {
+      setError("Für diesen Tarif ist aktuell kein SEPA-Checkout hinterlegt.");
       return;
     }
 
@@ -493,6 +460,7 @@ function AboPageContent() {
       role,
       planKey: selectedPlan.key,
       paymentMethod,
+      monthlyPriceCents: selectedPlan.baseCents,
       sepaAccountHolder,
       sepaIban,
       paypalEmail,
@@ -505,13 +473,17 @@ function AboPageContent() {
       return;
     }
 
-    const savedMonthlyPrice = "monthlyPriceCents" in res ? Number(res.monthlyPriceCents || 0) : 0;
-    const savedPlanLabel = "planLabel" in res ? String(res.planLabel || selectedPlan.label) : selectedPlan.label;
-    const savedPaymentMethod = "paymentMethod" in res && res.paymentMethod === "paypal" ? "paypal" : "sepa";
+    if (paymentMethod === "sepa" && selectedPlan.baseCents > 0 && checkoutUrl) {
+      window.location.href = checkoutUrl;
+      return;
+    }
+
+    const savedMonthlyPrice = Number(res.monthlyPriceCents || selectedPlan.baseCents || 0);
+    const savedPaymentMethod = res.paymentMethod === "paypal" ? "paypal" : paymentMethod;
     setSuccess(
       savedMonthlyPrice > 0
-        ? `Abo aktiv: ${savedPlanLabel} mit ${savedPaymentMethod === "sepa" ? "SEPA" : "PayPal"} (${formatEuro(savedMonthlyPrice)} / Monat)`
-        : `Aktiv: ${savedPlanLabel} ohne Monatsgebühr`
+        ? `Abo gespeichert: ${selectedPlan.label} mit ${savedPaymentMethod === "sepa" ? "SEPA" : "PayPal"} (${formatEuro(savedMonthlyPrice)} / Monat)`
+        : `Aktiv: ${selectedPlan.label} ohne Monatsgebühr`
     );
 
     if (onboarding) {
@@ -522,20 +494,11 @@ function AboPageContent() {
   };
 
   const handleConnectGoCardless = async () => {
-    if (!userId) return;
+    await saveSubscription();
+  };
 
-    setGoCardlessBusy(true);
-    setError("");
-    setSuccess("");
-
-    const res = await createGoCardlessRedirectFlow(userId);
-    if (!res.success || !res.redirectUrl) {
-      setGoCardlessBusy(false);
-      setError(res.error || "GoCardless-Verbindung konnte nicht gestartet werden.");
-      return;
-    }
-
-    window.location.href = String(res.redirectUrl);
+  const handleSave = async () => {
+    await saveSubscription();
   };
 
   const handleLogout = () => {
@@ -793,11 +756,11 @@ function AboPageContent() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zahlungsart</p>
                 <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">
-                  {isPaidPlan ? "Zahlungslogik am Ende" : "Kostenloser Tarif"}
+                  {isPaidPlan ? "SEPA oder PayPal wählen" : "Kostenloser Tarif"}
                 </h2>
                 <p className="mt-2 text-sm text-slate-600">
                   {isPaidPlan
-                    ? "Wähle hier am Seitenende direkt deine Zahlungsart und speichere den Tarif ohne Umweg."
+                    ? "Wähle die Zahlungsart direkt hier und buche den Tarif mit einem Klick."
                     : "Für kostenlose Tarife ist kein zusätzlicher Checkout nötig."}
                 </p>
               </div>
@@ -842,10 +805,10 @@ function AboPageContent() {
                       <button
                         type="button"
                         onClick={handleConnectGoCardless}
-                        disabled={goCardlessBusy}
+                        disabled={saving}
                         className="md:col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                       >
-                        {goCardlessBusy ? "Verbinde..." : goCardlessMandateId ? "SEPA neu verbinden" : "SEPA über GoCardless verbinden"}
+                        {saving ? "Buche..." : "SEPA buchen"}
                       </button>
                     </div>
                   )}
@@ -859,6 +822,9 @@ function AboPageContent() {
                         placeholder="PayPal E-Mail"
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none"
                       />
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                        Nach dem PayPal-Klick wird das Abo automatisch gespeichert.
+                      </p>
                       {paypalPlanConfig && <div id={paypalPlanConfig.containerId} className="min-h-[48px]" />}
                       {paypalButtonError && <p className="text-[11px] font-bold text-red-600">{paypalButtonError}</p>}
                       {paypalSubscriptionId && <p className="text-[11px] font-bold text-emerald-700">PayPal-Abo erstellt: {paypalSubscriptionId}</p>}
