@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
 import { getExpertDashboardAnalytics } from "../../actions";
 
-// Hilfskomponente für die Kacheln (außerhalb der Hauptkomponente für bessere Performance)
 const StatTile = ({ label, value, sublabel }: { label: string; value: any; sublabel?: string }) => (
   <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-colors">
     <div>
@@ -18,18 +17,14 @@ const StatTile = ({ label, value, sublabel }: { label: string; value: any; subla
 
 export default function ExpertDashboardPage() {
   const router = useRouter();
-
-  // Navigation & User State
   const [userId, setUserId] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [userName, setUserName] = useState("Experte");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Analytics & UI State
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeFilters, setActiveFilters] = useState<string[]>([]); // Leer = Alles anzeigen
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
   useEffect(() => {
     const init = async () => {
@@ -47,10 +42,10 @@ export default function ExpertDashboardPage() {
           if (res.success) {
             setAnalytics(res.data);
           } else {
-            setError("Daten konnten nicht geladen werden.");
+            setError("Fehler beim Abrufen der Daten.");
           }
         } catch (err) {
-          setError("Verbindungsproblem zum Server.");
+          setError("Server-Verbindung unterbrochen.");
         }
       }
       setLoading(false);
@@ -58,7 +53,6 @@ export default function ExpertDashboardPage() {
     init();
   }, []);
 
-  // Filter-Logik
   const toggleFilter = (f: string) => {
     setActiveFilters(prev => 
       prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]
@@ -81,7 +75,6 @@ export default function ExpertDashboardPage() {
   return (
     <div className="min-h-screen bg-[#fbfcfd] text-slate-900 font-sans">
       
-      {/* Sidebar Navigation */}
       <aside className={`fixed left-0 top-0 h-full w-80 bg-white z-[70] shadow-2xl transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} p-8 flex flex-col`}>
         <div className="flex justify-between items-center mb-10 text-xl font-black italic uppercase">
           <h2>Menü</h2>
@@ -106,7 +99,6 @@ export default function ExpertDashboardPage() {
       <main className="max-w-[1500px] mx-auto px-6 py-10">
         <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-6">
           
-          {/* PROFIL STATS */}
           <div className="lg:col-span-4 bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Profil-Sichtbarkeit</p>
             <p className="text-6xl font-black italic text-emerald-600">{analytics?.profile?.viewsTotal || 0}</p>
@@ -116,13 +108,11 @@ export default function ExpertDashboardPage() {
             </div>
           </div>
 
-          {/* ABO PLAN */}
           <div className="lg:col-span-4 bg-slate-950 rounded-[2.5rem] p-8 text-white flex flex-col justify-between">
             <h3 className="text-3xl font-black italic uppercase">{analytics?.planLabel || "Premium Experte"}</h3>
             <button onClick={() => router.push('/abo')} className="mt-6 w-full py-4 bg-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/10 hover:bg-white/20 transition-all">Plan verwalten</button>
           </div>
 
-          {/* MINI METRICS */}
           <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex flex-col justify-center">
              <p className="text-[10px] font-bold text-slate-400 uppercase">Nachrichten</p>
              <p className="text-4xl font-black mt-2 italic">{analytics?.ads?.incomingMessagesTotal || 0}</p>
@@ -132,7 +122,6 @@ export default function ExpertDashboardPage() {
              <p className="text-4xl font-black mt-2 italic">{analytics?.posts?.likesTotal || 0}</p>
           </div>
 
-          {/* PERFORMANCE HUB (Der Graph) */}
           <div className="lg:col-span-8 bg-white rounded-[3rem] p-10 shadow-sm border border-slate-100">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-4">
               <h3 className="font-black italic uppercase text-2xl tracking-tight">Performance Hub</h3>
@@ -143,21 +132,21 @@ export default function ExpertDashboardPage() {
               </div>
             </div>
 
-            <div className="grid gap-8 transition-all items-end" style={{ gridTemplateColumns: `repeat(${visibleCount || 1}, 1fr)` }}>
+            <div className="grid gap-10 transition-all items-end" style={{ gridTemplateColumns: `repeat(${visibleCount || 1}, 1fr)` }}>
               {isFilterActive('Anzeigen') && (
                 <div className="space-y-4">
                   <div className="flex flex-col gap-3 min-h-[250px] justify-end">
                     {(analytics?.ads?.list || []).map((ad: any) => (
-                      <div key={ad.id} className="w-full">
-                        <div className="bg-emerald-500 rounded-xl" style={{ height: `${Math.max(ad.views * 2, 12)}px` }} />
+                      <div key={ad.id} className="w-full group">
+                        <div className="bg-emerald-500 rounded-xl transition-all" style={{ height: `${Math.max((ad.views || 0) * 2, 12)}px` }} />
                         <div className="flex justify-between mt-2 text-[8px] font-black uppercase px-1">
                           <span className="truncate max-w-[70%]">{ad.title}</span>
-                          <span className="text-emerald-600">{ad.views}</span>
+                          <span className="text-emerald-600">{ad.views || 0}</span>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <p className="text-center text-[10px] font-black uppercase text-slate-200 border-t pt-4">Anzeigen</p>
+                  <p className="text-center text-[10px] font-black uppercase text-slate-200 border-t pt-4 tracking-[0.2em]">Anzeigen</p>
                 </div>
               )}
               {isFilterActive('Beiträge') && (
@@ -165,15 +154,15 @@ export default function ExpertDashboardPage() {
                   <div className="flex flex-col gap-3 min-h-[250px] justify-end">
                     {(analytics?.posts?.list || []).map((p: any) => (
                       <div key={p.id}>
-                        <div className="bg-sky-500 rounded-xl" style={{ height: `${Math.max(p.views * 2, 12)}px` }} />
+                        <div className="bg-sky-500 rounded-xl" style={{ height: `${Math.max((p.views || 0) * 2, 12)}px` }} />
                         <div className="flex justify-between mt-2 text-[8px] font-black uppercase px-1">
                           <span className="truncate max-w-[70%]">{p.title}</span>
-                          <span className="text-sky-600">{p.views}</span>
+                          <span className="text-sky-600">{p.views || 0}</span>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <p className="text-center text-[10px] font-black uppercase text-slate-200 border-t pt-4">Beiträge</p>
+                  <p className="text-center text-[10px] font-black uppercase text-slate-200 border-t pt-4 tracking-[0.2em]">Beiträge</p>
                 </div>
               )}
               {isFilterActive('Werbung') && (
@@ -181,21 +170,20 @@ export default function ExpertDashboardPage() {
                   <div className="flex flex-col gap-3 min-h-[250px] justify-end">
                     {(analytics?.werbung?.list || []).map((w: any) => (
                       <div key={w.id}>
-                        <div className="bg-amber-500 rounded-xl" style={{ height: `${Math.max(w.views * 2, 12)}px` }} />
+                        <div className="bg-amber-500 rounded-xl" style={{ height: `${Math.max((w.views || 0) * 2, 12)}px` }} />
                         <div className="flex justify-between mt-2 text-[8px] font-black uppercase px-1">
                           <span className="truncate max-w-[70%]">{w.title}</span>
-                          <span className="text-amber-600">{w.views}</span>
+                          <span className="text-amber-600">{w.views || 0}</span>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <p className="text-center text-[10px] font-black uppercase text-slate-200 border-t pt-4">Werbung</p>
+                  <p className="text-center text-[10px] font-black uppercase text-slate-200 border-t pt-4 tracking-[0.2em]">Werbung</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* INTERACTION DETAILS */}
           <div className="lg:col-span-4 bg-white rounded-[3rem] p-8 shadow-sm border border-slate-100 flex flex-col gap-4">
              <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Details Interaktionen</p>
              <StatTile label="Kommentare" value={analytics?.posts?.commentsTotal} />
@@ -204,22 +192,17 @@ export default function ExpertDashboardPage() {
              <StatTile label="Merkliste" value={(analytics?.profile?.wishlistTotal || 0) + (analytics?.ads?.wishlistTotal || 0)} />
           </div>
 
-          {/* QUICK ACTIONS */}
           <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
             <button onClick={() => router.push('/werbung-buchen')} className="p-8 bg-white border border-slate-100 rounded-[2.5rem] text-left hover:shadow-xl transition-all">
-              <span className="text-2xl mb-4 block">💎</span>
               <span className="text-[11px] font-black uppercase">Werbung auf der Startseite →</span>
             </button>
             <button onClick={() => router.push('/inserieren')} className="p-8 bg-white border border-slate-100 rounded-[2.5rem] text-left hover:shadow-xl transition-all">
-              <span className="text-2xl mb-4 block">📢</span>
               <span className="text-[11px] font-black uppercase">Anzeige schalten →</span>
             </button>
             <button onClick={() => router.push('/beitrag-erstellen')} className="p-8 bg-white border border-slate-100 rounded-[2.5rem] text-left hover:shadow-xl transition-all">
-              <span className="text-2xl mb-4 block">✍️</span>
               <span className="text-[11px] font-black uppercase">Beitrag erstellen →</span>
             </button>
             <button onClick={() => router.push('/dashboard/experte/schueler')} className="p-8 bg-emerald-600 text-white rounded-[2.5rem] text-left shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all">
-              <span className="text-2xl mb-4 block">👥</span>
               <span className="text-[11px] font-black uppercase">Meine Schüler →</span>
             </button>
           </div>
