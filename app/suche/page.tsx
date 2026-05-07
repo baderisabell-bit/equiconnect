@@ -454,8 +454,8 @@ function SuchseiteContent() {
 
       <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
         {/* Filter Header */}
-        <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-          <div className="flex flex-wrap gap-3 pt-4">
+        <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3 flex-nowrap overflow-x-auto">
             <div className="relative">
               <button
                 type="button"
@@ -488,7 +488,7 @@ function SuchseiteContent() {
                 onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                {selectedCategory || "Kategorien"} <ChevronDown size={14} />
+                {selectedCategory || "Alle Kategorien"} <ChevronDown size={14} />
               </button>
               {categoryDropdownOpen && (
                 <div className="absolute top-12 left-0 z-20 max-h-64 w-48 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
@@ -514,15 +514,15 @@ function SuchseiteContent() {
             <button onClick={clearFilters} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
               Filter zurücksetzen
             </button>
-          </div>
 
-          <button
-            type="button"
-            onClick={() => setShowMap(!showMap)}
-            className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition ${showMap ? "border border-slate-900 bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-          >
-            Karte {showMap ? "verbergen" : "anzeigen"}
-          </button>
+            <button
+              type="button"
+              onClick={() => setShowMap(!showMap)}
+              className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition ${showMap ? "border border-slate-900 bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+            >
+              {showMap ? "Karte verbergen" : "Karte anzeigen"}
+            </button>
+          </div>
         </div>
 
         {/* Results */}

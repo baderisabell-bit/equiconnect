@@ -10,6 +10,7 @@ import {
   upsertUserSubscriptionSettings,
 } from "../actions";
 import LoggedInHeader from "../components/logged-in-header";
+import DashboardSidebar from "../components/dashboard-sidebar";
 
 type UserRole = "experte" | "nutzer";
 type PaymentMethod = "sepa" | "paypal";
@@ -547,6 +548,16 @@ function AboPageContent() {
     router.push("/login");
   };
 
+  const openProfile = () => {
+    const userIdRaw = sessionStorage.getItem('userId');
+    const parsedUserId = userIdRaw ? parseInt(userIdRaw, 10) : NaN;
+    if (!Number.isNaN(parsedUserId) && parsedUserId > 0) {
+      window.location.href = `/profil/${parsedUserId}`;
+      return;
+    }
+    window.location.href = '/login';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 p-8">
@@ -564,35 +575,7 @@ function AboPageContent() {
         onOpenSidebar={() => setSidebarOpen(true)}
       />
 
-      {sidebarOpen && (
-        <button
-          type="button"
-          aria-label="Menü schließen"
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-900/30"
-        />
-      )}
-
-      {sidebarOpen && (
-        <aside className="fixed left-0 top-0 z-50 h-full w-72 border-r border-slate-200 bg-white p-6 shadow-2xl">
-          <div className="mb-8 flex items-center justify-between">
-            <p className="text-sm font-black uppercase tracking-widest text-slate-900">Menü</p>
-            <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-full border border-slate-200 px-2 py-1 text-slate-500">
-              ×
-            </button>
-          </div>
-          <nav className="space-y-3 text-sm font-black uppercase tracking-widest text-slate-700">
-            <Link href="/" className="block">Startseite</Link>
-            <Link href="/suche" className="block">Suche</Link>
-            <Link href="/netzwerk" className="block">Netzwerk</Link>
-            <Link href="/nachrichten" className="block">Nachrichten</Link>
-            <Link href="/merkliste" className="block">Merkliste</Link>
-            <Link href="/einstellungen" className="block">Einstellungen</Link>
-            <Link href="/kontakt" className="block">Kontakt & FAQ</Link>
-            <button type="button" onClick={handleLogout} className="block text-left text-slate-400">Abmelden</button>
-          </nav>
-        </aside>
-      )}
+      <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={openProfile} role={role} />
 
       <main className="max-w-4xl mx-auto px-5 py-10 space-y-8">
         <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
