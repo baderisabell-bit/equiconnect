@@ -1256,6 +1256,7 @@ type SearchFeedEntry = {
   sucheText: string;
   lat?: number;
   lon?: number;
+  imageUrl?: string;
 };
 
 const searchGeoCache = new Map<string, { lat: number; lon: number } | null>();
@@ -1275,6 +1276,14 @@ function normalizeSearchValue(value: string) {
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+function normalizeMediaUrl(url: string) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('//') && typeof window !== 'undefined') return `${window.location.protocol}${raw}`;
+  return raw.startsWith('/') ? raw : `/${raw}`;
 }
 
 async function resolveSearchCoordinates(location: string) {
@@ -1367,7 +1376,16 @@ export async function getSearchFeed(userId: number | null, filters: any): Promis
         kategorien: categories,
         angebotText: String(row.angebot_text || ''),
         sucheText: String(row.suche_text || ''),
+        imageUrl: normalizeMediaUrl(String(profileData?.profilbild_url || profileData?.profilbildUrl || profileData?.titleImageUrl || '')),
       };
+
+      if (!profileItem.imageUrl) {
+        const gallery = Array.isArray(profileData?.galerie) ? profileData.galerie : [];
+        const firstGalleryImage = gallery.find((item: any) => String(item?.type || 'image') !== 'video' && String(item?.url || '').trim().length > 0);
+        if (firstGalleryImage?.url) {
+          profileItem.imageUrl = normalizeMediaUrl(String(firstGalleryImage.url));
+        }
+      }
 
       const profileCoordinates = await resolveSearchCoordinates([profileItem.plz, profileItem.ort].filter(Boolean).join(' '));
       if (profileCoordinates) {
@@ -1421,7 +1439,15 @@ export async function getSearchFeed(userId: number | null, filters: any): Promis
           kategorien: offerCategories,
           angebotText: offerText || String(row.angebot_text || ''),
           sucheText: String(row.suche_text || ''),
+          imageUrl: normalizeMediaUrl(String(offer?.titleImageUrl || offer?.imageUrl || offer?.bild_url || '')),
         };
+
+        if (!offerItem.imageUrl && Array.isArray(offer?.mediaItems)) {
+          const firstMediaImage = offer.mediaItems.find((item: any) => String(item?.type || 'image') !== 'video' && String(item?.url || '').trim().length > 0);
+          if (firstMediaImage?.url) {
+            offerItem.imageUrl = normalizeMediaUrl(String(firstMediaImage.url));
+          }
+        }
 
         const offerCoordinates = await resolveSearchCoordinates([offerItem.plz, offerItem.ort].filter(Boolean).join(' '));
         if (offerCoordinates) {

@@ -69,6 +69,7 @@ type AddonCheckoutLink = {
   label: string;
   price: string;
   method: string;
+  billingLabel: string;
   href: string;
   note?: string;
 };
@@ -215,6 +216,7 @@ const EXPERT_ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
     label: "Individuelle Werbung auf der Startseite für 14 Tage",
     price: "14,99 €",
     method: "GoCardless",
+    billingLabel: "alle 14 Tage",
     href: GOCARDLESS_STARTSEITE_WERBUNG_URL,
     note: "Startseiten Werbung",
   },
@@ -222,6 +224,7 @@ const EXPERT_ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
     label: "Anzeigen oben anheften",
     price: "5,99 €/Monat",
     method: "GoCardless",
+    billingLabel: "monatlich",
     href: GOCARDLESS_ANZEIGE_OBEN_ANHEFTEN_URL,
     note: "Anzeige oben anheften",
   },
@@ -232,6 +235,7 @@ const USER_ADDON_CHECKOUT_LINKS: AddonCheckoutLink[] = [
     label: "Anzeigen oben anheften",
     price: "5,99 €/Monat",
     method: "GoCardless",
+    billingLabel: "monatlich",
     href: GOCARDLESS_ANZEIGE_OBEN_ANHEFTEN_URL,
     note: "Anzeige oben anheften",
   },
@@ -704,6 +708,55 @@ function AboPageContent() {
           </section>
         )}
 
+        {selectedPlan && (
+          <section className="rounded-[2rem] border border-slate-900 bg-slate-950 p-8 text-white shadow-xl space-y-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Bestellung</p>
+                <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight">Ausgewähltes Abo</h2>
+                <p className="mt-2 text-sm text-slate-300">Immer nur ein Abo aktiv. Zusätze werden separat gebucht.</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-4 py-3 text-right">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Preis</p>
+                <p className="mt-1 text-3xl font-black italic">{formatEuro(monthlyPriceCents)}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{selectedPlan.baseCents > 0 ? "monatlich" : "kostenfrei"}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Gewählt</p>
+                <p className="mt-2 text-xl font-black italic uppercase">{selectedPlan.label}</p>
+                <p className="mt-1 text-slate-300">{selectedPlan.audience}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Abrechnungsart</p>
+                <p className="mt-2 text-xl font-black italic uppercase">{selectedPlan.baseCents > 0 ? "monatlich" : "einmalig"}</p>
+                <p className="mt-1 text-slate-300">Abo und Zusatzprodukte werden getrennt geführt.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Zahlung</p>
+                <p className="mt-2 text-xl font-black italic uppercase">SEPA oder PayPal</p>
+                <p className="mt-1 text-slate-300">Nur eine Zahlungsart gleichzeitig auswählbar.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || aboBlocked}
+                className="rounded-xl bg-emerald-500 px-8 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {saving ? "Bestelle..." : selectedPlan.baseCents > 0 ? "Kostenpflichtig bestellen" : "Kostenlos übernehmen"}
+              </button>
+              <span className="rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">
+                {selectedPlan.baseCents > 0 ? "Vor dem Kauf Zahlungsart wählen" : "Keine Zahlungsdaten nötig"}
+              </span>
+            </div>
+          </section>
+        )}
+
         {role === "nutzer" && (
           <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4 overflow-x-auto">
             <div>
@@ -737,6 +790,7 @@ function AboPageContent() {
           </section>
         )}
 
+
         {selectedPlan && (
           <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-6">
             <div>
@@ -765,24 +819,6 @@ function AboPageContent() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Monatlicher Preis</p>
-              <p className="text-xl font-black italic uppercase text-slate-900">{formatEuro(monthlyPriceCents)}</p>
-            </div>
-
-            {isPaidPlan && (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                <p className="font-black uppercase tracking-widest text-[10px]">Einzug</p>
-                <p className="mt-2 font-bold">Der erste Einzug (SEPA und PayPal) erfolgt erst in 2 Monaten.</p>
-              </div>
-            )}
-
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <p className="font-black uppercase tracking-widest text-[10px]">Verlängerung</p>
-              <p className="mt-2 font-bold">Monatlich kündigbar. Der erste Einzug erfolgt in 2 Monaten, danach monatlich immer am gleichen Kalendertag wie beim Abschluss.</p>
-              <p className="mt-2 font-bold">Wichtig: Kündigungen müssen spätestens 3 Tage vor dem jeweiligen Abo-Ende eingehen.</p>
-            </div>
-
             {aboBlocked && (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
                 <p className="font-black uppercase tracking-widest text-[10px]">Abo gesperrt</p>
@@ -793,26 +829,6 @@ function AboPageContent() {
 
             {error && <p className="text-[11px] font-bold uppercase tracking-widest text-red-600">{error}</p>}
             {success && <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">{success}</p>}
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || aboBlocked}
-                className="px-8 py-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 disabled:opacity-60"
-              >
-                {saving ? "Speichere..." : onboarding ? "Tarif speichern" : "Tarif aktualisieren"}
-              </button>
-              {onboarding && (
-                <button
-                  type="button"
-                  onClick={() => router.push("/einstellungen")}
-                  className="px-6 py-4 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600"
-                >
-                  Später in Einstellungen
-                </button>
-              )}
-            </div>
 
             <div className="pt-2 space-y-4">
               <div>
@@ -914,8 +930,55 @@ function AboPageContent() {
                 </div>
               )}
             </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || aboBlocked}
+                className="px-8 py-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 disabled:opacity-60"
+              >
+                {saving ? "Speichere..." : onboarding ? "Tarif speichern" : "Tarif aktualisieren"}
+              </button>
+              {onboarding && (
+                <button
+                  type="button"
+                  onClick={() => router.push("/einstellungen")}
+                  className="px-6 py-4 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600"
+                >
+                  Später in Einstellungen
+                </button>
+              )}
+            </div>
           </section>
         )}
+
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm space-y-4">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zusätze</p>
+            <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Separat buchbare Extras</h2>
+            <p className="mt-2 text-sm text-slate-600">Extras werden in einem eigenen Vorgang gebucht und laufen getrennt vom Abo.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {addonLinks.map((item) => (
+              <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{item.billingLabel}</p>
+                <h3 className="mt-2 text-lg font-black italic uppercase text-slate-900">{item.label}</h3>
+                <p className="mt-2 text-sm font-bold text-slate-900">{item.price}</p>
+                <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 inline-flex rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:border-slate-400 hover:bg-slate-100"
+                >
+                  {item.method} öffnen
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );

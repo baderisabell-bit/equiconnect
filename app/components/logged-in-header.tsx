@@ -10,6 +10,7 @@ type LoggedInHeaderProps = {
   onOpenSidebar: () => void;
   onOpenProfile?: () => void;
   brandText?: string;
+  searchContent?: React.ReactNode;
 };
 
 function resolveProfileHref(userId: number | null, role: string | null) {
@@ -32,9 +33,9 @@ export default function LoggedInHeader({
   userName,
   onOpenSidebar,
   onOpenProfile,
-  brandText = 'Equily'
+  brandText = 'Equily',
+  searchContent,
 }: LoggedInHeaderProps) {
-  const [searchTerm, setSearchTerm] = React.useState('');
   const initial = String(userName || 'P').trim().charAt(0).toUpperCase() || 'P';
 
   const openProfile = () => {
@@ -43,16 +44,6 @@ export default function LoggedInHeader({
       return;
     }
     window.location.href = resolveProfileHref(userId, role);
-  };
-
-  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const query = searchTerm.trim();
-    if (!query) {
-      window.location.href = '/suche';
-      return;
-    }
-    window.location.href = `/suche?q=${encodeURIComponent(query)}`;
   };
 
   return (
@@ -64,21 +55,9 @@ export default function LoggedInHeader({
         </div>
       </div>
 
-      <form onSubmit={handleSearchSubmit} className="flex-1 max-w-2xl mx-auto hidden md:flex items-center gap-2">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Spezialisierung oder Ort suchen..."
-          className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 outline-none focus:border-emerald-300 text-sm font-bold"
-        />
-        <button
-          type="submit"
-          className="px-5 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500"
-        >
-          Suchen
-        </button>
-      </form>
+      <div className="flex-1 max-w-4xl mx-auto hidden md:flex items-center gap-2">
+        {searchContent || null}
+      </div>
 
       <div className="flex items-center gap-3 ml-auto">
         <NotificationBell userId={userId} />

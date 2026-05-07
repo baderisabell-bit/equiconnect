@@ -343,18 +343,6 @@ export default function PublicProfilePage() {
           profilData
         });
 
-        // If the viewer is the profile owner and there are draft offers, show drafts by default
-        try {
-          if (safeViewer > 0 && safeViewer === profileUserId) {
-            const offersRaw = Array.isArray(row?.profil_data?.angeboteAnzeigen) ? row.profil_data.angeboteAnzeigen : [];
-            if (offersRaw.some((o: any) => String(o?.visibility || '').trim() === 'draft')) {
-              setOfferVisibilityFilter('draft');
-            }
-          }
-        } catch (e) {
-          // ignore errors here, optional UX improvement only
-        }
-
         if (safeViewer > 0 && safeViewer === profileUserId && row.role) {
           const resolvedRole = String(row.role).trim().toLowerCase();
           setViewerRole(resolvedRole);
