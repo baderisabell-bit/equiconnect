@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
+import DashboardSidebar from "../../components/dashboard-sidebar";
 import { safeToFixed } from '../../lib/num';
 import { getInvoiceData, getMyStudents, getOwnSubscriptionInvoicePdf, getOwnSubscriptionInvoices, getUserBookings } from "../../actions";
 
@@ -586,26 +587,7 @@ export default function RechnungenPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <div
-        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] transition-opacity ${sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-      <aside className={`fixed left-0 top-0 h-full w-72 bg-white z-[70] shadow-2xl transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} p-6 flex flex-col`}>
-        <div className="flex justify-between items-center mb-8 text-emerald-600 font-black italic tracking-tighter">MENÜ <button onClick={() => setSidebarOpen(false)} className="text-slate-300">×</button></div>
-        <nav className="space-y-5 flex-grow">
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push("/"); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Startseite</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push(dashboardHref); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Dashboard</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push(invoicesHref); }} className="block text-left text-lg font-black italic uppercase text-emerald-600">Rechnungen</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); openProfile(); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Profil</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push("/suche"); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Suche</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push("/netzwerk"); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Netzwerk</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push("/merkliste"); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Merkliste</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push("/nachrichten"); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Nachrichten</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push("/einstellungen"); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Einstellungen</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); router.push("/kontakt"); }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Kontakt & FAQ</button>
-        </nav>
-        <button onClick={handleLogout} className="mt-auto p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">Abmelden</button>
-      </aside>
+      <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={openProfile} role={role} />
 
       <LoggedInHeader
         userId={userId}

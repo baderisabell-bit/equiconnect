@@ -6,6 +6,7 @@ import { Camera, ChevronLeft, ChevronRight, ImagePlus, MapPin, Play, User } from
 import { safeToFixed } from '../../../lib/num';
 import { ANGEBOT_KATEGORIEN } from "../../../suche/kategorien-daten";
 import LoggedInHeader from "../../../components/logged-in-header";
+import DashboardSidebar from "../../../components/dashboard-sidebar";
 import MediaDropzone from "../../../components/media-dropzone";
 import {
   addWishlistItem,
@@ -674,24 +675,7 @@ export default function NutzerProfilAnpassen() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div
-        className={`fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] transition-opacity ${sidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-      <aside className={`fixed left-0 top-0 h-full w-72 bg-white z-[70] shadow-2xl transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} p-6 flex flex-col`}>
-        <div className="flex justify-between items-center mb-8 text-emerald-600 font-black italic tracking-tighter">MENUE <button onClick={() => setSidebarOpen(false)} className="text-slate-300">x</button></div>
-        <nav className="space-y-5 flex-grow">
-          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Startseite</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/dashboard/nutzer"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Dashboard</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); openProfile(); }} className="block text-left text-lg font-black italic uppercase text-emerald-600 hover:text-emerald-600">Mein Profil</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/netzwerk"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Netzwerk</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/merkliste"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Merkliste</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/nachrichten"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Nachrichten</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/einstellungen"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Einstellungen</button>
-          <button type="button" onClick={() => { setSidebarOpen(false); window.location.href = "/kontakt"; }} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Kontakt & FAQ</button>
-        </nav>
-        <button onClick={handleLogout} className="mt-auto p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">Abmelden</button>
-      </aside>
+      <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onOpenProfile={openProfile} role="nutzer" />
 
       <LoggedInHeader
         userId={userId}

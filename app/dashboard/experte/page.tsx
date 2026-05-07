@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LoggedInHeader from "../../components/logged-in-header";
 import { getExpertDashboardAnalytics } from "../../actions";
@@ -119,8 +120,9 @@ const EMPTY_ANALYTICS: DashboardAnalyticsData = {
 export default function ExpertDashboardPage() {
   const router = useRouter();
   const [userId, setUserId] = useState<number | null>(null);
+  const [userName, setUserName] = useState("Experte");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<any>(EMPTY_ANALYTICS);
   const [loading, setLoading] = useState(true);
   
   // FILTER-STATE für den Graphen
@@ -143,7 +145,27 @@ export default function ExpertDashboardPage() {
   };
 
   useEffect(() => {
-    // ... (Initialisierungs-Logik wie zuvor)
+    const init = async () => {
+      const role = sessionStorage.getItem("role") || sessionStorage.getItem("userRole");
+      const userIdRaw = sessionStorage.getItem("userId");
+      const parsedUserId = userIdRaw ? parseInt(userIdRaw, 10) : NaN;
+
+      if (role !== "experte" || Number.isNaN(parsedUserId) || parsedUserId <= 0) {
+        router.push("/");
+        return;
+      }
+
+      setUserId(parsedUserId);
+      setUserName(sessionStorage.getItem("userName") || "Experte");
+
+      const res = await getExpertDashboardAnalytics(parsedUserId);
+      if (res?.success && res?.data) {
+        setAnalytics(res.data);
+      }
+      setLoading(false);
+    };
+
+    void init();
   }, []);
 
   // Filter-Logik
@@ -159,10 +181,35 @@ export default function ExpertDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
+      {sidebarOpen && (
+        <>
+          <button type="button" aria-label="Menü schließen" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm" />
+          <aside className="fixed left-0 top-0 z-[70] h-full w-72 bg-white shadow-2xl transition-transform duration-300 p-6 flex flex-col">
+            <div className="flex justify-between items-center mb-8 text-emerald-600 font-black italic tracking-tighter">
+              MENÜ
+              <button onClick={() => setSidebarOpen(false)} className="text-slate-300 text-xl leading-none">×</button>
+            </div>
+            <nav className="space-y-5 flex-grow">
+              <Link href="/" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Startseite</Link>
+              <Link href="/dashboard/experte" className="block text-left text-lg font-black italic uppercase text-emerald-600">Dashboard</Link>
+              <button type="button" onClick={openProfile} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Profil</button>
+              <Link href="/dashboard/experte/schueler" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Schüler &amp; Kunden</Link>
+              <Link href="/suche" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Suche</Link>
+              <Link href="/netzwerk" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Netzwerk</Link>
+              <Link href="/nachrichten" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Nachrichten</Link>
+              <Link href="/merkliste" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Merkliste</Link>
+              <Link href="/einstellungen" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Einstellungen</Link>
+              <Link href="/kontakt" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Kontakt &amp; FAQ</Link>
+            </nav>
+            <button onClick={handleLogout} className="mt-auto p-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all">Abmelden</button>
+          </aside>
+        </>
+      )}
+
       <LoggedInHeader
         userId={userId}
         role="experte"
-        userName="Experte"
+        userName={userName}
         onOpenSidebar={() => setSidebarOpen(true)}
         onOpenProfile={openProfile}
       />

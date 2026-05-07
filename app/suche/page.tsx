@@ -420,32 +420,41 @@ function SuchseiteContent() {
         </>
       )}
 
-      <LoggedInHeader userId={userId} role={role === "experte" ? "experte" : "nutzer"} userName={userName || "Gast"} onOpenSidebar={() => setSidebarOpen(true)} onOpenProfile={openProfile} searchContent={<div className="flex flex-1 items-center gap-3" />} />
+      <LoggedInHeader
+        userId={userId}
+        role={role === "experte" ? "experte" : "nutzer"}
+        userName={userName || "Gast"}
+        onOpenSidebar={() => setSidebarOpen(true)}
+        onOpenProfile={openProfile}
+        searchContent={
+          <>
+            <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <Search size={16} className="text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Name, Kategorie, Stichwort..."
+                className="w-full bg-transparent text-sm font-bold text-slate-900 outline-none placeholder-slate-400"
+              />
+            </div>
+            <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <MapPin size={16} className="text-slate-400" />
+              <input
+                type="text"
+                value={ortFilter}
+                onChange={(e) => setOrtFilter(e.target.value)}
+                placeholder="Ort oder PLZ"
+                className="w-full bg-transparent text-sm font-bold text-slate-900 outline-none placeholder-slate-400"
+              />
+            </div>
+          </>
+        }
+      />
 
       <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
         {/* Filter Header */}
         <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-          <div className="flex w-full items-center gap-2">
-            <Search size={18} className="text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Name, Kategorie, Stichwort..."
-              className="w-full bg-transparent outline-none text-slate-900 font-bold placeholder-slate-400"
-            />
-          </div>
-          <div className="flex w-full items-center gap-2">
-            <MapPin size={18} className="text-slate-400" />
-            <input
-              type="text"
-              value={ortFilter}
-              onChange={(e) => setOrtFilter(e.target.value)}
-              placeholder="Ort oder PLZ"
-              className="w-full bg-transparent outline-none text-slate-900 font-bold placeholder-slate-400"
-            />
-          </div>
-
           <div className="flex flex-wrap gap-3 pt-4">
             <div className="relative">
               <button
