@@ -271,6 +271,7 @@ function AboPageContent() {
   const [paypalEmail, setPaypalEmail] = useState("");
   const [paypalSubscriptionId, setPaypalSubscriptionId] = useState("");
   const [paypalButtonError, setPaypalButtonError] = useState("");
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
 
   useEffect(() => {
     const sessionUserId = sessionStorage.getItem("userId");
@@ -893,23 +894,103 @@ function AboPageContent() {
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Zusätze</p>
             <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Separat buchbare Extras</h2>
-            <p className="mt-2 text-sm text-slate-600">Extras werden in einem eigenen Vorgang gebucht und laufen getrennt vom Abo.</p>
+            <p className="mt-2 text-sm text-slate-600">Wähle zusätzliche Extras aus, die zusammen mit deinem Abo gebucht werden.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {addonLinks.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{item.billingLabel}</p>
-                <h3 className="mt-2 text-lg font-black italic uppercase text-slate-900">{item.label}</h3>
-                <p className="mt-2 text-sm font-bold text-slate-900">{item.price}</p>
-                <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
-                <div className="mt-4 inline-flex rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Zahlungsart wählst du unten im Tarifbereich.
-                </div>
-              </div>
-            ))}
+            {addonLinks.map((item) => {
+              const isSelected = selectedAddons.includes(item.label);
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setSelectedAddons(prev => 
+                    prev.includes(item.label) 
+                      ? prev.filter(a => a !== item.label)
+                      : [...prev, item.label]
+                  )}
+                  className={`text-left rounded-2xl border p-4 transition ${
+                    isSelected 
+                      ? "border-emerald-500 bg-emerald-50 shadow-sm" 
+                      : "border-slate-200 bg-slate-50 hover:border-emerald-300"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-grow">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{item.billingLabel}</p>
+                      <h3 className="mt-2 text-lg font-black italic uppercase text-slate-900">{item.label}</h3>
+                      <p className="mt-2 text-sm font-bold text-slate-900">{item.price}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.note || item.method}</p>
+                    </div>
+                    <div className={`mt-1 w-6 h-6 rounded border-2 flex items-center justify-center transition ${
+                      isSelected 
+                        ? "border-emerald-500 bg-emerald-500" 
+                        : "border-slate-300 bg-white"
+                    }`}>
+                      {isSelected && <span className="text-white font-black text-sm">✓</span>}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
+
+        {selectedAddons.length > 0 && (
+          <section className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-8 shadow-sm space-y-6">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Ausgewählte Extras</p>
+              <h2 className="mt-2 text-2xl font-black italic uppercase tracking-tight text-slate-900">Zusätze-Übersicht</h2>
+            </div>
+
+            <div className="space-y-2">
+              {addonLinks
+                .filter(addon => selectedAddons.includes(addon.label))
+                .map((addon) => (
+                  <div key={addon.label} className="flex justify-between items-center rounded-xl border border-emerald-300 bg-white p-4">
+                    <div>
+                      <p className="font-bold text-slate-900">{addon.label}</p>
+                      <p className="text-xs text-slate-500">{addon.price} · {addon.billingLabel}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAddons(prev => prev.filter(a => a !== addon.label))}
+                      className="text-slate-400 hover:text-red-500 font-black text-lg"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+            </div>
+
+            <div className="rounded-2xl border border-emerald-300 bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Gesamtbetrag der Zusätze (monatlich)</p>
+              <p className="mt-2 text-3xl font-black italic text-slate-900">
+                {formatEuro(
+                  addonLinks
+                    .filter(addon => selectedAddons.includes(addon.label))
+                    .reduce((sum, addon) => sum + parseInt(addon.price.replace(/\D/g, ''), 10), 0) * 100 / 100
+                )}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {addonLinks
+                .filter(addon => selectedAddons.includes(addon.label))
+                .map((addon) => (
+                  <a
+                    key={addon.label}
+                    href={addon.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex px-6 py-4 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-700 transition"
+                  >
+                    {addon.label} kaufen
+                  </a>
+                ))}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

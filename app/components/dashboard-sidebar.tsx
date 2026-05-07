@@ -29,11 +29,17 @@ export default function DashboardSidebar({ isOpen, onClose, onOpenProfile, role 
         <nav className="space-y-5 flex-grow">
           <Link href="/" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Startseite</Link>
           {role === 'experte' ? (
-            <Link href="/dashboard/experte" className="block text-left text-lg font-black italic uppercase text-emerald-600">Dashboard</Link>
+            <>
+              <Link href="/dashboard/experte" className="block text-left text-lg font-black italic uppercase text-emerald-600">Dashboard</Link>
+              <button type="button" onClick={openProfile} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Profil</button>
+              <Link href="/dashboard/experte/schueler" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Schüler &amp; Kunden</Link>
+            </>
           ) : (
-            <Link href={role === 'nutzer' ? '/dashboard/nutzer' : '/'} className="block text-left text-lg font-black italic uppercase text-emerald-600">Dashboard</Link>
+            <>
+              <button type="button" onClick={openProfile} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Profil</button>
+              <Link href="/dashboard/nutzer" className="block text-left text-lg font-black italic uppercase text-emerald-600">Dashboard</Link>
+            </>
           )}
-          <button type="button" onClick={openProfile} className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Mein Profil</button>
           <Link href="/suche" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Suche</Link>
           <Link href="/netzwerk" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Netzwerk</Link>
           <Link href="/nachrichten" className="block text-left text-lg font-black italic uppercase text-slate-800 hover:text-emerald-600">Nachrichten</Link>
