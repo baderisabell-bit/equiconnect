@@ -7,25 +7,21 @@ import { getExpertDashboardAnalytics } from "../../actions";
 
 export default function ExpertDashboardPage() {
   const router = useRouter();
-  
-  // State für Nutzerdaten
   const [userId, setUserId] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [userName, setUserName] = useState("Experte");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
-  // State für Analytics & UI
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [chartFilters, setChartFilters] = useState<string[]>([]); // Leer = Alles anzeigen
+  
+  // Standardmäßig sind alle Filter aktiv (leeres Array = alle anzeigen)
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
 
-  // Initialisierung & Fetching
   useEffect(() => {
     const init = async () => {
       const userIdRaw = sessionStorage.getItem("userId");
       const roleRaw = sessionStorage.getItem("userRole");
       const name = sessionStorage.getItem("userName") || "Experte";
-      
       setRole(roleRaw);
       setUserName(name);
       
@@ -34,11 +30,9 @@ export default function ExpertDashboardPage() {
         setUserId(parsedUserId);
         try {
           const res = await getExpertDashboardAnalytics(parsedUserId);
-          if (res.success) {
-            setAnalytics(res.data);
-          }
+          if (res.success) setAnalytics(res.data);
         } catch (error) {
-          console.error("Fehler beim Laden der Analytics:", error);
+          console.error("Fehler beim Laden:", error);
         }
       }
       setLoading(false);
@@ -46,188 +40,137 @@ export default function ExpertDashboardPage() {
     init();
   }, []);
 
-  // Hilfsfunktion für Filter
-  const isFilterActive = (filter: string) => 
-    chartFilters.length === 0 || chartFilters.includes(filter);
-
-  const toggleFilter = (filter: string) => {
-    setChartFilters(prev => 
-      prev.includes(filter) ? prev.filter(f => f !== filter) : [filter]
+  const toggleFilter = (f: string) => {
+    setActiveFilters(prev => 
+      prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]
     );
   };
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-      <p className="font-black italic uppercase text-slate-400 animate-pulse">Lade Experten-Daten...</p>
-    </div>
-  );
+  // Bestimme, welche Sektionen angezeigt werden sollen
+  const showAds = activeFilters.length === 0 || activeFilters.includes('Anzeigen');
+  const showPosts = activeFilters.length === 0 || activeFilters.includes('Beiträge');
+  const showWerbung = activeFilters.length === 0 || activeFilters.includes('Werbung');
 
-  const totalReach = (analytics?.profile?.viewsTotal || 0) + 
-                     (analytics?.posts?.viewsTotal || 0) + 
-                     (analytics?.ads?.viewsTotal || 0);
+  // Berechne die Anzahl der sichtbaren Spalten für das Grid
+  const visibleCount = [showAds, showPosts, showWerbung].filter(Boolean).length;
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#fbfcfd]">Lade...</div>;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
+    <div className="min-h-screen bg-[#fbfcfd] text-slate-900">
       <LoggedInHeader 
         userId={userId} 
         role={role === "experte" ? "experte" : "nutzer"} 
         userName={userName} 
         onOpenSidebar={() => setSidebarOpen(true)} 
-        brandText="Experten-Dashboard"
+        brandText="Expert Intelligence"
       />
 
-      <main className="max-w-[1600px] mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6 auto-rows-auto">
+      <main className="max-w-[1400px] mx-auto px-8 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* 1. PROFIL-ZAHLEN (Allgemein) */}
-          <div className="md:col-span-2 bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Profil-Sichtbarkeit</p>
-              <p className="text-5xl font-black italic mt-2 text-emerald-600">{analytics?.profile?.viewsTotal || 0}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Direkte Aufrufe Ihres Profils</p>
+          {/* Top Stats */}
+          <div className="lg:col-span-4 bg-white rounded-[3rem] p-10 shadow-sm border border-slate-100 ring-1 ring-slate-50">
+            <p className="text-[11px] font-black uppercase text-emerald-600 tracking-[0.2em] mb-4">Profil-Sichtbarkeit</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-7xl font-black italic tracking-tighter">{analytics?.profile?.viewsTotal || 0}</span>
+              <span className="text-emerald-500 font-bold text-lg">↑</span>
             </div>
-            <div className="w-16 h-16 bg-emerald-50 rounded-3xl flex items-center justify-center text-3xl">👤</div>
           </div>
 
-          {/* 2. GESAMT-REICHWEITE */}
-          <div className="md:col-span-2 bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Gesamt-Reichweite</p>
-              <p className="text-5xl font-black italic mt-2 text-slate-900">{totalReach.toLocaleString('de-DE')}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Kombinierte Views aller Inhalte</p>
-            </div>
-            <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center text-3xl">📈</div>
-          </div>
-
-          {/* 3. PLAN VERWALTEN (Schwarz) */}
-          <div className="md:col-span-2 bg-slate-950 rounded-[2.5rem] p-8 text-white flex flex-col justify-between overflow-hidden relative">
-            <div className="relative z-10">
-              <span className="px-3 py-1 bg-emerald-500 text-[9px] font-black uppercase rounded-full">Status</span>
-              <h3 className="text-2xl font-black italic uppercase mt-4">{analytics?.planLabel || "Experte"}</h3>
-            </div>
-            <button 
-              onClick={() => router.push('/abo')}
-              className="relative z-10 mt-8 w-full py-4 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/10"
-            >
-              Plan verwalten
-            </button>
-          </div>
-
-          {/* 4. AKTIVITÄTSVERLAUF (Strikte Kategorietrennung) */}
-          <div className="md:col-span-4 md:row-span-2 bg-white rounded-[2.5rem] p-8 shadow-sm border border-slate-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
+          <div className="lg:col-span-8 bg-slate-950 rounded-[3rem] p-10 text-white flex flex-col justify-between">
+            <div className="flex justify-between items-start">
               <div>
-                <h3 className="font-black italic uppercase text-xl">Aktivitätsverlauf</h3>
-                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mt-1">Aufrufe pro einzelnem Inhalt</p>
+                <span className="px-4 py-1.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase rounded-full border border-emerald-500/30">Active Plan</span>
+                <h3 className="text-4xl font-black italic uppercase mt-6 tracking-tight">{analytics?.planLabel || "Premium Experte"}</h3>
+              </div>
+              <button onClick={() => router.push('/abo')} className="bg-white/5 hover:bg-white/10 p-4 rounded-2xl border border-white/10 transition-colors">
+                <span className="text-[10px] font-black uppercase tracking-widest">Upgrade</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Dynamischer Aktivitätsverlauf */}
+          <div className="lg:col-span-12 bg-white rounded-[3.5rem] p-10 shadow-xl shadow-slate-200/40 border border-slate-100">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 gap-6">
+              <div>
+                <h2 className="text-3xl font-black italic uppercase tracking-tight">Performance Hub</h2>
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-2">Echtzeit-Analyse Ihrer Inhalte</p>
               </div>
               
-              <div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-                {[
-                  { id: 'Anzeigen', label: 'Anzeigen', color: 'bg-emerald-500' },
-                  { id: 'Beitraege', label: 'Beiträge', color: 'bg-sky-500' },
-                  { id: 'Werbung', label: 'Werbung', color: 'bg-amber-500' }
-                ].map((f) => (
+              <div className="flex gap-3 bg-slate-50 p-2 rounded-3xl border border-slate-100">
+                {['Anzeigen', 'Beiträge', 'Werbung'].map((f) => (
                   <button
-                    key={f.id}
-                    onClick={() => toggleFilter(f.id)}
-                    className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${
-                      chartFilters.includes(f.id) || chartFilters.length === 0 
-                      ? 'bg-white shadow-sm text-slate-900' 
-                      : 'text-slate-400 hover:text-slate-600'
+                    key={f}
+                    onClick={() => toggleFilter(f)}
+                    className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${
+                      activeFilters.includes(f) || activeFilters.length === 0 ? 'bg-white shadow-md text-slate-900' : 'text-slate-400'
                     }`}
                   >
-                    <span className={`inline-block w-2 h-2 rounded-full mr-2 ${f.color}`}></span>
-                    {f.label}
+                    {f}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-8 min-h-[300px] items-end px-4">
-              {/* BLOCK LINKS: ANZEIGEN */}
-              <div className="flex flex-col gap-3 items-center h-full justify-end border-r border-slate-50 pr-4">
-                {isFilterActive('Anzeigen') && analytics?.ads?.list?.map((ad: any) => (
-                  <div key={ad.id} className="w-full group">
-                    <div className="bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center rounded-t-xl transition-all hover:brightness-110" 
-                         style={{ height: `${Math.max(ad.views * 2, 40)}px` }}>
-                      {ad.views}
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-b-xl">
-                      <p className="text-[8px] font-black uppercase truncate text-center text-slate-600">{ad.title}</p>
-                    </div>
+            {/* Dynamisches Grid-System */}
+            <div className={`grid gap-12 transition-all duration-500`} style={{ gridTemplateColumns: `repeat(${visibleCount}, 1fr)` }}>
+              
+              {showAds && (
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col gap-4 min-h-[300px] justify-end">
+                    {analytics?.ads?.list?.map((ad: any) => (
+                      <div key={ad.id} className="w-full">
+                        <div className="bg-emerald-500 rounded-2xl transition-all hover:scale-[1.02]" style={{ height: `${Math.max(ad.views * 3, 20)}px`, minHeight: '12px' }} />
+                        <div className="mt-3 flex justify-between items-center px-1">
+                          <p className="text-[9px] font-black uppercase truncate max-w-[70%]">{ad.title}</p>
+                          <span className="text-[10px] font-bold text-emerald-600">{ad.views}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <span className="text-[10px] font-black uppercase text-slate-300 mt-4 tracking-widest">Anzeigen</span>
-              </div>
+                  <div className="h-px bg-slate-100 w-full" />
+                  <p className="text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Anzeigen</p>
+                </div>
+              )}
 
-              {/* BLOCK MITTE: BEITRÄGE */}
-              <div className="flex flex-col gap-3 items-center h-full justify-end border-r border-slate-50 px-4">
-                {isFilterActive('Beitraege') && analytics?.posts?.list?.map((post: any) => (
-                  <div key={post.id} className="w-full group">
-                    <div className="bg-sky-500 text-white text-[10px] font-black flex items-center justify-center rounded-t-xl transition-all hover:brightness-110" 
-                         style={{ height: `${Math.max(post.views * 2, 40)}px` }}>
-                      {post.views}
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-b-xl">
-                      <p className="text-[8px] font-black uppercase truncate text-center text-slate-600">{post.title}</p>
-                    </div>
+              {showPosts && (
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col gap-4 min-h-[300px] justify-end">
+                    {analytics?.posts?.list?.map((post: any) => (
+                      <div key={post.id} className="w-full">
+                        <div className="bg-sky-500 rounded-2xl transition-all hover:scale-[1.02]" style={{ height: `${Math.max(post.views * 3, 20)}px`, minHeight: '12px' }} />
+                        <div className="mt-3 flex justify-between items-center px-1">
+                          <p className="text-[9px] font-black uppercase truncate max-w-[70%]">{post.title}</p>
+                          <span className="text-[10px] font-bold text-sky-600">{post.views}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <span className="text-[10px] font-black uppercase text-slate-300 mt-4 tracking-widest">Beiträge</span>
-              </div>
+                  <div className="h-px bg-slate-100 w-full" />
+                  <p className="text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Beiträge</p>
+                </div>
+              )}
 
-              {/* BLOCK RECHTS: WERBUNG */}
-              <div className="flex flex-col gap-3 items-center h-full justify-end pl-4">
-                {isFilterActive('Werbung') && analytics?.werbung?.list?.map((w: any) => (
-                  <div key={w.id} className="w-full group">
-                    <div className="bg-amber-500 text-white text-[10px] font-black flex items-center justify-center rounded-t-xl transition-all hover:brightness-110" 
-                         style={{ height: `${Math.max(w.views * 2, 40)}px` }}>
-                      {w.views}
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-b-xl">
-                      <p className="text-[8px] font-black uppercase truncate text-center text-slate-600">{w.title}</p>
-                    </div>
+              {showWerbung && (
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col gap-4 min-h-[300px] justify-end">
+                    {analytics?.werbung?.list?.map((w: any) => (
+                      <div key={w.id} className="w-full">
+                        <div className="bg-amber-500 rounded-2xl transition-all hover:scale-[1.02]" style={{ height: `${Math.max(w.views * 3, 20)}px`, minHeight: '12px' }} />
+                        <div className="mt-3 flex justify-between items-center px-1">
+                          <p className="text-[9px] font-black uppercase truncate max-w-[70%]">{w.title}</p>
+                          <span className="text-[10px] font-bold text-amber-600">{w.views}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <span className="text-[10px] font-black uppercase text-slate-300 mt-4 tracking-widest">Werbung</span>
-              </div>
+                  <div className="h-px bg-slate-100 w-full" />
+                  <p className="text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-300">Werbung</p>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* 5. QUICK ACTIONS */}
-          <div className="md:col-span-2 md:row-span-2 bg-emerald-50 rounded-[2.5rem] p-8 border border-emerald-100 flex flex-col">
-            <p className="text-[10px] font-black uppercase text-emerald-700 tracking-widest mb-6">Quick Actions</p>
-            <div className="space-y-3 flex-grow">
-               <button 
-                onClick={() => router.push('/werbung-buchen')} 
-                className="w-full p-5 bg-white rounded-2xl text-left text-[11px] font-black uppercase tracking-tight flex justify-between items-center hover:shadow-md transition-all group"
-               >
-                 Werbung auf der Startseite <span className="text-emerald-500 group-hover:translate-x-1 transition-transform">→</span>
-               </button>
-               
-               <button 
-                onClick={() => router.push('/inserieren')} 
-                className="w-full p-5 bg-white rounded-2xl text-left text-[11px] font-black uppercase tracking-tight flex justify-between items-center hover:shadow-md transition-all group"
-               >
-                 Anzeige schalten <span className="text-emerald-500 group-hover:translate-x-1 transition-transform">→</span>
-               </button>
-
-               <button 
-                onClick={() => router.push('/beitrag-erstellen')} 
-                className="w-full p-5 bg-white rounded-2xl text-left text-[11px] font-black uppercase tracking-tight flex justify-between items-center hover:shadow-md transition-all group"
-               >
-                 Beitrag erstellen <span className="text-emerald-500 group-hover:translate-x-1 transition-transform">→</span>
-               </button>
-            </div>
-
-            <button 
-              onClick={() => router.push('/dashboard/experte/schueler')} 
-              className="w-full p-5 bg-emerald-600 text-white rounded-2xl text-left text-[11px] font-black uppercase mt-6 flex justify-between items-center hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
-            >
-              Meine Schüler & Kunden <span>→</span>
-            </button>
-          </div>
-
         </div>
       </main>
     </div>
