@@ -14,30 +14,27 @@ export default function ImpressumPage() {
           </Link>
         </div>
 
-        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-5">
-          <h2 className="text-xl font-black italic uppercase text-slate-900">Wichtiger Hinweis</h2>
+        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
+          <h2 className="text-xl font-black italic uppercase text-slate-900">Gesetzliche Anbieterkennung: </h2>
           <p className="text-sm text-slate-600 leading-relaxed">
-            Die folgenden Angaben wurden auf Wunsch an den öffentlich auffindbaren Impressumsdaten von Isabell Bader ausgerichtet. Bitte prüfe vor Livegang selbst, ob diese Daten für equilife.de tatsächlich so verwendet werden sollen.
+            Isabell Bader<br />
+            Equily<br />
+            Schwendenerstraße 23<br />
+            87616 Marktoberdorf<br />
+            Deutschland<br />
+            Telefon: +4915117903181<br />
+            E-Mail: info@equily.de<br />
+            Kontaktformular: info@equily.de, Email: info@equily.de, Interne Nachrichten
           </p>
         </section>
 
         <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
-          <h2 className="text-xl font-black italic uppercase text-slate-900">Angaben gemäß § 5 TMG</h2>
+          <h2 className="text-xl font-black italic uppercase text-slate-900">Inhaltlich Verantwortlicher gemäß § 18 Abs. 2 MStV:</h2>
           <p className="text-sm text-slate-600 leading-relaxed">
-            Equily - Isabell Bader<br />
-            Isabell Bader<br />
-            Innerkoflerstrasse 40<br />
+            Frau Isabell Bader<br />
+            Innerkoflerstraße 40<br />
             81377 München<br />
             Deutschland
-          </p>
-        </section>
-
-        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
-          <h2 className="text-xl font-black italic uppercase text-slate-900">Kontakt</h2>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            E-Mail: baderisabell@gmail.com<br />
-            Telefon: +49 (0) 151 17903181<br />
-            Website: www.klassischbarocke-dressur.de
           </p>
         </section>
 
@@ -50,40 +47,25 @@ export default function ImpressumPage() {
         </section>
 
         <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
-          <h2 className="text-xl font-black italic uppercase text-slate-900">Berufsbezeichnung</h2>
+          <h2 className="text-xl font-black italic uppercase text-slate-900">zuständige Aufsichtsbehörde für audiovisuelle Mediendienste:</h2>
           <p className="text-sm text-slate-600 leading-relaxed">
-            Reitlehrerin / Bereiterin mit Trainer C - klassisch-barocke Reiterei.
+            Bayerische Landeszentrale für neue Medien (BLM)<br />
+            Heinrich-Lübke-Str. 27<br />
+            81737 München<br />
+            Internet: https://www.blm.de/
           </p>
         </section>
 
         <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
           <h2 className="text-xl font-black italic uppercase text-slate-900">Verantwortlich für den Inhalt</h2>
           <p className="text-sm text-slate-600 leading-relaxed">
-            Isabell Bader<br />
-            Innerkoflerstrasse 40<br />
-            81377 München
+            Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor Verbraucherschlichtungsstellen teilzunehmen.
           </p>
         </section>
 
         <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
-          <h2 className="text-xl font-black italic uppercase text-slate-900">Haftung für Inhalte</h2>
           <p className="text-sm text-slate-600 leading-relaxed">
             Die Inhalte dieser Website wurden mit Sorgfalt erstellt. Eine Gewähr für Richtigkeit, Vollständigkeit und Aktualität der Inhalte wird jedoch nicht übernommen.
-          </p>
-        </section>
-
-        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
-          <h2 className="text-xl font-black italic uppercase text-slate-900">Bildnachweise</h2>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            Private Aufnahmen<br />
-            Foto: Christina Meyer
-          </p>
-        </section>
-
-        <section className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-sm space-y-4">
-          <h2 className="text-xl font-black italic uppercase text-slate-900">Streitschlichtung</h2>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung bereit. Falls du diesen Hinweis brauchst, ergänze hier den finalen Rechtstext nach deiner tatsächlichen Unternehmensform und Prüfung.
           </p>
         </section>
       </main>

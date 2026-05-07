@@ -334,7 +334,7 @@ function SuchseiteContent() {
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-  const [showMap, setShowMap] = useState(true);
+  const [viewMode, setViewMode] = useState<"search" | "map">("search");
   const [searchTerm, setSearchTerm] = useState("");
   const [ortFilter, setOrtFilter] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -595,15 +595,15 @@ function SuchseiteContent() {
         }
       />
 
-      <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-[1600px] px-3 py-6 sm:px-6 lg:px-8">
         {/* Filter Header */}
-        <div className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-3 flex-nowrap overflow-x-auto">
+        <div className="mb-6 rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2 flex-nowrap overflow-x-auto">
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setTypeDropdownOpen(!typeDropdownOpen)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
                 {FILTER_TYPES.find((t) => t.value === filterType)?.label} <ChevronDown size={14} />
               </button>
@@ -629,7 +629,7 @@ function SuchseiteContent() {
               <button
                 type="button"
                 onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
                 {selectedCategory || "Alle Kategorien"} <ChevronDown size={14} />
               </button>
@@ -654,95 +654,104 @@ function SuchseiteContent() {
               )}
             </div>
 
-            <button onClick={clearFilters} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+            <button onClick={clearFilters} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50">
               Filter zurücksetzen
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowMap(!showMap)}
-              className={`inline-flex items-center justify-center rounded-2xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition ${showMap ? "border border-slate-900 bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-            >
-              {showMap ? "Karte verbergen" : "Karte anzeigen"}
-            </button>
+            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode("search")}
+                className={`rounded-lg px-3 py-2 text-[9px] font-black uppercase tracking-widest ${viewMode === "search" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+              >
+                Suche
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("map")}
+                className={`rounded-lg px-3 py-2 text-[9px] font-black uppercase tracking-widest ${viewMode === "map" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+              >
+                Karte
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Results */}
-        <div className={showMap ? "grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]" : "block"}>
-          <section className="space-y-4">
-            {filteredEntries.length === 0 && !loading ? (
-              <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white p-8 text-sm text-slate-500">
-                Keine Treffer gefunden. Bitte Suche, Ort oder Kategorien anpassen.
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {filteredEntries.map((entry) => (
-                  <article
-                    key={entry.id}
-                    onClick={() => setSelectedEntry(entry)}
-                    className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
-                  >
-                    {entry.imageUrl ? (
-                      <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-                        <img src={entry.imageUrl} alt={entry.name} className="h-44 w-full object-cover" loading="lazy" />
+        <div>
+          {viewMode === "search" ? (
+            <section className="space-y-4">
+              {filteredEntries.length === 0 && !loading ? (
+                <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white p-8 text-sm text-slate-500">
+                  Keine Treffer gefunden. Bitte Suche, Ort oder Kategorien anpassen.
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {filteredEntries.map((entry) => (
+                    <article
+                      key={entry.id}
+                      onClick={() => setSelectedEntry(entry)}
+                      className="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+                    >
+                      {entry.imageUrl ? (
+                        <div className="mb-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                          <img src={entry.imageUrl} alt={entry.name} className="h-40 w-full object-cover" loading="lazy" />
+                        </div>
+                      ) : null}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            {entry.typ === "experte" ? "Experte" : entry.typ === "nutzer" ? "Nutzer" : entry.typ === "angebot" ? "Anzeige" : entry.typ === "gruppe" ? "Gruppe" : "Beitrag"}
+                          </p>
+                          <h3 className="mt-1 text-base font-black italic uppercase text-slate-900">{displayText(entry.name)}</h3>
+                          <p className="text-xs text-slate-500">
+                            {displayText(entry.ort)}
+                            {entry.plz ? ` · ${entry.plz}` : ""}
+                          </p>
+                        </div>
+                        <div className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-700">{safeToFixed(entry.rating, 1)}</div>
                       </div>
-                    ) : null}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          {entry.typ === "experte" ? "Experte" : entry.typ === "nutzer" ? "Nutzer" : entry.typ === "angebot" ? "Anzeige" : entry.typ === "gruppe" ? "Gruppe" : "Beitrag"}
+
+                      <p className="mt-2 text-sm text-slate-600 line-clamp-3">{displayText(entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar.")}</p>
+
+                      {typeof entryDistanceKm[entry.id] === "number" && (
+                        <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                          {safeToFixed(entryDistanceKm[entry.id], 1)} km entfernt
                         </p>
-                        <h3 className="mt-1 text-lg font-black italic uppercase text-slate-900">{displayText(entry.name)}</h3>
-                        <p className="text-xs text-slate-500">
-                          {displayText(entry.ort)}
-                          {entry.plz ? ` · ${entry.plz}` : ""}
-                        </p>
+                      )}
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {entry.kategorien.slice(0, 4).map((category) => (
+                          <span key={`${entry.id}-${category}`} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                            {displayText(category)}
+                          </span>
+                        ))}
                       </div>
-                      <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">{safeToFixed(entry.rating, 1)}</div>
-                    </div>
 
-                    <p className="mt-3 text-sm text-slate-600 line-clamp-3">{displayText(entry.angebotText || entry.sucheText || "Keine Beschreibung verfügbar.")}</p>
-
-                    {typeof entryDistanceKm[entry.id] === "number" && (
-                      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-700">
-                        {safeToFixed(entryDistanceKm[entry.id], 1)} km entfernt
-                      </p>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {entry.kategorien.slice(0, 4).map((category) => (
-                        <span key={`${entry.id}-${category}`} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-600">
-                          {displayText(category)}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button type="button" className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${wishlistIds.has(entry.id) ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-700"}`}>
-                        <Heart size={14} fill={wishlistIds.has(entry.id) ? "currentColor" : "none"} /> {wishlistIds.has(entry.id) ? "Gemerkt" : "Merken"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {showMap && (
-            <section className="xl:sticky xl:top-24">
-              <div className="rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm">
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest ${wishlistIds.has(entry.id) ? "border-red-200 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-700"}`}>
+                          <Heart size={14} fill={wishlistIds.has(entry.id) ? "currentColor" : "none"} /> {wishlistIds.has(entry.id) ? "Gemerkt" : "Merken"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : (
+            <section>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-1">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Karte</p>
-                    <h2 className="mt-1 text-lg font-black italic uppercase tracking-tight text-slate-900">Standorte der Treffer</h2>
+                    <h2 className="mt-1 text-base font-black italic uppercase tracking-tight text-slate-900">Standorte der Treffer</h2>
                   </div>
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
                     {mapEntries.length} Marker
                   </span>
                 </div>
                 <SearchMap
-                  className="h-[72vh] w-full rounded-[1.5rem] overflow-hidden"
+                  className="h-[72vh] w-full rounded-[1.25rem] overflow-hidden"
                   entries={mapEntries}
                   onSelectEntry={(id: string) => {
                     const entry = filteredEntries.find((item) => item.id === id);
