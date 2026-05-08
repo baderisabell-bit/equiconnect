@@ -758,8 +758,11 @@ export default function EinstellungenPage() {
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Einstellungen</p>
             <h1 className="mt-2 text-3xl font-black italic uppercase tracking-tight text-slate-900">Private personenbezogene Daten</h1>
             <p className="mt-2 text-sm font-medium text-slate-600">
-              Diese Angaben sind nicht öffentlich in deinem Profil sichtbar.
+                Diese Angaben werden nur kontobezogen gespeichert und sind nicht öffentlich in deinem Profil sichtbar.
             </p>
+              <p className="mt-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+                Private Daten werden nicht öffentlich angezeigt und nicht an andere Nutzer weitergegeben.
+              </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
