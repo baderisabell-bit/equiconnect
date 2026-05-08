@@ -68,10 +68,13 @@ const ADMIN_SECTIONS: AdminSection[] = [
 
 export default function AdminHomePage() {
   const [adminCode, setAdminCode] = useState('');
+  const [searchUserId, setSearchUserId] = useState('');
   const [searchFirstName, setSearchFirstName] = useState('');
   const [searchLastName, setSearchLastName] = useState('');
   const [searchBirthDate, setSearchBirthDate] = useState('');
+  const [showAllUsers, setShowAllUsers] = useState(false);
   const [searchedUser, setSearchedUser] = useState<AdminUser | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -94,9 +97,11 @@ export default function AdminHomePage() {
     setSearchBusy(true);
     const res = await adminFindUserByIdentity({
       adminCode,
+      userId: searchUserId,
       firstName: searchFirstName,
       lastName: searchLastName,
       birthDate: searchBirthDate,
+      showAll: showAllUsers,
     } as any);
     setSearchBusy(false);
 
@@ -105,7 +110,8 @@ export default function AdminHomePage() {
       return;
     }
 
-    setSearchedUser((res.user || null) as AdminUser | null);
+    setUsers((res.users || []) as AdminUser[]);
+    setSearchedUser((res.user || (res.users || [])[0] || null) as AdminUser | null);
   };
 
   const deleteUser = async () => {
@@ -123,6 +129,7 @@ export default function AdminHomePage() {
 
     alert('Profil gelöscht.');
     setSearchedUser(null);
+    setUsers([]);
   };
 
   const deleteUserPosts = async () => {
@@ -202,13 +209,28 @@ export default function AdminHomePage() {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input value={searchUserId} onChange={(e) => setSearchUserId(e.target.value)} placeholder="User-ID" type="number" className="p-3 rounded-xl border border-red-200 bg-white" />
             <input value={searchFirstName} onChange={(e) => setSearchFirstName(e.target.value)} placeholder="Vorname" className="p-3 rounded-xl border border-red-200 bg-white" />
             <input value={searchLastName} onChange={(e) => setSearchLastName(e.target.value)} placeholder="Nachname" className="p-3 rounded-xl border border-red-200 bg-white" />
             <input value={searchBirthDate} onChange={(e) => setSearchBirthDate(e.target.value)} type="date" className="p-3 rounded-xl border border-red-200 bg-white" />
+            <label className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700">
+              <input type="checkbox" checked={showAllUsers} onChange={(e) => setShowAllUsers(e.target.checked)} />
+              Alle Nutzer anzeigen
+            </label>
             <button type="button" onClick={searchUser} disabled={searchBusy} className="px-4 py-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-60">
-              {searchBusy ? 'Suche...' : 'Nutzer suchen'}
+              {searchBusy ? 'Suche...' : showAllUsers ? 'Alle Nutzer laden' : 'Nutzer suchen'}
             </button>
           </div>
+          {users.length > 0 && (
+            <div className="space-y-2 rounded-2xl border border-red-200 bg-white p-4 max-h-72 overflow-auto">
+              {users.map((user) => (
+                <button key={user.id} type="button" onClick={() => setSearchedUser(user)} className={`w-full text-left rounded-xl border px-3 py-2 ${searchedUser?.id === user.id ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'}`}>
+                  <p className="text-sm font-black uppercase text-slate-900">#{user.id} {user.vorname} {user.nachname}</p>
+                  <p className="text-[10px] font-black uppercase text-slate-500">{user.email} • {user.role}</p>
+                </button>
+              ))}
+            </div>
+          )}
           {searchedUser && (
             <div className="rounded-2xl border border-red-200 bg-white p-4 space-y-3">
               <div>

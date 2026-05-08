@@ -782,6 +782,16 @@ export async function deleteOwnAccount(arg1: number | { userId?: number; confirm
       await pool.query('BEGIN');
       await deleteUserRelatedData(userId, true);
       await pool.query('COMMIT');
+
+      try {
+        const cookieStore = await cookies();
+        for (const name of ['userId', 'userEmail', 'userName', 'userRole']) {
+          cookieStore.set(name, '', { path: '/', maxAge: 0 });
+        }
+      } catch (cookieErr) {
+        console.warn('Could not clear auth cookies after account deletion:', cookieErr);
+      }
+
       return { success: true } as any;
     } catch (delErr) {
       try { await pool.query('ROLLBACK'); } catch {};
@@ -2213,8 +2223,68 @@ export async function reviewChatReport(params?: { adminCode?: string; reportId?:
 }
 
 export async function adminFindUserByIdentity(paramsOrQuery?: { adminCode?: string } | string, queryObj?: any) {
-  const user = null;
-  return { success: true, users: [], user, error: null };
+  try {
+    const params = typeof paramsOrQuery === 'object' ? paramsOrQuery : { adminCode: paramsOrQuery };
+    const query = typeof paramsOrQuery === 'object' ? (queryObj || {}) : (queryObj || {});
+    const expected = String(process.env.ADMIN_PANEL_CODE || '').trim();
+    if (!expected || String(params?.adminCode || '').trim() !== expected) return { success: false, users: [], user: null, error: 'Ungültiger Admin-Code.' };
+
+    const userId = Number(query?.userId || query?.id || 0);
+    const showAll = Boolean(query?.showAll || query?.allUsers || query?.listAll);
+    const firstName = String(query?.firstName || query?.vorname || '').trim().toLowerCase();
+    const lastName = String(query?.lastName || query?.nachname || '').trim().toLowerCase();
+    const birthDate = String(query?.birthDate || query?.geburtsdatum || '').trim();
+
+    const rows = showAll || Number.isInteger(userId) && userId > 0
+      ? await pool.query(
+          `SELECT
+             u.id,
+             COALESCE(up.display_name, u.name, u.email) AS vorname,
+             ''::text AS nachname,
+             u.email,
+             u.role,
+             u.birth_date,
+             u.created_at
+           FROM users u
+           LEFT JOIN user_profiles up ON up.user_id = u.id
+           WHERE ($1::int IS NULL OR u.id = $1)
+           ORDER BY u.id DESC
+           LIMIT 250`,
+          [Number.isInteger(userId) && userId > 0 ? userId : null]
+        )
+      : await pool.query(
+          `SELECT
+             u.id,
+             COALESCE(up.display_name, u.name, u.email) AS vorname,
+             ''::text AS nachname,
+             u.email,
+             u.role,
+             u.birth_date,
+             u.created_at
+           FROM users u
+           LEFT JOIN user_profiles up ON up.user_id = u.id
+           WHERE ($1 = '' OR LOWER(COALESCE(up.display_name, u.name, u.email)) LIKE '%' || $1 || '%')
+             AND ($2 = '' OR LOWER(COALESCE(u.name, up.display_name, u.email)) LIKE '%' || $2 || '%')
+             AND ($3 = '' OR COALESCE(TO_CHAR(u.birth_date, 'YYYY-MM-DD'), '') = $3)
+           ORDER BY u.id DESC
+           LIMIT 100`,
+          [firstName, lastName, birthDate]
+        );
+
+    const users = (rows.rows || []).map((row: any) => ({
+      id: Number(row.id),
+      vorname: String(row.vorname || '').trim() || `Nutzer ${row.id}`,
+      nachname: String(row.nachname || '').trim(),
+      email: String(row.email || '').trim(),
+      role: String(row.role || 'nutzer'),
+      birth_date: row.birth_date ? String(row.birth_date) : null,
+    }));
+
+    return { success: true, users, user: users[0] || null, error: null };
+  } catch (error: any) {
+    console.error('adminFindUserByIdentity error:', error);
+    return { success: false, users: [], user: null, error: error?.message || 'Suche fehlgeschlagen.' };
+  }
 }
 
 export async function adminApplyUserSanction(paramsOrUserId?: { adminCode?: string; firstName?: string; lastName?: string; birthDate?: string; action?: string; note?: string; durationDays?: number; reason?: string } | number, data?: any) {
