@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import NotificationBell from './components/notification-bell';
-import FooterLinks from './components/footer-links';
 import { safeToFixed } from './lib/num';
 import { getHomeHubData, rateUser, submitAnimalWelfareStatement, submitAnimalWelfareVote, trackAdvertisingViews } from './actions';
 
@@ -686,7 +685,6 @@ export default function Startseite() {
         <main className="flex-grow p-6 space-y-8 flex flex-col items-center">
           <HomeHubSections isLoggedIn={true} />
         </main>
-        <FooterLinks />
       </div>
     );
   }
@@ -744,7 +742,6 @@ export default function Startseite() {
         </section>
         <HomeHubSections isLoggedIn={false} />
       </main>
-      <FooterLinks />
     </div>
   );
 }

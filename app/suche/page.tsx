@@ -166,8 +166,16 @@ function DetailModal({
 
 
   const handleConnect = () => {
-    if (entry.userId && userId) {
-      void sendConnectionRequest({ requesterId: userId, targetUserId: entry.userId });
+    const targetUserId = entry.userId;
+    if (typeof targetUserId === 'number' && targetUserId > 0 && userId) {
+      void (async () => {
+        const res = await sendConnectionRequest({ requesterId: userId, targetUserId });
+        if (!res.success) {
+          alert(res.error || 'Vernetzungsanfrage konnte nicht gesendet werden.');
+          return;
+        }
+        router.push(`/nachrichten?target=${encodeURIComponent(displayText(entry.name))}&targetType=${entry.typ === "angebot" ? "anzeige" : "person"}&targetUserId=${targetUserId}`);
+      })();
     }
   };
   const handleAddComment = () => {
@@ -598,8 +606,8 @@ function SuchseiteContent() {
       <main className="mx-auto max-w-[1600px] px-3 py-6 sm:px-6 lg:px-8">
         {/* Filter Header */}
         <div className="mb-6 rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="flex items-center gap-2 flex-nowrap overflow-x-auto">
-            <div className="relative">
+          <div className="flex flex-wrap items-start gap-2 overflow-visible">
+            <div className="relative z-30 shrink-0">
               <button
                 type="button"
                 onClick={() => setTypeDropdownOpen(!typeDropdownOpen)}
@@ -608,10 +616,11 @@ function SuchseiteContent() {
                 {FILTER_TYPES.find((t) => t.value === filterType)?.label} <ChevronDown size={14} />
               </button>
               {typeDropdownOpen && (
-                <div className="absolute top-12 left-0 z-20 rounded-2xl border border-slate-200 bg-white shadow-lg">
+                <div className="absolute top-12 left-0 z-40 rounded-2xl border border-slate-200 bg-white shadow-lg min-w-40 overflow-hidden">
                   {FILTER_TYPES.map((type) => (
                     <button
                       key={type.value}
+                      type="button"
                       onClick={() => {
                         setFilterType(type.value);
                         setTypeDropdownOpen(false);
@@ -625,7 +634,7 @@ function SuchseiteContent() {
               )}
             </div>
 
-            <div className="relative">
+            <div className="relative z-30 shrink-0">
               <button
                 type="button"
                 onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
@@ -634,8 +643,9 @@ function SuchseiteContent() {
                 {selectedCategory || "Alle Kategorien"} <ChevronDown size={14} />
               </button>
               {categoryDropdownOpen && (
-                <div className="absolute top-12 left-0 z-20 max-h-64 w-48 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
+                <div className="absolute top-12 left-0 z-40 max-h-64 w-56 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedCategory("");
                       setSelectedThemes([]);
@@ -646,7 +656,7 @@ function SuchseiteContent() {
                     Alle
                   </button>
                   {categoryOptions.map((category) => (
-                    <button key={category.label} onClick={() => { setSelectedCategory(category.label); setCategoryDropdownOpen(false); }} className="block w-full px-4 py-2 text-left text-sm font-bold hover:bg-slate-50">
+                    <button key={category.label} type="button" onClick={() => { setSelectedCategory(category.label); setCategoryDropdownOpen(false); }} className="block w-full px-4 py-2 text-left text-sm font-bold hover:bg-slate-50">
                       {category.label}
                     </button>
                   ))}

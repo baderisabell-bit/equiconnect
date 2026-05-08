@@ -107,7 +107,29 @@ export default function NachrichtenPage() {
           };
         });
         setChats(mapped);
-        if (mapped.length > 0) setActiveChat(mapped[0]);
+        if (quickTargetUserId) {
+          const targetChat = mapped.find((chat) => chat.partnerId === quickTargetUserId) || null;
+          if (targetChat) {
+            setActiveChat(targetChat);
+          } else {
+            setActiveChat({
+              id: 'temp-chat',
+              partnerId: quickTargetUserId,
+              partnerName: quickTarget,
+              typ: 'person',
+              letzteNachricht: 'Noch keine Nachrichten',
+              zeit: '',
+              online: false,
+              ungelesen: 0,
+              favorit: false,
+              archiviert: false,
+              gemeldet: false,
+              verlauf: []
+            });
+          }
+        } else if (mapped.length > 0) {
+          setActiveChat(mapped[0]);
+        }
         setIsLoadingChats(false);
       };
       loadData();
@@ -299,7 +321,7 @@ export default function NachrichtenPage() {
       }
 
       const chatRes = await createOrGetConnectedChat({ requesterId: userId, targetUserId: quickTargetUserId });
-      if (!chatRes.success || !chatRes.chatId) {
+      if (!chatRes.success || chatRes.chatId === null || chatRes.chatId === undefined) {
         alert(chatRes.error || 'Vor dem Schreiben muss eine Vernetzungsanfrage angenommen werden.');
         return;
       }
