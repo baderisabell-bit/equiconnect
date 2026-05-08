@@ -1244,7 +1244,7 @@ export default function EinstellungenPage() {
               </div>
             )}
 
-            <div id="section-delete-profile" className="pt-6 border-t border-black-100 space-y-4">
+            <div id="section-delete-profile" className="pt-6 border-t border-slate-200 space-y-4">
               <div>
                 <h2 className="mt-2 text-xl font-black italic uppercase tracking-tight text-slate-900">Profil dauerhaft löschen</h2>
                 <p className="mt-2 text-sm font-medium text-slate-600">
@@ -1257,7 +1257,7 @@ export default function EinstellungenPage() {
                 value={deleteConfirmationInput}
                 onChange={(e) => setDeleteConfirmationInput(e.target.value)}
                 placeholder="LOESCHEN"
-                className="w-full md:w-72 p-4 rounded-xl border border-black-200 bg-black-50 font-black uppercase outline-none focus:border-black-400"
+                className="w-full md:w-72 p-4 rounded-xl border border-slate-200 bg-white font-black uppercase outline-none focus:border-slate-400"
               />
 
               <input
@@ -1265,14 +1265,14 @@ export default function EinstellungenPage() {
                 value={deletePasswordInput}
                 onChange={(e) => setDeletePasswordInput(e.target.value)}
                 placeholder="Aktuelles Passwort"
-                className="w-full md:w-72 p-4 rounded-xl border border-black-200 bg-black-50 font-bold outline-none focus:border-black-400"
+                className="w-full md:w-72 p-4 rounded-xl border border-slate-200 bg-white font-bold outline-none focus:border-slate-400"
               />
 
               <button
                 type="button"
                 onClick={handleDeleteAccount}
                 disabled={deletingAccount || deleteCooldownActive}
-                className="w-full md:w-auto px-8 py-4 rounded-xl bg-black-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-black-500 disabled:opacity-60"
+                className="w-full md:w-auto px-8 py-4 rounded-xl bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-700 disabled:opacity-60"
               >
                 {deletingAccount ? "Lösche Profil..." : deleteCooldownActive ? "Bitte kurz warten..." : "Profil dauerhaft löschen"}
               </button>

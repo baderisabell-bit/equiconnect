@@ -439,12 +439,42 @@ export default function AdminModerationPage() {
               <input value={searchBirthDate} onChange={(e) => setSearchBirthDate(e.target.value)} type="date" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
               <button type="button" onClick={searchUser} className="px-4 py-3 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white">Nutzer suchen</button>
             </div>
-            {searchedUser && (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <p className="text-sm font-black uppercase text-slate-900">{searchedUser.vorname} {searchedUser.nachname}</p>
-                <p className="text-[10px] font-black uppercase text-slate-500">{searchedUser.email} • {searchedUser.role}</p>
-              </div>
-            )}
+                    {searchedUser && (
+                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                        <p className="text-sm font-black uppercase text-slate-900">{searchedUser.vorname} {searchedUser.nachname}</p>
+                        <p className="text-[10px] font-black uppercase text-slate-500">{searchedUser.email} • {searchedUser.role}</p>
+                        <div className="flex gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm('Profil wirklich dauerhaft löschen?')) return;
+                              const res = await (window as any).appActions?.adminDeleteUser?.(adminCode, searchedUser.id) || await (await import('../../actions')).adminDeleteUser(adminCode, searchedUser.id);
+                              if (!res.success) return alert(res.error || 'Löschen fehlgeschlagen');
+                              alert('Profil gelöscht.');
+                              setSearchedUser(null);
+                              await loadDashboard(adminCode);
+                            }}
+                            className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-red-600 text-white"
+                          >
+                            Profil löschen
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm('Alle Beiträge dieses Profils löschen?')) return;
+                              const res = await (window as any).appActions?.adminDeleteUserPosts?.(adminCode, searchedUser.id) || await (await import('../../actions')).adminDeleteUserPosts(adminCode, searchedUser.id);
+                              if (!res.success) return alert(res.error || 'Löschen fehlgeschlagen');
+                              alert('Beiträge gelöscht.');
+                              await loadDashboard(adminCode);
+                            }}
+                            className="px-3 py-2 rounded-xl text-[10px] font-black uppercase border border-slate-200 text-slate-700 bg-white"
+                          >
+                            Beiträge löschen
+                          </button>
+                        </div>
+                      </div>
+                    )}
             <textarea value={sanctionReason} onChange={(e) => setSanctionReason(e.target.value)} rows={3} placeholder="Begründung" className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={sanctionAction} onChange={(e) => setSanctionAction(e.target.value as any)} className="p-3 rounded-xl border border-slate-200 bg-slate-50">

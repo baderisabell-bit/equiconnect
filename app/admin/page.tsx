@@ -1,9 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, BellRing, Shield, Sparkles, Megaphone, Users, CalendarCheck2 } from "lucide-react";
-import { adminLogout } from "../actions";
+import { ArrowRight, BadgeCheck, BellRing, Shield, Sparkles, Megaphone, Users, CalendarCheck2, Trash2 } from "lucide-react";
+import { adminDeleteUser, adminDeleteUserPosts, adminFindUserByIdentity, adminLogout } from "../actions";
+
+type AdminUser = {
+  id: number;
+  vorname: string;
+  nachname: string;
+  email: string;
+  role: string;
+  birth_date?: string | null;
+};
 
 type AdminSection = {
   href: string;
@@ -58,10 +67,78 @@ const ADMIN_SECTIONS: AdminSection[] = [
 ];
 
 export default function AdminHomePage() {
+  const [adminCode, setAdminCode] = useState('');
+  const [searchFirstName, setSearchFirstName] = useState('');
+  const [searchLastName, setSearchLastName] = useState('');
+  const [searchBirthDate, setSearchBirthDate] = useState('');
+  const [searchedUser, setSearchedUser] = useState<AdminUser | null>(null);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  useEffect(() => {
+    setAdminCode(sessionStorage.getItem('adminPanelCode') || '');
+  }, []);
+
   const onLogout = async () => {
     sessionStorage.removeItem("adminPanelCode");
     await adminLogout();
     window.location.href = "/admin/login";
+  };
+
+  const searchUser = async () => {
+    if (!adminCode.trim()) {
+      alert('Bitte zuerst im Admin-Login anmelden.');
+      return;
+    }
+
+    setSearchBusy(true);
+    const res = await adminFindUserByIdentity({
+      adminCode,
+      firstName: searchFirstName,
+      lastName: searchLastName,
+      birthDate: searchBirthDate,
+    } as any);
+    setSearchBusy(false);
+
+    if (!res.success) {
+      alert(res.error || 'Nutzer konnte nicht gefunden werden.');
+      return;
+    }
+
+    setSearchedUser((res.user || null) as AdminUser | null);
+  };
+
+  const deleteUser = async () => {
+    if (!adminCode.trim() || !searchedUser) return;
+    if (!confirm('Profil wirklich dauerhaft löschen?')) return;
+
+    setDeleteBusy(true);
+    const res = await adminDeleteUser({ adminCode, userId: searchedUser.id } as any);
+    setDeleteBusy(false);
+
+    if (!res.success) {
+      alert(res.error || 'Löschen fehlgeschlagen.');
+      return;
+    }
+
+    alert('Profil gelöscht.');
+    setSearchedUser(null);
+  };
+
+  const deleteUserPosts = async () => {
+    if (!adminCode.trim() || !searchedUser) return;
+    if (!confirm('Alle Beiträge dieses Profils löschen?')) return;
+
+    setDeleteBusy(true);
+    const res = await adminDeleteUserPosts({ adminCode, userId: searchedUser.id } as any);
+    setDeleteBusy(false);
+
+    if (!res.success) {
+      alert(res.error || 'Beiträge konnten nicht gelöscht werden.');
+      return;
+    }
+
+    alert('Beiträge gelöscht.');
   };
 
   return (
@@ -109,6 +186,46 @@ export default function AdminHomePage() {
               </div>
             </Link>
           ))}
+        </section>
+
+        <section className="rounded-[1.75rem] border border-red-100 bg-red-50 p-5 md:p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-red-600 border border-red-100">
+              <Trash2 size={18} />
+            </span>
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-red-700">Löschfunktionen</p>
+              <p className="text-sm text-red-950 leading-relaxed">
+                Profile und Beiträge kannst du direkt hier suchen und löschen. Falls du mehr Details brauchst, ist die
+                <Link href="/admin/moderation" className="font-black underline underline-offset-2"> Moderation</Link> weiterhin verfügbar.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input value={searchFirstName} onChange={(e) => setSearchFirstName(e.target.value)} placeholder="Vorname" className="p-3 rounded-xl border border-red-200 bg-white" />
+            <input value={searchLastName} onChange={(e) => setSearchLastName(e.target.value)} placeholder="Nachname" className="p-3 rounded-xl border border-red-200 bg-white" />
+            <input value={searchBirthDate} onChange={(e) => setSearchBirthDate(e.target.value)} type="date" className="p-3 rounded-xl border border-red-200 bg-white" />
+            <button type="button" onClick={searchUser} disabled={searchBusy} className="px-4 py-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-60">
+              {searchBusy ? 'Suche...' : 'Nutzer suchen'}
+            </button>
+          </div>
+          {searchedUser && (
+            <div className="rounded-2xl border border-red-200 bg-white p-4 space-y-3">
+              <div>
+                <p className="text-sm font-black uppercase text-slate-900">{searchedUser.vorname} {searchedUser.nachname}</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">{searchedUser.email} • {searchedUser.role}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={deleteUser} disabled={deleteBusy} className="px-4 py-3 rounded-xl bg-red-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-60">
+                  {deleteBusy ? 'Lösche...' : 'Profil löschen'}
+                </button>
+                <button type="button" onClick={deleteUserPosts} disabled={deleteBusy} className="px-4 py-3 rounded-xl border border-red-200 bg-white text-red-700 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 disabled:opacity-60">
+                  Beiträge löschen
+                </button>
+              </div>
+              <p className="text-[11px] font-bold text-slate-500">Die Löschung läuft über dieselbe Serverlogik wie im Profilbereich.</p>
+            </div>
+          )}
         </section>
 
         <section className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 p-5 md:p-6">
