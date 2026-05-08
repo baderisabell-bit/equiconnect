@@ -755,8 +755,42 @@ export async function resetPasswordWithToken(tokenOrObj: string | { token?: stri
 }
 
 export async function deleteOwnAccount(arg1: number | { userId?: number; confirmation?: string; currentPassword?: string }): Promise<any> {
-  const userId = typeof arg1 === 'object' ? arg1.userId : arg1;
-  return { success: false, error: 'Kontolöschung nicht implementiert.' } as any;
+  try {
+    const userId = typeof arg1 === 'object' ? Number(arg1.userId) : Number(arg1);
+    const currentPassword = typeof arg1 === 'object' ? String(arg1.currentPassword || '') : '';
+
+    if (!Number.isInteger(userId) || userId <= 0) return { success: false, error: 'Ungültige Nutzer-ID.' } as any;
+
+    // If a password was provided, validate it before deletion (best-effort)
+    if (currentPassword) {
+      try {
+        const q = await pool.query('SELECT password_hash, password_digest, password, passhash FROM users WHERE id = $1 LIMIT 1', [userId]);
+        const row = q?.rows?.[0];
+        const hashed = String(row?.password_hash || row?.password_digest || row?.password || row?.passhash || '');
+        if (hashed) {
+          const ok = await bcrypt.compare(String(currentPassword || ''), String(hashed));
+          if (!ok) return { success: false, error: 'Aktuelles Passwort ist falsch.' } as any;
+        }
+      } catch (pwErr) {
+        // If password check fails due to DB issue, abort for safety
+        return { success: false, error: 'Passwortprüfung fehlgeschlagen.' } as any;
+      }
+    }
+
+    // Perform account deletion (cascade will clean related data per schema)
+    try {
+      await pool.query('BEGIN');
+      await deleteUserRelatedData(userId, true);
+      await pool.query('COMMIT');
+      return { success: true } as any;
+    } catch (delErr) {
+      try { await pool.query('ROLLBACK'); } catch {};
+      console.error('Error deleting user account:', delErr);
+      return { success: false, error: 'Konto konnte nicht gelöscht werden.' } as any;
+    }
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Fehler bei Kontolöschung.' } as any;
+  }
 }
 
 // ==================== PROFILE DATA ====================
@@ -1051,6 +1085,59 @@ async function persistProfileJson(userId: number, nextProfileData: any, roleFall
     [userId, role, displayName, mergedProfileData]
   );
   return mergedProfileData;
+}
+
+async function deleteUserRelatedData(userId: number, includeUserRow: boolean = false) {
+  const deletions: Array<{ table: string; column: string }> = [
+    { table: 'contact_form_messages', column: 'user_id' },
+    { table: 'notifications', column: 'user_id' },
+    { table: 'password_reset_tokens', column: 'user_id' },
+    { table: 'wishlists', column: 'user_id' },
+    { table: 'wishlist_items', column: 'user_id' },
+    { table: 'profile_views', column: 'user_id' },
+    { table: 'interactions', column: 'user_id' },
+    { table: 'offer_views', column: 'viewer_id' },
+    { table: 'ratings', column: 'rated_user_id' },
+    { table: 'ratings', column: 'rating_user_id' },
+    { table: 'profile_reports', column: 'reported_user_id' },
+    { table: 'profile_reports', column: 'reporter_user_id' },
+    { table: 'connections', column: 'requester_user_id' },
+    { table: 'connections', column: 'addressee_user_id' },
+    { table: 'expert_students', column: 'expert_id' },
+    { table: 'expert_students', column: 'student_id' },
+    { table: 'student_billing_info', column: 'expert_id' },
+    { table: 'student_billing_info', column: 'student_id' },
+    { table: 'expert_student_bookings', column: 'expert_id' },
+    { table: 'expert_student_bookings', column: 'student_id' },
+    { table: 'expert_calendar_slots', column: 'expert_id' },
+    { table: 'expert_calendar_slots', column: 'student_id' },
+    { table: 'expert_calendar_availability', column: 'expert_id' },
+    { table: 'student_service_plans', column: 'expert_id' },
+    { table: 'student_service_plans', column: 'student_id' },
+    { table: 'user_subscriptions', column: 'user_id' },
+    { table: 'user_subscription_invoices', column: 'user_id' },
+    { table: 'visibility_promotions', column: 'user_id' },
+    { table: 'expert_team_members', column: 'expert_id' },
+    { table: 'expert_team_members', column: 'member_user_id' },
+    { table: 'expert_horses', column: 'expert_id' },
+    { table: 'user_profiles', column: 'user_id' },
+  ];
+
+  if (includeUserRow) {
+    deletions.push({ table: 'users', column: 'id' });
+  }
+
+  for (const item of deletions) {
+    try {
+      await pool.query(`DELETE FROM ${item.table} WHERE ${item.column} = $1`, [userId]);
+    } catch (error: any) {
+      const code = String(error?.code || '').trim();
+      if (code === '42P01' || code === '42703') {
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 export async function getProfileAnalytics(userId: number): Promise<any> {
@@ -2136,6 +2223,67 @@ export async function adminApplyUserSanction(paramsOrUserId?: { adminCode?: stri
 
 export async function reviewAnimalWelfareCase(paramsOrCaseId?: { adminCode?: string; caseId?: number; outcome?: string; note?: string } | number, data?: any) {
   return { success: true, error: null };
+}
+
+export async function adminDeleteUser(paramsOrAdminCode?: { adminCode?: string; userId?: number } | string, maybeUserId?: number) {
+  try {
+    let adminCode: string | null = null;
+    let userId: number | null = null;
+    if (typeof paramsOrAdminCode === 'string') {
+      adminCode = paramsOrAdminCode;
+      userId = maybeUserId ? Number(maybeUserId) : null;
+    } else if (typeof paramsOrAdminCode === 'object') {
+      adminCode = String(paramsOrAdminCode.adminCode || null);
+      userId = paramsOrAdminCode.userId ? Number(paramsOrAdminCode.userId) : null;
+    }
+
+    const expected = String(process.env.ADMIN_PANEL_CODE || '').trim();
+    if (!expected || String(adminCode || '').trim() !== expected) return { success: false, error: 'Ungültiger Admin-Code.' };
+    if (!userId || !Number.isInteger(userId) || userId <= 0) return { success: false, error: 'Ungültige Nutzer-ID.' };
+
+    try {
+      await pool.query('BEGIN');
+      await deleteUserRelatedData(userId, true);
+      await pool.query('COMMIT');
+      return { success: true };
+    } catch (err) {
+      try { await pool.query('ROLLBACK'); } catch {}
+      console.error('adminDeleteUser error:', err);
+      return { success: false, error: 'Konnte Nutzer nicht löschen.' };
+    }
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Fehler' };
+  }
+}
+
+export async function adminDeleteUserPosts(paramsOrAdminCode?: { adminCode?: string; userId?: number } | string, maybeUserId?: number) {
+  try {
+    let adminCode: string | null = null;
+    let userId: number | null = null;
+    if (typeof paramsOrAdminCode === 'string') {
+      adminCode = paramsOrAdminCode;
+      userId = maybeUserId ? Number(maybeUserId) : null;
+    } else if (typeof paramsOrAdminCode === 'object') {
+      adminCode = String(paramsOrAdminCode.adminCode || null);
+      userId = paramsOrAdminCode.userId ? Number(paramsOrAdminCode.userId) : null;
+    }
+
+    const expected = String(process.env.ADMIN_PANEL_CODE || '').trim();
+    if (!expected || String(adminCode || '').trim() !== expected) return { success: false, error: 'Ungültiger Admin-Code.' };
+    if (!userId || !Number.isInteger(userId) || userId <= 0) return { success: false, error: 'Ungültige Nutzer-ID.' };
+
+    // Clear profile posts JSON using existing helper
+    try {
+      const snapshot = await getUserProfileSnapshot(userId);
+      await persistProfileJson(userId, { beitraege: [] }, String(snapshot?.profile_role || snapshot?.user_role || 'nutzer'), snapshot?.display_name || `Profil ${userId}`);
+      return { success: true };
+    } catch (err) {
+      console.error('adminDeleteUserPosts error:', err);
+      return { success: false, error: 'Konnte Beiträge nicht löschen.' };
+    }
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Fehler' };
+  }
 }
 
 // ==================== ADMIN - EARLY ACCESS ====================
