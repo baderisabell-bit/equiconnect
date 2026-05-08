@@ -7,6 +7,48 @@ import path from 'path';
 import { put } from '@vercel/blob';
 import { cookies } from 'next/headers';
 
+// Brevo email helper
+async function sendBrevoTemplate(templateId: number | string | null, toEmail: string | null, toName: string | null, params: any = {}) {
+  try {
+    const tpl = Number(templateId || 0);
+    if (!tpl || !toEmail) return { success: false, error: 'No template or recipient' };
+
+    const apiKey = String(process.env.BREVO_API_KEY || process.env.SIB_API_KEY || '').trim();
+    if (!apiKey) return { success: false, error: 'No Brevo API key configured' };
+
+    const senderEmail = String(process.env.BREVO_SMTP_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
+    const senderName = String(process.env.SMTP_FROM_NAME || process.env.BREVO_SMTP_FROM_NAME || 'Equily').trim();
+
+    const body = {
+      to: [{ email: toEmail, name: toName || undefined }],
+      templateId: tpl,
+      params: params || {},
+      sender: { name: senderName, email: senderEmail || 'info@equily.de' },
+    } as any;
+
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error('Brevo send failed', res.status, text);
+      return { success: false, status: res.status, error: text };
+    }
+
+    const json = await res.json().catch(() => ({}));
+    return { success: true, data: json };
+  } catch (err: any) {
+    console.error('Brevo send exception', err);
+    return { success: false, error: String(err?.message || err) };
+  }
+}
+
 export interface ProfileResponse {
   success: boolean;
   data?: any;
@@ -1644,11 +1686,48 @@ export async function upsertUserSubscriptionSettings(data: any) {
        RETURNING *`,
       [userId, role, planKey, paymentMethod, monthlyPriceCents, status, sepaAccountHolder, sepaIban, paypalEmail]
     );
+    const saved = result.rows[0] || null;
+
+    // Try to send confirmation email (best-effort)
+    try {
+      if (saved && Number(saved.user_id) > 0) {
+        const u = await pool.query('SELECT id, email, name, display_name FROM users WHERE id = $1 LIMIT 1', [Number(saved.user_id)]);
+        const userRow = u?.rows?.[0];
+        const email = String(userRow?.email || '').trim() || null;
+        const name = String(userRow?.display_name || userRow?.name || '').trim() || null;
+
+        const plan = String(saved.plan_key || planKey || '').toLowerCase();
+        const roleSaved = String(saved.role || role || '').toLowerCase();
+
+        let templateEnvName: string | null = null;
+        if (plan.includes('premium') && roleSaved === 'nutzer') templateEnvName = 'BREVO_NUTZER_PREMIUM_BESTÄTIGUNG_TEMPLATE_ID';
+        else if (plan.includes('premium') && roleSaved === 'experte') templateEnvName = 'BREVO_EXPERT_PREMIUM_BESTÄTIGUNG_TEMPLATE_ID';
+        else if (plan.includes('experte') && plan.includes('basic')) templateEnvName = 'BREVO_EXPERT_BASIS_BESTÄTIGUNG_TEMPLATE_ID';
+        else if (plan.includes('individuell') || plan.includes('werbung')) templateEnvName = 'BREVO_INDIVIDUELLE_WERBUNG_BESTÄTIGUNG_TEMPLATE_ID';
+        else if (plan.includes('anheften') || plan.includes('pin') || plan.includes('oben')) templateEnvName = 'BREVO_ANZEIGE_OBEN_ANHEFTEN_BESTÄTIGUNG_TEMPLATE_ID';
+
+        const templateId = templateEnvName ? Number(process.env[templateEnvName] || 0) : 0;
+        if (templateId && email) {
+          const params = {
+            USER_ID: saved.user_id,
+            PLAN_KEY: saved.plan_key,
+            PLAN_LABEL: saved.plan_key || planKey,
+            PAYMENT_METHOD: saved.payment_method || paymentMethod,
+            STARTED_AT: saved.started_at || new Date().toISOString(),
+          };
+          const sendRes = await sendBrevoTemplate(templateId, email, name, params);
+          if (!sendRes?.success) console.warn('Subscription mail send failed', sendRes?.error || sendRes);
+        }
+      }
+    } catch (emailErr) {
+      console.error('Error sending subscription confirmation email:', emailErr);
+    }
+
     return {
       success: true,
-      data: result.rows[0] || null,
+      data: saved,
       paymentMethod,
-      monthlyPriceCents: Number(result.rows[0]?.monthly_price_cents || monthlyPriceCents || 0),
+      monthlyPriceCents: Number(saved?.monthly_price_cents || monthlyPriceCents || 0),
     };
   } catch (error: any) {
     return { success: false, error: 'Einstellungen konnten nicht gespeichert werden.' };
