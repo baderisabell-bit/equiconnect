@@ -111,6 +111,30 @@ export default function AdminModerationPage() {
   const [reviewNote, setReviewNote] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const resolveAdminCode = (allowPrompt: boolean = false) => {
+    const storedCode = String(sessionStorage.getItem('adminPanelCode') || '').trim();
+    if (storedCode) {
+      if (storedCode !== adminCode) setAdminCode(storedCode);
+      return storedCode;
+    }
+
+    const currentCode = String(adminCode || '').trim();
+    if (currentCode) {
+      sessionStorage.setItem('adminPanelCode', currentCode);
+      return currentCode;
+    }
+
+    if (!allowPrompt) return '';
+
+    const code = window.prompt('Admin-Code eingeben') || '';
+    const normalized = String(code).trim();
+    if (normalized) {
+      sessionStorage.setItem('adminPanelCode', normalized);
+      setAdminCode(normalized);
+    }
+    return normalized;
+  };
+
   const loadDashboard = async (code: string) => {
     setLoading(true);
     const res = await getModerationDashboard(code);
@@ -189,7 +213,10 @@ export default function AdminModerationPage() {
   };
 
   const searchUser = async () => {
-    const res = await adminFindUserByIdentity(adminCode, {
+    const code = resolveAdminCode(true);
+    if (!code) return;
+
+    const res = await adminFindUserByIdentity(code, {
       firstName: searchFirstName,
       lastName: searchLastName,
       birthDate: searchBirthDate,
@@ -204,13 +231,10 @@ export default function AdminModerationPage() {
   };
 
   const loadAllUsers = async () => {
-    if (!adminCode.trim()) {
-      const code = window.prompt('Admin-Code eingeben');
-      if (!code) return;
-      sessionStorage.setItem('adminPanelCode', String(code));
-      setAdminCode(String(code));
-    }
-    const res = await adminFindUserByIdentity(adminCode, { showAll: true });
+    const code = resolveAdminCode(true);
+    if (!code) return;
+
+    const res = await adminFindUserByIdentity(code, { showAll: true });
     if (!res.success) return alert(res.error || 'Konnte Nutzerliste nicht laden.');
     setUsers((res.users || []) as IdentityUser[]);
     setSearchedUser((res.user || (res.users || [])[0] || null) as IdentityUser | null);
@@ -218,8 +242,14 @@ export default function AdminModerationPage() {
 
   const applySanction = async () => {
     setSanctionBusy(true);
+    const code = resolveAdminCode(true);
+    if (!code) {
+      setSanctionBusy(false);
+      return;
+    }
+
     const res = await adminApplyUserSanction({
-      adminCode,
+      adminCode: code,
       firstName: searchFirstName,
       lastName: searchLastName,
       birthDate: searchBirthDate,
@@ -240,8 +270,13 @@ export default function AdminModerationPage() {
 
   const decideWelfareCase = async (caseId: number, outcome: "suspend" | "clear") => {
     setSaving(true);
+    const code = resolveAdminCode(true);
+    if (!code) {
+      setSaving(false);
+      return;
+    }
     const res = await reviewAnimalWelfareCase({
-      adminCode,
+      adminCode: code,
       caseId,
       outcome,
       note: reviewNote,
