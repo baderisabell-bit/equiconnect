@@ -35,6 +35,7 @@ const CHAT_META_STORAGE_PREFIX = 'chatMeta';
 export default function NachrichtenPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const [messageInput, setMessageInput] = useState("");
   const [userId, setUserId] = useState<number | null>(null);
   const [quickTarget, setQuickTarget] = useState("");
@@ -111,6 +112,7 @@ export default function NachrichtenPage() {
           const targetChat = mapped.find((chat) => chat.partnerId === quickTargetUserId) || null;
           if (targetChat) {
             setActiveChat(targetChat);
+            setMobileView('chat');
           } else {
             setActiveChat({
               id: 'temp-chat',
@@ -126,9 +128,11 @@ export default function NachrichtenPage() {
               gemeldet: false,
               verlauf: []
             });
+            setMobileView('chat');
           }
         } else if (mapped.length > 0) {
           setActiveChat(mapped[0]);
+          setMobileView('chat');
         }
         setIsLoadingChats(false);
       };
@@ -166,6 +170,7 @@ export default function NachrichtenPage() {
 
     setChats((prev) => (prev.length === 0 ? [tempChat] : prev));
     setActiveChat((prev) => prev || tempChat);
+    setMobileView('chat');
   }, []);
 
   useEffect(() => {
@@ -487,7 +492,10 @@ export default function NachrichtenPage() {
             return (
             <button
               key={chat.id}
-              onClick={() => setActiveChat(chat)}
+              onClick={() => {
+                setActiveChat(chat);
+                setMobileView('chat');
+              }}
               className={`w-full p-5 flex items-center gap-4 transition-all border-b border-slate-50 hover:bg-slate-50 ${isActive ? "bg-emerald-50/50 border-r-4 border-r-emerald-600" : ""}`}
             >
               <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-emerald-600 text-lg uppercase">
@@ -511,12 +519,25 @@ export default function NachrichtenPage() {
       </aside>
 
       {/* RECHTE SEITE: CHAT-FENSTER */}
-      <main className="hidden md:flex flex-1 flex-col bg-slate-50/50 relative">
+      <main className={`${mobileView === 'chat' ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-slate-50/50 relative`}>
         {activeChat ? (
         <>
-        {quickTarget && (
-          <div className="px-6 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between gap-3">
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Direktnachricht vorbereitet für {quickTarget}</p>
+        <div className="px-6 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileView('list')}
+              className="md:hidden px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white border border-emerald-200 text-emerald-700"
+            >
+              Zurück
+            </button>
+            {quickTarget ? (
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 truncate">Direktnachricht vorbereitet für {quickTarget}</p>
+            ) : (
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 truncate">Chat mit {activeChat.partnerName}</p>
+            )}
+          </div>
+          {quickTarget && (
             <button
               type="button"
               onClick={requestConnectionForQuickTarget}
@@ -524,8 +545,8 @@ export default function NachrichtenPage() {
             >
               Vernetzen
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="flex-1 p-8 overflow-y-auto space-y-6 flex flex-col no-scrollbar">
           {activeChat.verlauf.map((msg) => {
