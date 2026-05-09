@@ -40,8 +40,6 @@ export default function NachrichtenPage() {
   const [userId, setUserId] = useState<number | null>(null);
   const [quickTarget, setQuickTarget] = useState("");
   const [quickTargetUserId, setQuickTargetUserId] = useState<number | null>(null);
-  const [composeRecipientId, setComposeRecipientId] = useState('');
-  const [composeRecipientName, setComposeRecipientName] = useState('');
   const [composeBusy, setComposeBusy] = useState(false);
   const [composeError, setComposeError] = useState('');
   const [isLoadingChats, setIsLoadingChats] = useState(true);
@@ -156,11 +154,6 @@ export default function NachrichtenPage() {
         }).catch(() => {
           // Keep the session role when resolving fails.
         });
-      }
-
-      if (quickTargetUserId) {
-        setComposeRecipientId(String(quickTargetUserId));
-        setComposeRecipientName(quickTarget);
       }
 
       void refreshChats(uid, quickTargetUserId || null);
@@ -423,12 +416,12 @@ export default function NachrichtenPage() {
     e.preventDefault();
     if (!userId) return;
 
-    const recipientId = Number(quickTargetUserId || composeRecipientId);
+    const recipientId = Number(quickTargetUserId || activeChat?.partnerId || 0);
     const messageText = messageInput.trim();
-    const recipientName = composeRecipientName.trim() || quickTarget.trim() || (Number.isInteger(recipientId) && recipientId > 0 ? `Nutzer ${recipientId}` : '');
+    const recipientName = quickTarget.trim() || activeChat?.partnerName || (Number.isInteger(recipientId) && recipientId > 0 ? `Nutzer ${recipientId}` : '');
 
     if (!Number.isInteger(recipientId) || recipientId <= 0) {
-      setComposeError('Bitte eine gültige Empfänger-ID eingeben.');
+      setComposeError('Bitte öffne eine Anzeige oder ein Profil und klicke dort auf Nachricht.');
       return;
     }
 
@@ -455,7 +448,6 @@ export default function NachrichtenPage() {
       return;
     }
 
-    setComposeRecipientName(recipientName);
     setMessageInput('');
     setMobileView('chat');
 
@@ -554,24 +546,12 @@ export default function NachrichtenPage() {
           <form onSubmit={handleStartConversation} className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 space-y-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Neue Nachricht</p>
-              <p className="text-xs text-emerald-900/70 font-medium mt-1">Empfänger angeben, Nachricht schreiben und senden.</p>
+              <p className="text-xs text-emerald-900/70 font-medium mt-1">Empfänger wird automatisch aus dem gewählten Profil/der Anzeige übernommen.</p>
             </div>
             <div className="grid grid-cols-1 gap-2">
-              <input
-                type="number"
-                min={1}
-                value={composeRecipientId}
-                onChange={(e) => setComposeRecipientId(e.target.value)}
-                placeholder="Empfänger-ID"
-                className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-sm outline-none focus:border-emerald-400"
-              />
-              <input
-                type="text"
-                value={composeRecipientName}
-                onChange={(e) => setComposeRecipientName(e.target.value)}
-                placeholder="Name (optional)"
-                className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-sm outline-none focus:border-emerald-400"
-              />
+              <div className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-xs font-black uppercase tracking-widest text-emerald-700">
+                Empfänger: {quickTarget || activeChat?.partnerName || 'Nicht gesetzt'}
+              </div>
               <textarea
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}

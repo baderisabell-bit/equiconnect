@@ -174,7 +174,11 @@ function DetailModal({
           alert(res.error || 'Vernetzungsanfrage konnte nicht gesendet werden.');
           return;
         }
-        router.push(`/nachrichten?target=${encodeURIComponent(displayText(entry.name))}&targetType=${entry.typ === "angebot" ? "anzeige" : "person"}&targetUserId=${targetUserId}`);
+        if (res.status === 'accepted') {
+          alert('Du folgst diesem Profil jetzt.');
+          return;
+        }
+        alert('Vernetzung/Folgen wurde gesendet.');
       })();
     }
   };
