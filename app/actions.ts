@@ -283,6 +283,18 @@ async function ensureExtraSchema() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS connections (
+        id SERIAL PRIMARY KEY,
+        requester_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        addressee_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (requester_user_id, addressee_user_id)
+      );
+    `);
+
     extraSchemaReady = true;
   } catch (err) {
     console.error("Schema setup error:", err);
@@ -390,16 +402,32 @@ export async function persistProfileImageUrl(userId: number, imageUrl: string) {
 // Connection Functions
 export async function sendConnectionRequest(params: { requesterId: number; targetUserId: number }): Promise<any> {
   try {
+    const requesterId = Number(params.requesterId);
+    const targetUserId = Number(params.targetUserId);
+
+    if (!Number.isInteger(requesterId) || requesterId <= 0 || !Number.isInteger(targetUserId) || targetUserId <= 0) {
+      return { success: false, error: 'Ungültige Nutzer-ID.' } as any;
+    }
+
+    if (requesterId === targetUserId) {
+      return { success: false, error: 'Du kannst dich nicht selbst vernetzen.' } as any;
+    }
+
+    await ensureExtraSchema();
+
     const result = await pool.query(
       `INSERT INTO connections (requester_user_id, addressee_user_id, status)
        VALUES ($1, $2, 'pending')
-       ON CONFLICT DO NOTHING
+       ON CONFLICT (requester_user_id, addressee_user_id) DO UPDATE
+       SET status = EXCLUDED.status,
+           updated_at = NOW()
        RETURNING id`,
-      [params.requesterId, params.targetUserId]
+      [requesterId, targetUserId]
     );
     return { success: true, id: result.rows[0]?.id, inserted: !!result.rows[0], waitlistCount: 0 } as any;
   } catch (error: any) {
-    return { success: false, error: 'Vernetzungsanfrage konnte nicht gesendet werden.' } as any;
+    console.error('sendConnectionRequest error:', error);
+    return { success: false, error: error?.message || 'Vernetzungsanfrage konnte nicht gesendet werden.' } as any;
   }
 }
 
