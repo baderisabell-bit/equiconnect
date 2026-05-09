@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, Send, Heart, Archive, Flag, Filter } from 'lucide-react';
-import { createOrGetConnectedChat, getResolvedUserRole, holeMeineChats, reportChatConversation, sendeNachricht, sendConnectionRequest } from '../actions';
+import { createOrGetConnectedChat, getChatMessages, getResolvedUserRole, holeMeineChats, reportChatConversation, sendeNachricht, sendConnectionRequest } from '../actions';
 import LoggedInHeader from '../components/logged-in-header';
 import { canUseOptionalStorage } from '../lib/storage-consent';
 
@@ -40,6 +40,10 @@ export default function NachrichtenPage() {
   const [userId, setUserId] = useState<number | null>(null);
   const [quickTarget, setQuickTarget] = useState("");
   const [quickTargetUserId, setQuickTargetUserId] = useState<number | null>(null);
+  const [composeRecipientId, setComposeRecipientId] = useState('');
+  const [composeRecipientName, setComposeRecipientName] = useState('');
+  const [composeBusy, setComposeBusy] = useState(false);
+  const [composeError, setComposeError] = useState('');
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [chatSearch, setChatSearch] = useState('');
   const [filterKey, setFilterKey] = useState<'alle' | 'person' | 'anzeige' | 'favorit' | 'archiviert'>('alle');
@@ -51,6 +55,86 @@ export default function NachrichtenPage() {
   const [userName, setUserName] = useState('Profil');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [canCloseSidebar, setCanCloseSidebar] = useState(false);
+
+  const loadChatMessages = async (chat: Chat, uid: number) => {
+    if (chat.id === 'temp-chat') {
+      setActiveChat(chat);
+      return chat;
+    }
+
+    const chatId = parseInt(chat.id, 10);
+    if (Number.isNaN(chatId) || chatId <= 0) {
+      setActiveChat(chat);
+      return chat;
+    }
+
+    const res = await getChatMessages({ chatId, userId: uid });
+    const verlauf = res.success && Array.isArray(res.messages) ? res.messages : [];
+    const enrichedChat = {
+      ...chat,
+      verlauf,
+      letzteNachricht: verlauf.length > 0 ? verlauf[verlauf.length - 1].text : chat.letzteNachricht,
+      zeit: verlauf.length > 0 ? verlauf[verlauf.length - 1].zeitstempel : chat.zeit,
+    };
+
+    setActiveChat(enrichedChat);
+    setChats((prev) => prev.map((item) => (item.id === enrichedChat.id ? enrichedChat : item)));
+    return enrichedChat;
+  };
+
+  const refreshChats = async (uid: number, preferredPartnerId?: number | null) => {
+    const dbChatsRes = await holeMeineChats(uid);
+    const dbChats = dbChatsRes.success && Array.isArray(dbChatsRes.chats) ? dbChatsRes.chats : [];
+
+    let storedMeta: Record<string, Partial<Pick<Chat, 'typ' | 'favorit' | 'archiviert' | 'gemeldet' | 'meldeGrund'>>> = {};
+    if (canUseOptionalStorage()) {
+      try {
+        const raw = localStorage.getItem(`${CHAT_META_STORAGE_PREFIX}-${uid}`);
+        if (raw) storedMeta = JSON.parse(raw);
+      } catch {
+        // Ignoriere ungültige Browserdaten.
+      }
+    }
+
+    const mapped: Chat[] = dbChats.map((db: any) => {
+      const chatId = db.chat_id?.toString();
+      const chatTyp: Chat['typ'] = storedMeta[chatId]?.typ === 'anzeige' ? 'anzeige' : 'person';
+
+      return {
+        id: chatId,
+        partnerId: Number(db.partner_id) || null,
+        partnerName: db.partner_name,
+        typ: chatTyp,
+        letzteNachricht: db.letzte_nachricht || 'Noch keine Nachrichten',
+        zeit: db.zeit ? new Date(db.zeit).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        online: false,
+        ungelesen: 0,
+        favorit: Boolean(storedMeta[chatId]?.favorit),
+        archiviert: Boolean(storedMeta[chatId]?.archiviert),
+        gemeldet: Boolean(storedMeta[chatId]?.gemeldet),
+        meldeGrund: storedMeta[chatId]?.meldeGrund || '',
+        verlauf: []
+      };
+    });
+
+    setChats(mapped);
+
+    const nextActive = preferredPartnerId
+      ? mapped.find((chat) => chat.partnerId === preferredPartnerId) || null
+      : activeChat && mapped.some((chat) => chat.id === activeChat.id)
+        ? mapped.find((chat) => chat.id === activeChat.id) || null
+        : mapped[0] || null;
+
+    if (nextActive) {
+      await loadChatMessages(nextActive, uid);
+      setMobileView('chat');
+    } else {
+      setActiveChat(null);
+      setMobileView('list');
+    }
+
+    setIsLoadingChats(false);
+  };
 
   // 1. Daten beim Laden abrufen
   useEffect(() => {
@@ -73,70 +157,13 @@ export default function NachrichtenPage() {
           // Keep the session role when resolving fails.
         });
       }
-      
-      const loadData = async () => {
-        const dbChats = await holeMeineChats(uid);
 
-        let storedMeta: Record<string, Partial<Pick<Chat, 'typ' | 'favorit' | 'archiviert' | 'gemeldet' | 'meldeGrund'>>> = {};
-        if (canUseOptionalStorage()) {
-          try {
-            const raw = localStorage.getItem(`${CHAT_META_STORAGE_PREFIX}-${uid}`);
-            if (raw) storedMeta = JSON.parse(raw);
-          } catch {
-            // Ignoriere ungültige Browserdaten.
-          }
-        }
+      if (quickTargetUserId) {
+        setComposeRecipientId(String(quickTargetUserId));
+        setComposeRecipientName(quickTarget);
+      }
 
-        const mapped: Chat[] = dbChats.map((db: any) => {
-          const chatId = db.chat_id?.toString();
-          const chatTyp: Chat['typ'] = storedMeta[chatId]?.typ === 'anzeige' ? 'anzeige' : 'person';
-
-          return {
-            id: chatId,
-            partnerId: Number(db.partner_id) || null,
-            partnerName: db.partner_name,
-            typ: chatTyp,
-            letzteNachricht: db.letzte_nachricht || "Noch keine Nachrichten",
-            zeit: db.zeit ? new Date(db.zeit).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
-            online: false,
-            ungelesen: 0,
-            favorit: Boolean(storedMeta[chatId]?.favorit),
-            archiviert: Boolean(storedMeta[chatId]?.archiviert),
-            gemeldet: Boolean(storedMeta[chatId]?.gemeldet),
-            meldeGrund: storedMeta[chatId]?.meldeGrund || '',
-            verlauf: []
-          };
-        });
-        setChats(mapped);
-        if (quickTargetUserId) {
-          const targetChat = mapped.find((chat) => chat.partnerId === quickTargetUserId) || null;
-          if (targetChat) {
-            setActiveChat(targetChat);
-            setMobileView('chat');
-          } else {
-            setActiveChat({
-              id: 'temp-chat',
-              partnerId: quickTargetUserId,
-              partnerName: quickTarget,
-              typ: 'person',
-              letzteNachricht: 'Noch keine Nachrichten',
-              zeit: '',
-              online: false,
-              ungelesen: 0,
-              favorit: false,
-              archiviert: false,
-              gemeldet: false,
-              verlauf: []
-            });
-            setMobileView('chat');
-          }
-        } else if (mapped.length > 0) {
-          setActiveChat(mapped[0]);
-          setMobileView('chat');
-        }
-        setIsLoadingChats(false);
-      };
-      loadData();
+      void refreshChats(uid, quickTargetUserId || null);
     } else {
       setIsLoadingChats(false);
     }
@@ -359,7 +386,9 @@ export default function NachrichtenPage() {
         return [replacedChat, ...withoutTemp];
       });
       setActiveChat(replacedChat);
+      setMobileView('chat');
       setMessageInput('');
+      void refreshChats(userId, quickTargetUserId || null);
       return;
     }
 
@@ -384,9 +413,73 @@ export default function NachrichtenPage() {
       setChats(prev => prev.map(c => c.id === currentChat.id ? updatedChat : c));
       setActiveChat(updatedChat);
       setMessageInput("");
+      void refreshChats(userId, currentChat.partnerId || null);
     } else {
       alert(res.error || 'Nachricht konnte nicht gesendet werden.');
     }
+  };
+
+  const handleStartConversation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId) return;
+
+    const recipientId = Number(quickTargetUserId || composeRecipientId);
+    const messageText = messageInput.trim();
+    const recipientName = composeRecipientName.trim() || quickTarget.trim() || (Number.isInteger(recipientId) && recipientId > 0 ? `Nutzer ${recipientId}` : '');
+
+    if (!Number.isInteger(recipientId) || recipientId <= 0) {
+      setComposeError('Bitte eine gültige Empfänger-ID eingeben.');
+      return;
+    }
+
+    if (!messageText) {
+      setComposeError('Bitte eine Nachricht eingeben.');
+      return;
+    }
+
+    setComposeBusy(true);
+    setComposeError('');
+
+    const chatRes = await createOrGetConnectedChat({ requesterId: userId, targetUserId: recipientId });
+    if (!chatRes.success || chatRes.chatId === null || chatRes.chatId === undefined) {
+      setComposeBusy(false);
+      setComposeError(chatRes.error || 'Chat konnte nicht erstellt werden.');
+      return;
+    }
+
+    const sendRes = await sendeNachricht(Number(chatRes.chatId), userId, messageText);
+    setComposeBusy(false);
+
+    if (!sendRes.success) {
+      setComposeError(sendRes.error || 'Nachricht konnte nicht gesendet werden.');
+      return;
+    }
+
+    setComposeRecipientName(recipientName);
+    setMessageInput('');
+    setMobileView('chat');
+
+    const startChat: Chat = {
+      id: String(chatRes.chatId),
+      partnerId: recipientId,
+      partnerName: recipientName,
+      typ: 'person',
+      letzteNachricht: messageText,
+      zeit: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      online: false,
+      ungelesen: 0,
+      favorit: false,
+      archiviert: false,
+      gemeldet: false,
+      verlauf: [],
+    };
+
+    setChats((prev) => {
+      const withoutDuplicate = prev.filter((chat) => chat.id !== startChat.id && chat.id !== 'temp-chat');
+      return [startChat, ...withoutDuplicate];
+    });
+
+    await refreshChats(userId, recipientId);
   };
 
   const requestConnectionForQuickTarget = async () => {
@@ -458,6 +551,45 @@ export default function NachrichtenPage() {
       <aside className="w-full md:w-96 bg-white border-r border-slate-100 flex flex-col">
         <div className="p-6 border-b border-slate-50">
           <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic mb-4">Nachrichten</h1>
+          <form onSubmit={handleStartConversation} className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 space-y-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Neue Nachricht</p>
+              <p className="text-xs text-emerald-900/70 font-medium mt-1">Empfänger angeben, Nachricht schreiben und senden.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              <input
+                type="number"
+                min={1}
+                value={composeRecipientId}
+                onChange={(e) => setComposeRecipientId(e.target.value)}
+                placeholder="Empfänger-ID"
+                className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-sm outline-none focus:border-emerald-400"
+              />
+              <input
+                type="text"
+                value={composeRecipientName}
+                onChange={(e) => setComposeRecipientName(e.target.value)}
+                placeholder="Name (optional)"
+                className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-sm outline-none focus:border-emerald-400"
+              />
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                placeholder="Nachricht schreiben..."
+                rows={4}
+                className="w-full px-3 py-2 rounded-xl border border-emerald-200 bg-white text-sm outline-none focus:border-emerald-400 resize-none"
+              />
+            </div>
+            {composeError && <p className="text-[11px] font-bold text-red-600">{composeError}</p>}
+            <button
+              type="submit"
+              disabled={composeBusy}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+            >
+              <Send size={14} />
+              {composeBusy ? 'Sende...' : 'Senden'}
+            </button>
+          </form>
           <div className="flex items-center gap-2 mb-4">
             <Filter size={14} className="text-emerald-600" />
             <button onClick={() => setFilterKey('alle')} className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase border ${filterKey === 'alle' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200'}`}>Alle</button>
@@ -492,9 +624,13 @@ export default function NachrichtenPage() {
             return (
             <button
               key={chat.id}
-              onClick={() => {
-                setActiveChat(chat);
+              onClick={async () => {
                 setMobileView('chat');
+                if (userId) {
+                  await loadChatMessages(chat, userId);
+                } else {
+                  setActiveChat(chat);
+                }
               }}
               className={`w-full p-5 flex items-center gap-4 transition-all border-b border-slate-50 hover:bg-slate-50 ${isActive ? "bg-emerald-50/50 border-r-4 border-r-emerald-600" : ""}`}
             >

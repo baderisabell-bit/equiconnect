@@ -262,6 +262,27 @@ async function ensureExtraSchema() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_chats (
+        id SERIAL PRIMARY KEY,
+        participant_a_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        participant_b_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (participant_a_id, participant_b_id)
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        chat_id INTEGER NOT NULL REFERENCES user_chats(id) ON DELETE CASCADE,
+        sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        read_at TIMESTAMP
+      );
+    `);
+
     extraSchemaReady = true;
   } catch (err) {
     console.error("Schema setup error:", err);
@@ -1915,20 +1936,187 @@ export async function markAllUserNotificationsRead(userId: number) {
 }
 
 // ==================== MESSAGING ====================
+function normalizeChatPair(userA: number, userB: number) {
+  const first = Number(userA);
+  const second = Number(userB);
+  if (!Number.isInteger(first) || !Number.isInteger(second) || first <= 0 || second <= 0) {
+    throw new Error('Ungültige Nutzer-ID.');
+  }
+  return first < second ? [first, second] : [second, first];
+}
+
 export async function holeMeineChats(userId: number): Promise<any> {
-  return { success: true, chats: [] } as any;
+  try {
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, chats: [], error: 'Ungültige Nutzer-ID.' } as any;
+    }
+
+    await ensureExtraSchema();
+
+    const result = await pool.query(
+      `SELECT
+         c.id AS chat_id,
+         CASE WHEN c.participant_a_id = $1 THEN c.participant_b_id ELSE c.participant_a_id END AS partner_id,
+         COALESCE(up.display_name, u.name, u.email, 'Nutzer ' || u.id::text) AS partner_name,
+         COALESCE(lm.message, 'Noch keine Nachrichten') AS letzte_nachricht,
+         lm.created_at AS zeit
+       FROM user_chats c
+       JOIN users u
+         ON u.id = CASE WHEN c.participant_a_id = $1 THEN c.participant_b_id ELSE c.participant_a_id END
+       LEFT JOIN user_profiles up ON up.user_id = u.id
+       LEFT JOIN LATERAL (
+         SELECT m.message, m.created_at
+         FROM chat_messages m
+         WHERE m.chat_id = c.id
+         ORDER BY m.created_at DESC, m.id DESC
+         LIMIT 1
+       ) lm ON true
+       WHERE c.participant_a_id = $1 OR c.participant_b_id = $1
+       ORDER BY COALESCE(lm.created_at, c.created_at) DESC, c.id DESC`,
+      [userId]
+    );
+
+    return {
+      success: true,
+      chats: result.rows.map((row: any) => ({
+        chat_id: Number(row.chat_id),
+        partner_id: Number(row.partner_id),
+        partner_name: String(row.partner_name || '').trim(),
+        letzte_nachricht: String(row.letzte_nachricht || 'Noch keine Nachrichten'),
+        zeit: row.zeit || null,
+      })),
+    } as any;
+  } catch (error: any) {
+    console.error('holeMeineChats error:', error);
+    return { success: false, chats: [], error: error?.message || 'Chats konnten nicht geladen werden.' } as any;
+  }
 }
 
 export async function sendeNachricht(arg1: any, arg2?: any, arg3?: any): Promise<any> {
   // Accept either a single payload object or (chatId, userId, content)
   const payload = typeof arg1 === 'object' && (arg1.chatId || arg1.targetId || arg1.message) ? arg1 : { chatId: arg1, userId: arg2, message: arg3 };
-  return { success: true } as any;
+  try {
+    const chatId = Number(payload.chatId || payload.targetId || 0);
+    const userId = Number(payload.userId || payload.senderId || 0);
+    const message = String(payload.message || payload.content || '').trim();
+
+    if (!Number.isInteger(chatId) || chatId <= 0) {
+      return { success: false, error: 'Ungültige Chat-ID.' } as any;
+    }
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, error: 'Ungültige Nutzer-ID.' } as any;
+    }
+    if (!message) {
+      return { success: false, error: 'Nachricht ist leer.' } as any;
+    }
+
+    await ensureExtraSchema();
+
+    const accessCheck = await pool.query(
+      `SELECT id FROM user_chats WHERE id = $1 AND (participant_a_id = $2 OR participant_b_id = $2) LIMIT 1`,
+      [chatId, userId]
+    );
+
+    if (accessCheck.rows.length === 0) {
+      return { success: false, error: 'Chat nicht gefunden.' } as any;
+    }
+
+    const result = await pool.query(
+      `INSERT INTO chat_messages (chat_id, sender_id, message)
+       VALUES ($1, $2, $3)
+       RETURNING id, created_at`,
+      [chatId, userId, message]
+    );
+
+    return {
+      success: true,
+      chatId,
+      messageId: Number(result.rows[0]?.id || 0),
+      createdAt: result.rows[0]?.created_at || null,
+    } as any;
+  } catch (error: any) {
+    console.error('sendeNachricht error:', error);
+    return { success: false, error: error?.message || 'Nachricht konnte nicht gespeichert werden.' } as any;
+  }
 }
 
 export async function createOrGetConnectedChat(arg1: number | { requesterId?: number; targetUserId?: number }, arg2?: number): Promise<any> {
-  const userId = typeof arg1 === 'object' ? arg1.requesterId : arg1;
-  const otherId = typeof arg1 === 'object' ? arg1.targetUserId : arg2;
-  return { success: true, chatId: 0, id: 0, status: null, error: null } as any;
+  try {
+    const userId = Number(typeof arg1 === 'object' ? arg1.requesterId : arg1);
+    const otherId = Number(typeof arg1 === 'object' ? arg1.targetUserId : arg2);
+    if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(otherId) || otherId <= 0) {
+      return { success: false, chatId: null, id: null, status: null, error: 'Ungültige Nutzer-ID.' } as any;
+    }
+    if (userId === otherId) {
+      return { success: false, chatId: null, id: null, status: null, error: 'Eigenen Chat kann man nicht erstellen.' } as any;
+    }
+
+    await ensureExtraSchema();
+    const [participantAId, participantBId] = normalizeChatPair(userId, otherId);
+
+    const existing = await pool.query(
+      `SELECT id FROM user_chats WHERE participant_a_id = $1 AND participant_b_id = $2 LIMIT 1`,
+      [participantAId, participantBId]
+    );
+
+    if (existing.rows[0]?.id) {
+      return { success: true, chatId: Number(existing.rows[0].id), id: Number(existing.rows[0].id), status: 'connected', error: null } as any;
+    }
+
+    const inserted = await pool.query(
+      `INSERT INTO user_chats (participant_a_id, participant_b_id)
+       VALUES ($1, $2)
+       RETURNING id`,
+      [participantAId, participantBId]
+    );
+
+    return { success: true, chatId: Number(inserted.rows[0]?.id || 0), id: Number(inserted.rows[0]?.id || 0), status: 'connected', error: null } as any;
+  } catch (error: any) {
+    console.error('createOrGetConnectedChat error:', error);
+    return { success: false, chatId: null, id: null, status: null, error: error?.message || 'Chat konnte nicht erstellt werden.' } as any;
+  }
+}
+
+export async function getChatMessages(arg1: number | { chatId?: number; userId?: number }, arg2?: number): Promise<any> {
+  try {
+    const chatId = Number(typeof arg1 === 'object' ? arg1.chatId : arg1);
+    const userId = Number(typeof arg1 === 'object' ? arg1.userId : arg2);
+    if (!Number.isInteger(chatId) || chatId <= 0 || !Number.isInteger(userId) || userId <= 0) {
+      return { success: false, messages: [], error: 'Ungültige Daten.' } as any;
+    }
+
+    await ensureExtraSchema();
+
+    const accessCheck = await pool.query(
+      `SELECT id FROM user_chats WHERE id = $1 AND (participant_a_id = $2 OR participant_b_id = $2) LIMIT 1`,
+      [chatId, userId]
+    );
+    if (accessCheck.rows.length === 0) {
+      return { success: false, messages: [], error: 'Chat nicht gefunden.' } as any;
+    }
+
+    const result = await pool.query(
+      `SELECT m.id, m.sender_id, m.message, m.created_at, m.read_at
+       FROM chat_messages m
+       WHERE m.chat_id = $1
+       ORDER BY m.created_at ASC, m.id ASC`,
+      [chatId]
+    );
+
+    return {
+      success: true,
+      messages: result.rows.map((row: any) => ({
+        id: String(row.id),
+        senderId: Number(row.sender_id),
+        text: String(row.message || ''),
+        zeitstempel: row.created_at ? new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        gelesen: Boolean(row.read_at),
+      })),
+    } as any;
+  } catch (error: any) {
+    console.error('getChatMessages error:', error);
+    return { success: false, messages: [], error: error?.message || 'Nachrichten konnten nicht geladen werden.' } as any;
+  }
 }
 
 export async function reportChatConversation(arg1: number | { chatId?: number; userId?: number; reason?: string; reporterUserId?: number; reportedUserId?: number; severity?: string }, arg2?: number, arg3?: string): Promise<any> {
