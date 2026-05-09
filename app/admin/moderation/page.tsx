@@ -315,6 +315,7 @@ export default function AdminModerationPage() {
           <Link href="/admin/moderation" className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white">Moderation</Link>
           <Link href="/admin/werbung" className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 text-slate-600 hover:border-emerald-300">Werbung</Link>
           <Link href="/admin/abo" className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 text-slate-600 hover:border-emerald-300">Newsletter</Link>
+          <a href="#user-delete-section" className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-500">Nutzer löschen</a>
         </div>
       </header>
 
@@ -444,11 +445,12 @@ export default function AdminModerationPage() {
             </div>
           </article>
 
-          <article className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm space-y-4">
+          <article id="user-delete-section" className="bg-red-50 border border-red-100 rounded-[2rem] p-6 shadow-sm space-y-4 ring-1 ring-red-100">
             <div className="flex items-center gap-2">
               <AlertTriangle size={16} className="text-red-600" />
-              <h2 className="text-lg font-black uppercase italic text-slate-900">Nutzer sanktionieren</h2>
+              <h2 className="text-lg font-black uppercase italic text-slate-900">Nutzer anzeigen & Profil löschen</h2>
             </div>
+            <p className="text-sm text-slate-600 font-medium">Hier kannst du Nutzer suchen, alle Nutzer anzeigen und das Profil dauerhaft löschen.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input value={searchFirstName} onChange={(e) => setSearchFirstName(e.target.value)} placeholder="Vorname" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
                 <input value={searchLastName} onChange={(e) => setSearchLastName(e.target.value)} placeholder="Nachname" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
