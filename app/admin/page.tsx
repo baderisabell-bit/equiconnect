@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, BellRing, Shield, Sparkles, Megaphone, Users, CalendarCheck2, Trash2 } from "lucide-react";
-import { adminDeleteUser, adminDeleteUserPosts, adminFindUserByIdentity, adminLogout } from "../actions";
+import { adminDeleteUser, adminDeleteUserPosts, adminFindUserByIdentity, adminLogout, adminLogin } from "../actions";
 
 type AdminUser = {
   id: number;
@@ -77,6 +77,9 @@ export default function AdminHomePage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
 
   useEffect(() => {
     setAdminCode(sessionStorage.getItem('adminPanelCode') || '');
@@ -90,8 +93,10 @@ export default function AdminHomePage() {
 
   const searchUser = async () => {
     if (!adminCode.trim()) {
-      alert('Bitte zuerst im Admin-Login anmelden.');
-      return;
+      const code = window.prompt('Admin-Code eingeben');
+      if (!code) return;
+      sessionStorage.setItem('adminPanelCode', String(code));
+      setAdminCode(String(code));
     }
 
     setSearchBusy(true);
@@ -115,7 +120,13 @@ export default function AdminHomePage() {
   };
 
   const deleteUser = async () => {
-    if (!adminCode.trim() || !searchedUser) return;
+    if (!adminCode.trim()) {
+      const code = window.prompt('Admin-Code eingeben');
+      if (!code) return;
+      sessionStorage.setItem('adminPanelCode', String(code));
+      setAdminCode(String(code));
+    }
+    if (!searchedUser) return;
     if (!confirm('Profil wirklich dauerhaft löschen?')) return;
 
     setDeleteBusy(true);
@@ -133,7 +144,13 @@ export default function AdminHomePage() {
   };
 
   const deleteUserPosts = async () => {
-    if (!adminCode.trim() || !searchedUser) return;
+    if (!adminCode.trim()) {
+      const code = window.prompt('Admin-Code eingeben');
+      if (!code) return;
+      sessionStorage.setItem('adminPanelCode', String(code));
+      setAdminCode(String(code));
+    }
+    if (!searchedUser) return;
     if (!confirm('Alle Beiträge dieses Profils löschen?')) return;
 
     setDeleteBusy(true);
@@ -162,13 +179,49 @@ export default function AdminHomePage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={onLogout}
-              className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest"
-            >
-              Abmelden
-            </button>
+            <div className="w-full md:w-auto">
+              {!adminCode.trim() ? (
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    placeholder="Admin-Code"
+                    className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-emerald-400"
+                  />
+                  <button
+                    type="button"
+                    disabled={loginBusy}
+                    onClick={async () => {
+                      setLoginError('');
+                      setLoginBusy(true);
+                      const res = await adminLogin(adminPasswordInput || '');
+                      setLoginBusy(false);
+                      if (!res.success) {
+                        setLoginError(res.error || 'Login fehlgeschlagen');
+                        return;
+                      }
+                      sessionStorage.setItem('adminPanelCode', String(adminPasswordInput || ''));
+                      setAdminCode(String(adminPasswordInput || ''));
+                      setAdminPasswordInput('');
+                      window.location.href = '/admin';
+                    }}
+                    className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest disabled:opacity-60"
+                  >
+                    {loginBusy ? 'Prüfe...' : 'Anmelden'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest"
+                >
+                  Abmelden
+                </button>
+              )}
+              {loginError && <p className="text-sm font-bold text-red-600 mt-2">{loginError}</p>}
+            </div>
           </div>
         </section>
 

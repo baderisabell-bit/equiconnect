@@ -101,6 +101,8 @@ export default function AdminModerationPage() {
   const [searchLastName, setSearchLastName] = useState('');
   const [searchBirthDate, setSearchBirthDate] = useState('');
   const [searchedUser, setSearchedUser] = useState<IdentityUser | null>(null);
+  const [users, setUsers] = useState<IdentityUser[]>([]);
+  const [showAllUsers, setShowAllUsers] = useState(false);
   const [sanctionReason, setSanctionReason] = useState('');
   const [sanctionDays, setSanctionDays] = useState(30);
   const [sanctionAction, setSanctionAction] = useState<'warn' | 'global_block' | 'group_block' | 'abo_block' | 'temporary_block'>('warn');
@@ -191,13 +193,27 @@ export default function AdminModerationPage() {
       firstName: searchFirstName,
       lastName: searchLastName,
       birthDate: searchBirthDate,
+      showAll: showAllUsers,
     });
     if (!res.success) {
       alert(res.error || 'Nutzer konnte nicht gefunden werden.');
       return;
     }
+    setUsers((res.users || []) as IdentityUser[]);
+    setSearchedUser((res.user || (res.users || [])[0] || null) as IdentityUser | null);
+  };
 
-    setSearchedUser((res.user || null) as IdentityUser | null);
+  const loadAllUsers = async () => {
+    if (!adminCode.trim()) {
+      const code = window.prompt('Admin-Code eingeben');
+      if (!code) return;
+      sessionStorage.setItem('adminPanelCode', String(code));
+      setAdminCode(String(code));
+    }
+    const res = await adminFindUserByIdentity(adminCode, { showAll: true });
+    if (!res.success) return alert(res.error || 'Konnte Nutzerliste nicht laden.');
+    setUsers((res.users || []) as IdentityUser[]);
+    setSearchedUser((res.user || (res.users || [])[0] || null) as IdentityUser | null);
   };
 
   const applySanction = async () => {
@@ -434,36 +450,60 @@ export default function AdminModerationPage() {
               <h2 className="text-lg font-black uppercase italic text-slate-900">Nutzer sanktionieren</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input value={searchFirstName} onChange={(e) => setSearchFirstName(e.target.value)} placeholder="Vorname" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
-              <input value={searchLastName} onChange={(e) => setSearchLastName(e.target.value)} placeholder="Nachname" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
-              <input value={searchBirthDate} onChange={(e) => setSearchBirthDate(e.target.value)} type="date" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
-              <button type="button" onClick={searchUser} className="px-4 py-3 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white">Nutzer suchen</button>
+                <input value={searchFirstName} onChange={(e) => setSearchFirstName(e.target.value)} placeholder="Vorname" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
+                <input value={searchLastName} onChange={(e) => setSearchLastName(e.target.value)} placeholder="Nachname" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
+                <input value={searchBirthDate} onChange={(e) => setSearchBirthDate(e.target.value)} type="date" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
+                <div className="flex gap-2">
+                  <button type="button" onClick={searchUser} className="px-4 py-3 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white">Nutzer suchen</button>
+                  <button type="button" onClick={() => { setShowAllUsers(!showAllUsers); }} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase ${showAllUsers ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}>
+                    {showAllUsers ? 'Alle anzeigen (Aus)' : 'Alle Nutzer anzeigen'}
+                  </button>
+                  <button type="button" onClick={loadAllUsers} className="px-4 py-3 rounded-xl text-[10px] font-black uppercase border border-emerald-200 bg-emerald-50 text-emerald-700">Liste laden</button>
+                </div>
             </div>
-                    {searchedUser && (
-                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                        <p className="text-sm font-black uppercase text-slate-900">{searchedUser.vorname} {searchedUser.nachname}</p>
-                        <p className="text-[10px] font-black uppercase text-slate-500">{searchedUser.email} • {searchedUser.role}</p>
-                        <div className="flex gap-2 pt-2">
+              {users.length > 0 && (
+                <div className="space-y-2 pt-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Gefundene Nutzer</p>
+                  <div className="space-y-2 max-h-72 overflow-auto">
+                    {users.map((user) => (
+                      <div key={`u-${user.id}`} className="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-black uppercase text-slate-900">#{user.id} {user.vorname} {user.nachname}</p>
+                          <p className="text-[10px] font-black uppercase text-slate-500">{user.email} • {user.role}</p>
+                        </div>
+                        <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={async () => {
+                              if (!adminCode.trim()) {
+                                const code = window.prompt('Admin-Code eingeben');
+                                if (!code) return;
+                                sessionStorage.setItem('adminPanelCode', String(code));
+                                setAdminCode(String(code));
+                              }
                               if (!confirm('Profil wirklich dauerhaft löschen?')) return;
-                              const res = await (window as any).appActions?.adminDeleteUser?.(adminCode, searchedUser.id) || await (await import('../../actions')).adminDeleteUser(adminCode, searchedUser.id);
+                              const res = await (window as any).appActions?.adminDeleteUser?.(adminCode, user.id) || await (await import('../../actions')).adminDeleteUser(adminCode, user.id);
                               if (!res.success) return alert(res.error || 'Löschen fehlgeschlagen');
                               alert('Profil gelöscht.');
-                              setSearchedUser(null);
+                              // remove from list
+                              setUsers((prev) => prev.filter((u) => u.id !== user.id));
                               await loadDashboard(adminCode);
                             }}
                             className="px-3 py-2 rounded-xl text-[10px] font-black uppercase bg-red-600 text-white"
                           >
                             Profil löschen
                           </button>
-
                           <button
                             type="button"
                             onClick={async () => {
+                              if (!adminCode.trim()) {
+                                const code = window.prompt('Admin-Code eingeben');
+                                if (!code) return;
+                                sessionStorage.setItem('adminPanelCode', String(code));
+                                setAdminCode(String(code));
+                              }
                               if (!confirm('Alle Beiträge dieses Profils löschen?')) return;
-                              const res = await (window as any).appActions?.adminDeleteUserPosts?.(adminCode, searchedUser.id) || await (await import('../../actions')).adminDeleteUserPosts(adminCode, searchedUser.id);
+                              const res = await (window as any).appActions?.adminDeleteUserPosts?.(adminCode, user.id) || await (await import('../../actions')).adminDeleteUserPosts(adminCode, user.id);
                               if (!res.success) return alert(res.error || 'Löschen fehlgeschlagen');
                               alert('Beiträge gelöscht.');
                               await loadDashboard(adminCode);
@@ -474,7 +514,10 @@ export default function AdminModerationPage() {
                           </button>
                         </div>
                       </div>
-                    )}
+                    ))}
+                  </div>
+                </div>
+              )}
             <textarea value={sanctionReason} onChange={(e) => setSanctionReason(e.target.value)} rows={3} placeholder="Begründung" className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <select value={sanctionAction} onChange={(e) => setSanctionAction(e.target.value as any)} className="p-3 rounded-xl border border-slate-200 bg-slate-50">
