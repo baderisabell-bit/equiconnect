@@ -248,59 +248,16 @@ export default function AdminHomePage() {
           ))}
         </section>
 
-        <section className="rounded-[1.75rem] border border-red-100 bg-red-50 p-5 md:p-6 space-y-4">
+        <section className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 p-5 md:p-6">
           <div className="flex items-start gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-red-600 border border-red-100">
-              <Trash2 size={18} />
-            </span>
-            <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-red-700">Löschfunktionen</p>
-              <p className="text-sm text-red-950 leading-relaxed">
-                Profile und Beiträge kannst du direkt hier suchen und löschen. Falls du mehr Details brauchst, ist die
-                <Link href="/admin/moderation" className="font-black underline underline-offset-2"> Moderation</Link> weiterhin verfügbar.
+            <CalendarCheck2 size={18} className="mt-1 text-emerald-700" />
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Moderation</p>
+              <p className="mt-2 text-sm text-emerald-900 leading-relaxed">
+                Lösch- und Moderationsfunktionen findest du im <Link href="/admin/moderation" className="font-black underline underline-offset-2">Moderation</Link>-Bereich.
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input value={searchUserId} onChange={(e) => setSearchUserId(e.target.value)} placeholder="User-ID" type="number" className="p-3 rounded-xl border border-red-200 bg-white" />
-            <input value={searchFirstName} onChange={(e) => setSearchFirstName(e.target.value)} placeholder="Vorname" className="p-3 rounded-xl border border-red-200 bg-white" />
-            <input value={searchLastName} onChange={(e) => setSearchLastName(e.target.value)} placeholder="Nachname" className="p-3 rounded-xl border border-red-200 bg-white" />
-            <input value={searchBirthDate} onChange={(e) => setSearchBirthDate(e.target.value)} type="date" className="p-3 rounded-xl border border-red-200 bg-white" />
-            <label className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-700">
-              <input type="checkbox" checked={showAllUsers} onChange={(e) => setShowAllUsers(e.target.checked)} />
-              Alle Nutzer anzeigen
-            </label>
-            <button type="button" onClick={searchUser} disabled={searchBusy} className="px-4 py-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-60">
-              {searchBusy ? 'Suche...' : showAllUsers ? 'Alle Nutzer laden' : 'Nutzer suchen'}
-            </button>
-          </div>
-          {users.length > 0 && (
-            <div className="space-y-2 rounded-2xl border border-red-200 bg-white p-4 max-h-72 overflow-auto">
-              {users.map((user) => (
-                <button key={user.id} type="button" onClick={() => setSearchedUser(user)} className={`w-full text-left rounded-xl border px-3 py-2 ${searchedUser?.id === user.id ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'}`}>
-                  <p className="text-sm font-black uppercase text-slate-900">#{user.id} {user.vorname} {user.nachname}</p>
-                  <p className="text-[10px] font-black uppercase text-slate-500">{user.email} • {user.role}</p>
-                </button>
-              ))}
-            </div>
-          )}
-          {searchedUser && (
-            <div className="rounded-2xl border border-red-200 bg-white p-4 space-y-3">
-              <div>
-                <p className="text-sm font-black uppercase text-slate-900">{searchedUser.vorname} {searchedUser.nachname}</p>
-                <p className="text-[10px] font-black uppercase text-slate-500">{searchedUser.email} • {searchedUser.role}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={deleteUser} disabled={deleteBusy} className="px-4 py-3 rounded-xl bg-red-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-60">
-                  {deleteBusy ? 'Lösche...' : 'Profil löschen'}
-                </button>
-                <button type="button" onClick={deleteUserPosts} disabled={deleteBusy} className="px-4 py-3 rounded-xl border border-red-200 bg-white text-red-700 text-[10px] font-black uppercase tracking-widest hover:bg-red-50 disabled:opacity-60">
-                  Beiträge löschen
-                </button>
-              </div>
-              <p className="text-[11px] font-bold text-slate-500">Die Löschung läuft über dieselbe Serverlogik wie im Profilbereich.</p>
-            </div>
-          )}
         </section>
 
         <section className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50 p-5 md:p-6">
