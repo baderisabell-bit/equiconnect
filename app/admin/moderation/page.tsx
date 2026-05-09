@@ -492,7 +492,17 @@ export default function AdminModerationPage() {
                 <input value={searchBirthDate} onChange={(e) => setSearchBirthDate(e.target.value)} type="date" className="p-3 rounded-xl border border-slate-200 bg-slate-50" />
                 <div className="flex gap-2">
                   <button type="button" onClick={searchUser} className="px-4 py-3 rounded-xl text-[10px] font-black uppercase bg-slate-900 text-white">Nutzer suchen</button>
-                  <button type="button" onClick={() => { setShowAllUsers(!showAllUsers); }} className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase ${showAllUsers ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = !showAllUsers;
+                      setShowAllUsers(next);
+                      if (next) {
+                        await loadAllUsers();
+                      }
+                    }}
+                    className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase ${showAllUsers ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-700'}`}
+                  >
                     {showAllUsers ? 'Alle anzeigen (Aus)' : 'Alle Nutzer anzeigen'}
                   </button>
                   <button type="button" onClick={loadAllUsers} className="px-4 py-3 rounded-xl text-[10px] font-black uppercase border border-emerald-200 bg-emerald-50 text-emerald-700">Liste laden</button>

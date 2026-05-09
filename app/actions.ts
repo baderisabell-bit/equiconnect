@@ -2451,41 +2451,80 @@ export async function adminFindUserByIdentity(paramsOrQuery?: { adminCode?: stri
     const lastName = String(query?.lastName || query?.nachname || '').trim().toLowerCase();
     const birthDate = String(query?.birthDate || query?.geburtsdatum || '').trim();
 
-    const rows = showAll || Number.isInteger(userId) && userId > 0
-      ? await pool.query(
-          `SELECT
-             u.id,
-             COALESCE(up.display_name, u.name, u.email) AS vorname,
-             ''::text AS nachname,
-             u.email,
-             u.role,
-             u.birth_date,
-             u.created_at
-           FROM users u
-           LEFT JOIN user_profiles up ON up.user_id = u.id
-           WHERE ($1::int IS NULL OR u.id = $1)
-           ORDER BY u.id DESC
-           LIMIT 250`,
-          [Number.isInteger(userId) && userId > 0 ? userId : null]
-        )
-      : await pool.query(
-          `SELECT
-             u.id,
-             COALESCE(up.display_name, u.name, u.email) AS vorname,
-             ''::text AS nachname,
-             u.email,
-             u.role,
-             u.birth_date,
-             u.created_at
-           FROM users u
-           LEFT JOIN user_profiles up ON up.user_id = u.id
-           WHERE ($1 = '' OR LOWER(COALESCE(up.display_name, u.name, u.email)) LIKE '%' || $1 || '%')
-             AND ($2 = '' OR LOWER(COALESCE(u.name, up.display_name, u.email)) LIKE '%' || $2 || '%')
-             AND ($3 = '' OR COALESCE(TO_CHAR(u.birth_date, 'YYYY-MM-DD'), '') = $3)
-           ORDER BY u.id DESC
-           LIMIT 100`,
-          [firstName, lastName, birthDate]
-        );
+    let rows: any;
+    try {
+      rows = showAll || Number.isInteger(userId) && userId > 0
+        ? await pool.query(
+            `SELECT
+               u.id,
+               COALESCE(up.display_name, u.name, u.email) AS vorname,
+               ''::text AS nachname,
+               u.email,
+               u.role,
+               u.birth_date,
+               u.created_at
+             FROM users u
+             LEFT JOIN user_profiles up ON up.user_id = u.id
+             WHERE ($1::int IS NULL OR u.id = $1)
+             ORDER BY u.id DESC
+             LIMIT 250`,
+            [Number.isInteger(userId) && userId > 0 ? userId : null]
+          )
+        : await pool.query(
+            `SELECT
+               u.id,
+               COALESCE(up.display_name, u.name, u.email) AS vorname,
+               ''::text AS nachname,
+               u.email,
+               u.role,
+               u.birth_date,
+               u.created_at
+             FROM users u
+             LEFT JOIN user_profiles up ON up.user_id = u.id
+             WHERE ($1 = '' OR LOWER(COALESCE(up.display_name, u.name, u.email)) LIKE '%' || $1 || '%')
+               AND ($2 = '' OR LOWER(COALESCE(u.name, up.display_name, u.email)) LIKE '%' || $2 || '%')
+               AND ($3 = '' OR COALESCE(TO_CHAR(u.birth_date, 'YYYY-MM-DD'), '') = $3)
+             ORDER BY u.id DESC
+             LIMIT 100`,
+            [firstName, lastName, birthDate]
+          );
+    } catch (schemaError: any) {
+      // Fallback for installations where users.name and/or users.birth_date do not exist.
+      rows = showAll || Number.isInteger(userId) && userId > 0
+        ? await pool.query(
+            `SELECT
+               u.id,
+               COALESCE(up.display_name, u.email) AS vorname,
+               ''::text AS nachname,
+               u.email,
+               u.role,
+               NULL::text AS birth_date,
+               u.created_at
+             FROM users u
+             LEFT JOIN user_profiles up ON up.user_id = u.id
+             WHERE ($1::int IS NULL OR u.id = $1)
+             ORDER BY u.id DESC
+             LIMIT 250`,
+            [Number.isInteger(userId) && userId > 0 ? userId : null]
+          )
+        : await pool.query(
+            `SELECT
+               u.id,
+               COALESCE(up.display_name, u.email) AS vorname,
+               ''::text AS nachname,
+               u.email,
+               u.role,
+               NULL::text AS birth_date,
+               u.created_at
+             FROM users u
+             LEFT JOIN user_profiles up ON up.user_id = u.id
+             WHERE ($1 = '' OR LOWER(COALESCE(up.display_name, u.email)) LIKE '%' || $1 || '%')
+               AND ($2 = '' OR LOWER(COALESCE(up.display_name, u.email)) LIKE '%' || $2 || '%')
+             ORDER BY u.id DESC
+             LIMIT 100`,
+            [firstName, lastName]
+          );
+    }
 
     const users = (rows.rows || []).map((row: any) => ({
       id: Number(row.id),
