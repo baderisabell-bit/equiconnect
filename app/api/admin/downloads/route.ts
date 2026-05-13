@@ -50,9 +50,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Construct safe file path
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    const requestedFile = path.join(uploadDir, filePath);
+    // Construct safe file path - admin files are stored in .uploads directory
+    let uploadDir: string;
+    if (filePath.includes('admin/certificates') || filePath.includes('admin/verification')) {
+      // Admin files are in .uploads for privacy
+      uploadDir = path.join(process.cwd(), '.uploads');
+    } else {
+      // Public files
+      uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    }
+    const requestedFile = path.join(uploadDir, filePath.replace(/^uploads\//, ''));
 
     // Prevent path traversal attacks
     if (!requestedFile.startsWith(uploadDir)) {
