@@ -14,7 +14,14 @@ type VerificationProfile = {
   verifiziert: boolean;
   display_name: string | null;
   zertifikate: string[] | null;
-  profil_data: any;
+  profil_data: {
+    uploadedCertificates?: string[];
+    uploadedIdDocs?: string[];
+    verifizierteZertifikate?: string[];
+    verifizierteUploadedCertificates?: string[];
+    verifizierteUploadedIdDocs?: string[];
+    [key: string]: any;
+  };
   updated_at: string;
 };
 
@@ -27,7 +34,15 @@ export default function AdminVerifizierungPage() {
   const [activeUserId, setActiveUserId] = useState<number | null>(null);
   const [accountVerified, setAccountVerified] = useState(false);
   const [verifiedCertificates, setVerifiedCertificates] = useState<string[]>([]);
+  const [verifiedUploadedCertificates, setVerifiedUploadedCertificates] = useState<string[]>([]);
+  const [verifiedUploadedIdDocs, setVerifiedUploadedIdDocs] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const formatUploadLabel = (value: string) => {
+    const clean = String(value || '').split('?')[0].split('#')[0];
+    const last = clean.split('/').filter(Boolean).pop() || clean;
+    return decodeURIComponent(last || value || 'Datei');
+  };
 
   useEffect(() => {
     const storedCode = sessionStorage.getItem("adminPanelCode") || "";
@@ -90,11 +105,31 @@ export default function AdminVerifizierungPage() {
       ? activeItem.profil_data.verifizierteZertifikate
       : [];
     setVerifiedCertificates(fromProfileData);
+
+    const fromUploadedCertificates = Array.isArray(activeItem.profil_data?.verifizierteUploadedCertificates)
+      ? activeItem.profil_data.verifizierteUploadedCertificates
+      : [];
+    setVerifiedUploadedCertificates(fromUploadedCertificates);
+
+    const fromUploadedIdDocs = Array.isArray(activeItem.profil_data?.verifizierteUploadedIdDocs)
+      ? activeItem.profil_data.verifizierteUploadedIdDocs
+      : [];
+    setVerifiedUploadedIdDocs(fromUploadedIdDocs);
   }, [activeItem]);
 
   const certificates = useMemo(() => {
     if (!activeItem || !Array.isArray(activeItem.zertifikate)) return [];
     return activeItem.zertifikate;
+  }, [activeItem]);
+
+  const uploadedCertificates = useMemo(() => {
+    if (!activeItem || !Array.isArray(activeItem.profil_data?.uploadedCertificates)) return [];
+    return activeItem.profil_data.uploadedCertificates.filter(Boolean) as string[];
+  }, [activeItem]);
+
+  const uploadedIdDocs = useMemo(() => {
+    if (!activeItem || !Array.isArray(activeItem.profil_data?.uploadedIdDocs)) return [];
+    return activeItem.profil_data.uploadedIdDocs.filter(Boolean) as string[];
   }, [activeItem]);
 
   const toggleCertificate = (value: string) => {
@@ -111,6 +146,8 @@ export default function AdminVerifizierungPage() {
       userId: activeItem.user_id,
       accountVerified,
       verifiedCertificates,
+      verifiedUploadedCertificates,
+      verifiedUploadedIdDocs,
     });
     setSaving(false);
 
@@ -128,6 +165,8 @@ export default function AdminVerifizierungPage() {
               profil_data: {
                 ...(item.profil_data || {}),
                 verifizierteZertifikate: verifiedCertificates,
+                verifizierteUploadedCertificates: verifiedUploadedCertificates,
+                verifizierteUploadedIdDocs: verifiedUploadedIdDocs,
               },
             }
           : item
@@ -269,6 +308,72 @@ export default function AdminVerifizierungPage() {
                       <ShieldCheck size={16} className="text-emerald-600" /> Ausweis-Verifizierung freigeben
                     </span>
                   </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-5">
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Nachweise hochladen</h3>
+                      <p className="mt-1 text-sm font-bold text-slate-600">Sichtbare Dokumente aus der Registrierung.</p>
+                    </div>
+                    {uploadedCertificates.length === 0 ? (
+                      <p className="text-sm font-bold text-slate-400">Keine Nachweise gefunden.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {uploadedCertificates.map((fileUrl) => {
+                          const active = verifiedUploadedCertificates.includes(fileUrl);
+                          return (
+                            <div key={fileUrl} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <a href={fileUrl} target="_blank" rel="noreferrer" className="flex-1 text-sm font-bold text-slate-700 underline underline-offset-2 truncate">
+                                {formatUploadLabel(fileUrl)}
+                              </a>
+                              <label className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={active}
+                                  onChange={() => setVerifiedUploadedCertificates((prev) => prev.includes(fileUrl) ? prev.filter((item) => item !== fileUrl) : [...prev, fileUrl])}
+                                  className="w-4 h-4 accent-emerald-600"
+                                />
+                                Verifiziert
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 rounded-2xl border border-slate-100 bg-white p-5">
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Ausweis verifizieren</h3>
+                      <p className="mt-1 text-sm font-bold text-slate-600">Hochgeladene Ausweisdateien aus der Registrierung.</p>
+                    </div>
+                    {uploadedIdDocs.length === 0 ? (
+                      <p className="text-sm font-bold text-slate-400">Kein Ausweis-Dokument gefunden.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {uploadedIdDocs.map((fileUrl) => {
+                          const active = verifiedUploadedIdDocs.includes(fileUrl);
+                          return (
+                            <div key={fileUrl} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <a href={fileUrl} target="_blank" rel="noreferrer" className="flex-1 text-sm font-bold text-slate-700 underline underline-offset-2 truncate">
+                                {formatUploadLabel(fileUrl)}
+                              </a>
+                              <label className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={active}
+                                  onChange={() => setVerifiedUploadedIdDocs((prev) => prev.includes(fileUrl) ? prev.filter((item) => item !== fileUrl) : [...prev, fileUrl])}
+                                  className="w-4 h-4 accent-emerald-600"
+                                />
+                                Verifiziert
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-3">

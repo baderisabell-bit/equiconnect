@@ -2652,7 +2652,7 @@ export async function getVerificationProfiles(params?: any) {
   }
 }
 
-export async function updateVerificationStatus(paramsOrProfileId?: { adminCode?: string; userId?: number; accountVerified?: boolean; verifiedCertificates?: any[] } | number, status?: string) {
+export async function updateVerificationStatus(paramsOrProfileId?: { adminCode?: string; userId?: number; accountVerified?: boolean; verifiedCertificates?: any[]; verifiedUploadedCertificates?: any[]; verifiedUploadedIdDocs?: any[] } | number, status?: string) {
   try {
     const params = typeof paramsOrProfileId === 'number' ? { userId: paramsOrProfileId } : (paramsOrProfileId || {});
     const adminCode = String(params.adminCode || '').trim();
@@ -2664,6 +2664,8 @@ export async function updateVerificationStatus(paramsOrProfileId?: { adminCode?:
     const userId = Number(params.userId || 0);
     const accountVerified = Boolean(params.accountVerified);
     const verifiedCertificates = Array.isArray(params.verifiedCertificates) ? params.verifiedCertificates : [];
+    const verifiedUploadedCertificates = Array.isArray(params.verifiedUploadedCertificates) ? params.verifiedUploadedCertificates : [];
+    const verifiedUploadedIdDocs = Array.isArray(params.verifiedUploadedIdDocs) ? params.verifiedUploadedIdDocs : [];
 
     if (!Number.isInteger(userId) || userId <= 0) {
       return { success: false, error: 'Ungültige userId' };
@@ -2683,6 +2685,8 @@ export async function updateVerificationStatus(paramsOrProfileId?: { adminCode?:
     const merged = {
       ...(typeof existing === 'object' ? existing : {}),
       verifizierteZertifikate: verifiedCertificates
+      ,verifizierteUploadedCertificates: verifiedUploadedCertificates
+      ,verifizierteUploadedIdDocs: verifiedUploadedIdDocs
     };
 
     // Upsert profile row
