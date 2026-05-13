@@ -660,7 +660,16 @@ function SuchseiteContent() {
                     Alle
                   </button>
                   {categoryOptions.map((category) => (
-                    <button key={category.label} type="button" onClick={() => { setSelectedCategory(category.label); setCategoryDropdownOpen(false); }} className="block w-full px-4 py-2 text-left text-sm font-bold hover:bg-slate-50">
+                    <button
+                      key={category.label}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(category.label);
+                        setSelectedThemes([]);
+                        setCategoryDropdownOpen(false);
+                      }}
+                      className="block w-full px-4 py-2 text-left text-sm font-bold hover:bg-slate-50"
+                    >
                       {category.label}
                     </button>
                   ))}
@@ -689,6 +698,54 @@ function SuchseiteContent() {
               </button>
             </div>
           </div>
+
+          {activeCategory && activeCategory.themen.length > 0 && (
+            <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Unterkategorien</p>
+                  <p className="text-xs font-bold text-slate-500">{activeCategory.label} auswählen oder einzelne Themen filtern</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedThemes([])}
+                  className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-[9px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-50"
+                >
+                  Unterkategorien zurücksetzen
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {activeCategory.themen.map((theme) => {
+                  const isSelected = selectedThemeSet.has(theme);
+                  return (
+                    <button
+                      key={theme}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(activeCategory.label);
+                        setSelectedThemes((prev) =>
+                          prev.includes(theme) ? prev.filter((item) => item !== theme) : [...prev, theme]
+                        );
+                      }}
+                      className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition ${
+                        isSelected
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
+                      }`}
+                    >
+                      {theme}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!activeCategory && categoryOptions.length > 0 && (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Unterkategorien erscheinen nach Auswahl einer Hauptkategorie</p>
+            </div>
+          )}
         </div>
 
         {/* Results */}
