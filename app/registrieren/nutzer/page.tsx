@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { registerUser, saveUserProfileData, uploadProfileHorseImage, uploadProfileImage, uploadCertificates, uploadIdentityVerification } from '../../actions';
+import { registerUser, saveUserProfileData, uploadProfileHorseImage, uploadProfileImage } from '../../actions';
 import Link from 'next/link';
 import { Camera, Check, FileText, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import { ANGEBOT_KATEGORIEN, ZERTIFIKAT_KATEGORIEN } from '../../suche/kategorien-daten';
@@ -30,8 +30,7 @@ export default function RegistrierungNutzer() {
   });
 
   const [images, setImages] = useState<FileList | null>(null);
-  const [certificates, setCertificates] = useState<FileList | null>(null);
-  const [idProof, setIdProof] = useState<FileList | null>(null);
+  // Certificates and ID verification are uploaded after login in the user profile (admin-only access to files)
   const [uploading, setUploading] = useState(false);
   const [pferde, setPferde] = useState<Array<{ name: string; rasse: string; alter: string; beschreibung: string; bilder: File[] }>>([
     { name: '', rasse: '', alter: '', beschreibung: '', bilder: [] }
@@ -247,37 +246,8 @@ export default function RegistrierungNutzer() {
           }
         }
 
-        // Upload certificates - stored in admin-only folder
-        if (certificates && certificates.length > 0) {
-          for (const file of Array.from(certificates)) {
-            try {
-              const uploadData = new FormData();
-              uploadData.append('file', file);
-              const uploadRes = await uploadCertificates(res.userId, uploadData);
-              if (!uploadRes.success) {
-                console.warn(`⚠ Zertifikat Upload fehlgeschlagen: ${uploadRes.error}`);
-              }
-            } catch (err) {
-              console.error('Fehler beim Zertifikat-Upload:', err);
-            }
-          }
-        }
-
-        // Upload ID proof - stored in admin-only folder
-        if (idProof && idProof.length > 0) {
-          for (const file of Array.from(idProof)) {
-            try {
-              const uploadData = new FormData();
-              uploadData.append('file', file);
-              const uploadRes = await uploadIdentityVerification(res.userId, uploadData);
-              if (!uploadRes.success) {
-                console.warn(`⚠ Ausweisverifikation Upload fehlgeschlagen: ${uploadRes.error}`);
-              }
-            } catch (err) {
-              console.error('Fehler beim Ausweisverifikation-Upload:', err);
-            }
-          }
-        }
+        // Certificates and ID uploads are intentionally NOT handled during registration.
+        // Users should log in and upload documents from their profile/settings page instead.
 
         // Upload horse images
         const gespeichertePferde = await Promise.all(
@@ -753,41 +723,15 @@ export default function RegistrierungNutzer() {
               ))}
             </div>
 
-            <div className="mt-8 p-6 border-2 border-dashed border-emerald-100 rounded-[1.5rem] bg-emerald-50/30">
-              <div className="flex flex-col md:flex-row items-center gap-5">
+            <div className="mt-8 p-6 rounded-[1.5rem] bg-emerald-50/20 border border-emerald-100">
+              <div className="flex items-start gap-4">
                 <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-sm text-emerald-600">
                   <ShieldCheck size={32} />
                 </div>
-                <div className="flex-1 text-center md:text-left">
-                  <h3 className="text-sm font-black uppercase italic text-slate-800">Nachweise hochladen</h3>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight mt-1">
-                    Bitte lade hier deine Zertifikate (Urkunden, Zeugnisse) als PDF oder Foto hoch.
-                    <span className="text-emerald-600 block sm:inline sm:ml-1">Dies ist zwingend für das "Verifiziert"-Abzeichen.</span>
-                  </p>
+                <div>
+                  <h3 className="text-sm font-black uppercase italic text-slate-800">Nachweise & Ausweis</h3>
+                  <p className="text-[10px] font-bold text-slate-500 mt-1">Bitte zuerst einloggen — Zertifikate und Ausweisverifikation müssen nach dem Login im Profil hochgeladen werden. Das Hochladen gehört nicht zur Registrierung.</p>
                 </div>
-                <div className="relative">
-                  <input 
-                    type="file" 
-                    multiple 
-                    className="hidden" 
-                    id="cert-upload-nutzer"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setCertificates(e.target.files)}
-                  />
-                  <label
-                    htmlFor="cert-upload-nutzer"
-                    className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase italic tracking-widest cursor-pointer hover:bg-emerald-600 transition-all shadow-lg block"
-                  >
-                    Dateien wählen
-                  </label>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="text-[8px] font-black uppercase text-slate-400">Unterstützte Formate: PDF, JPG, PNG (max. 5MB pro Datei)</span>
-                {certificates && certificates.length > 0 && (
-                  <span className="text-[8px] font-black uppercase text-emerald-600">✓ {certificates.length} Datei(en) gewählt</span>
-                )}
               </div>
             </div>
           </section>
@@ -974,23 +918,12 @@ export default function RegistrierungNutzer() {
               {fieldErrors.privatOrt && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatOrt}</p>}
 
               <div className="md:col-span-2 py-5 border-t border-white/10 mt-3">
-                <div className="flex items-center gap-4 p-5 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl">
+                <div className="flex items-start gap-4 p-5 bg-emerald-50/30 border border-emerald-100 rounded-2xl">
                   <FileText className="text-emerald-400" />
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest">Ausweis-Verifikation</p>
-                    <p className="text-[9px] text-slate-400 uppercase">Lade ein Foto deines Ausweises hoch (Manuelle Prüfung)</p>
-                    {idProof && idProof.length > 0 && (
-                      <p className="text-[8px] text-emerald-400 font-black uppercase mt-1">✓ {idProof.length} Datei(en) gewählt</p>
-                    )}
+                    <p className="text-[9px] text-slate-500">Bitte zuerst einloggen — lade Ausweisdokumente nach dem Login in deinem Profil hoch. Manuelle Prüfung durch Admins.</p>
                   </div>
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    id="id-upload-nutzer"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setIdProof(e.target.files)}
-                  />
-                  <label htmlFor="id-upload-nutzer" className="ml-auto bg-white text-slate-900 px-4 py-2 rounded-lg text-[9px] font-black uppercase cursor-pointer hover:bg-emerald-400 transition-colors">Upload</label>
                 </div>
               </div>
 
