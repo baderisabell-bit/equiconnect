@@ -767,6 +767,8 @@ export default function EinstellungenPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input
+              id="settings-vorname"
+              name="settings-vorname"
               type="text"
               value={formData.vorname}
               onChange={(e) => handleChange("vorname", e.target.value)}
@@ -774,6 +776,8 @@ export default function EinstellungenPage() {
               className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
             />
             <input
+              id="settings-nachname"
+              name="settings-nachname"
               type="text"
               value={formData.nachname}
               onChange={(e) => handleChange("nachname", e.target.value)}
@@ -783,6 +787,8 @@ export default function EinstellungenPage() {
           </div>
 
           <input
+            id="settings-unternehmensname"
+            name="settings-unternehmensname"
             type="text"
             value={formData.unternehmensname}
             onChange={(e) => handleChange("unternehmensname", e.target.value)}
@@ -791,8 +797,10 @@ export default function EinstellungenPage() {
           />
 
           <div>
-            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Geburtsdatum</label>
+            <label htmlFor="settings-birthDate" className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-500">Geburtsdatum</label>
             <input
+              id="settings-birthDate"
+              name="settings-birthDate"
               type="date"
               value={formData.birthDate}
               onChange={(e) => handleChange("birthDate", e.target.value)}
@@ -804,6 +812,8 @@ export default function EinstellungenPage() {
           </div>
 
           <input
+            id="settings-email"
+            name="settings-email"
             type="email"
             value={formData.email}
             onChange={(e) => handleChange("email", e.target.value)}
@@ -813,6 +823,8 @@ export default function EinstellungenPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <input
+              id="settings-privatStrasse"
+              name="settings-privatStrasse"
               type="text"
               value={formData.privatStrasse}
               onChange={(e) => handleChange("privatStrasse", e.target.value)}

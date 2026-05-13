@@ -145,16 +145,20 @@ export default function PublicContactForm() {
                 className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
               />
               <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="Deine E-Mail"
-                required
-                className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
-              />
+              id="contact-email"
+              name="contact-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Deine E-Mail"
+              required
+              className="w-full p-4 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:border-emerald-300"
+            />
             </div>
 
             <input
+              id="contact-subject"
+              name="contact-subject"
               type="text"
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
@@ -164,7 +168,8 @@ export default function PublicContactForm() {
             />
 
             <textarea
-              value={message}
+              id="contact-message"
+              name="contact-message"
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Deine Nachricht"
               required

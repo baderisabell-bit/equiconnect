@@ -548,8 +548,21 @@ export default function InserierenPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input value={formData.titel} onChange={(e) => setFormData((prev) => ({ ...prev, titel: e.target.value }))} placeholder="Titel" className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm" />
-            <select value={formData.kategorie} onChange={(e) => setFormData((prev) => ({ ...prev, kategorie: e.target.value }))} className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+            <input
+              id="ad-title"
+              name="ad-title"
+              value={formData.titel}
+              onChange={(e) => setFormData((prev) => ({ ...prev, titel: e.target.value }))}
+              placeholder="Titel"
+              className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm"
+            />
+            <select
+              id="ad-kategorie"
+              name="ad-kategorie"
+              value={formData.kategorie}
+              onChange={(e) => setFormData((prev) => ({ ...prev, kategorie: e.target.value }))}
+              className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm"
+            >
               {verfuegbareKategorien.map((kategorie) => (
                 <option key={kategorie} value={kategorie}>{kategorie}</option>
               ))}
@@ -564,8 +577,10 @@ export default function InserierenPage() {
             </div>
             {formData.modus === 'mobil' && (
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Umkreis um Profilstandort</label>
+                <label htmlFor="ad-mobilRadius" className="text-[10px] font-black uppercase tracking-widest text-slate-500">Umkreis um Profilstandort</label>
                 <select
+                  id="ad-mobilRadius"
+                  name="ad-mobilRadius"
                   value={formData.mobilRadiusKm}
                   onChange={(e) => setFormData((prev) => ({ ...prev, mobilRadiusKm: e.target.value }))}
                   className="w-full md:w-64 rounded-xl border border-slate-200 bg-white p-3 text-sm"
@@ -582,7 +597,15 @@ export default function InserierenPage() {
             )}
           </div>
 
-          <textarea value={formData.beschreibung} onChange={(e) => setFormData((prev) => ({ ...prev, beschreibung: e.target.value }))} rows={5} placeholder="Beschreibung" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm" />
+          <textarea
+            id="ad-beschreibung"
+            name="ad-beschreibung"
+            value={formData.beschreibung}
+            onChange={(e) => setFormData((prev) => ({ ...prev, beschreibung: e.target.value }))}
+            rows={5}
+            placeholder="Beschreibung"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm"
+          />
 
           <div className="rounded-2xl border border-slate-200 p-4 space-y-3">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Titelbild (Pflicht)</p>
@@ -630,8 +653,10 @@ export default function InserierenPage() {
               <div key={row.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                   <div className="md:col-span-3">
-                    <label className="text-[9px] uppercase font-bold text-slate-400 ml-1">Betrag (€)</label>
+                    <label htmlFor={`price-betrag-${row.id}`} className="text-[9px] uppercase font-bold text-slate-400 ml-1">Betrag (€)</label>
                     <input
+                      id={`price-betrag-${row.id}`}
+                      name={`price-betrag-${row.id}`}
                       value={row.betrag}
                       onChange={(e) => setPreisRows((prev) => prev.map((priceRow) => (priceRow.id === row.id ? { ...priceRow, betrag: e.target.value } : priceRow)))}
                       placeholder="0,00"
@@ -640,8 +665,10 @@ export default function InserierenPage() {
                   </div>
 
                   <div className="md:col-span-3">
-                    <label className="text-[9px] uppercase font-bold text-slate-400 ml-1">Leistungstyp</label>
+                    <label htmlFor={`price-typ-${row.id}`} className="text-[9px] uppercase font-bold text-slate-400 ml-1">Leistungstyp</label>
                     <select
+                      id={`price-typ-${row.id}`}
+                      name={`price-typ-${row.id}`}
                       value={row.typ}
                       onChange={(e) => setPreisRows((prev) => prev.map((priceRow) => (priceRow.id === row.id ? { ...priceRow, typ: e.target.value as PriceRow['typ'] } : priceRow)))}
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"

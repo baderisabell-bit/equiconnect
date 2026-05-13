@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { registerUser, saveUserProfileData, uploadProfileHorseImage } from '../../actions';
+import { registerUser, saveUserProfileData, uploadProfileHorseImage, uploadProfileImage, uploadCertificates, uploadIdentityVerification } from '../../actions';
 import Link from 'next/link';
 import { Camera, Check, FileText, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import { ANGEBOT_KATEGORIEN, ZERTIFIKAT_KATEGORIEN } from '../../suche/kategorien-daten';
@@ -30,6 +30,9 @@ export default function RegistrierungNutzer() {
   });
 
   const [images, setImages] = useState<FileList | null>(null);
+  const [certificates, setCertificates] = useState<FileList | null>(null);
+  const [idProof, setIdProof] = useState<FileList | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [pferde, setPferde] = useState<Array<{ name: string; rasse: string; alter: string; beschreibung: string; bilder: File[] }>>([
     { name: '', rasse: '', alter: '', beschreibung: '', bilder: [] }
   ]);
@@ -210,85 +213,149 @@ export default function RegistrierungNutzer() {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const res = await registerUser({
-      ...formData,
-      geburtsdatum: formData.birthDate,
-      stallName: formData.profilName || null,
-      bio: formData.profilBeschreibung || null,
-      lizenzen: formData.interessen,
-      custom_lizenzen: formData.interessenThemen.length > 0 ? formData.interessenThemen.join(', ') : null
-    });
+    setUploading(true);
+    try {
+      const res = await registerUser({
+        ...formData,
+        geburtsdatum: formData.birthDate,
+        stallName: formData.profilName || null,
+        bio: formData.profilBeschreibung || null,
+        lizenzen: formData.interessen,
+        custom_lizenzen: formData.interessenThemen.length > 0 ? formData.interessenThemen.join(', ') : null
+      });
 
-    if (!res.success) {
-      alert(res.error || 'Registrierung fehlgeschlagen.');
-      return;
-    }
+      if (!res.success) {
+        alert(res.error || 'Registrierung fehlgeschlagen.');
+        setUploading(false);
+        return;
+      }
 
-    if (res.userId) {
-      const gespeichertePferde = await Promise.all(
-        pferde.map(async (pferd) => {
-          const bildUrls: string[] = [];
-
-          for (const file of pferd.bilder) {
-            const uploadData = new FormData();
-            uploadData.append('file', file);
-            const uploadRes = await uploadProfileHorseImage(res.userId, 'nutzer', uploadData);
-            if (uploadRes.success && uploadRes.url) {
-              bildUrls.push(uploadRes.url);
+      if (res.userId) {
+        // Upload profile images
+        if (images && images.length > 0) {
+          for (const file of Array.from(images)) {
+            try {
+              const uploadData = new FormData();
+              uploadData.append('file', file);
+              const uploadRes = await uploadProfileImage(res.userId, uploadData);
+              if (!uploadRes.success) {
+                console.warn(`⚠ Profilbild Upload fehlgeschlagen: ${uploadRes.error}`);
+              }
+            } catch (err) {
+              console.error('Fehler beim Profilbild-Upload:', err);
             }
           }
+        }
 
-          return {
-            name: pferd.name.trim(),
-            rasse: pferd.rasse.trim(),
-            alter: pferd.alter.trim(),
-            beschreibung: pferd.beschreibung.trim(),
-            bilder: bildUrls
-          };
-        })
-      );
+        // Upload certificates - stored in admin-only folder
+        if (certificates && certificates.length > 0) {
+          for (const file of Array.from(certificates)) {
+            try {
+              const uploadData = new FormData();
+              uploadData.append('file', file);
+              const uploadRes = await uploadCertificates(res.userId, uploadData);
+              if (!uploadRes.success) {
+                console.warn(`⚠ Zertifikat Upload fehlgeschlagen: ${uploadRes.error}`);
+              }
+            } catch (err) {
+              console.error('Fehler beim Zertifikat-Upload:', err);
+            }
+          }
+        }
 
-      const validePferde = gespeichertePferde.filter((pferd) =>
-        pferd.name || pferd.rasse || pferd.alter || pferd.beschreibung || pferd.bilder.length > 0
-      );
+        // Upload ID proof - stored in admin-only folder
+        if (idProof && idProof.length > 0) {
+          for (const file of Array.from(idProof)) {
+            try {
+              const uploadData = new FormData();
+              uploadData.append('file', file);
+              const uploadRes = await uploadIdentityVerification(res.userId, uploadData);
+              if (!uploadRes.success) {
+                console.warn(`⚠ Ausweisverifikation Upload fehlgeschlagen: ${uploadRes.error}`);
+              }
+            } catch (err) {
+              console.error('Fehler beim Ausweisverifikation-Upload:', err);
+            }
+          }
+        }
 
-      const erstesPferd = validePferde[0] || { name: '', rasse: '', alter: '', beschreibung: '', bilder: [] as string[] };
+        // Upload horse images
+        const gespeichertePferde = await Promise.all(
+          pferde.map(async (pferd) => {
+            const bildUrls: string[] = [];
 
-      const sucheText = Object.entries(formData.gesuche)
-        .map(([kat, val]) => `${kat}: ${val.titel} ${val.inhalt}`.trim())
-        .join(' | ');
+            for (const file of pferd.bilder) {
+              try {
+                const uploadData = new FormData();
+                uploadData.append('file', file);
+                const uploadRes = await uploadProfileHorseImage(res.userId, 'nutzer', uploadData);
+                if (uploadRes.success && uploadRes.url) {
+                  bildUrls.push(uploadRes.url);
+                } else {
+                  console.warn(`⚠ Pferdbild Upload fehlgeschlagen: ${uploadRes.error}`);
+                }
+              } catch (err) {
+                console.error('Fehler beim Pferdbild-Upload:', err);
+              }
+            }
 
-      await saveUserProfileData(res.userId, {
-        profilName: formData.profilName,
-        profilBeschreibung: formData.profilBeschreibung,
-        vorname: formData.vorname,
-        nachname: formData.nachname,
-        birthDate: formData.birthDate,
-        email: formData.email,
-        pferdName: erstesPferd.name,
-        pferdRasse: erstesPferd.rasse,
-        pferdAlter: erstesPferd.alter,
-        pferdBeschreibung: erstesPferd.beschreibung,
-        pferdBilder: erstesPferd.bilder,
-        pferde: validePferde,
-        ort: formData.privatOrt,
-        plz: formData.privatPlz,
-        kategorien: formData.interessen,
-        interessenThemen: formData.interessenThemen,
-        block3Zertifikate: formData.block3Zertifikate,
-        gesuche: formData.gesuche,
-        sucheText
-      });
+            return {
+              name: pferd.name.trim(),
+              rasse: pferd.rasse.trim(),
+              alter: pferd.alter.trim(),
+              beschreibung: pferd.beschreibung.trim(),
+              bilder: bildUrls
+            };
+          })
+        );
+
+        const validePferde = gespeichertePferde.filter((pferd) =>
+          pferd.name || pferd.rasse || pferd.alter || pferd.beschreibung || pferd.bilder.length > 0
+        );
+
+        const erstesPferd = validePferde[0] || { name: '', rasse: '', alter: '', beschreibung: '', bilder: [] as string[] };
+
+        const sucheText = Object.entries(formData.gesuche)
+          .map(([kat, val]) => `${kat}: ${val.titel} ${val.inhalt}`.trim())
+          .join(' | ');
+
+        await saveUserProfileData(res.userId, {
+          profilName: formData.profilName,
+          profilBeschreibung: formData.profilBeschreibung,
+          vorname: formData.vorname,
+          nachname: formData.nachname,
+          birthDate: formData.birthDate,
+          email: formData.email,
+          pferdName: erstesPferd.name,
+          pferdRasse: erstesPferd.rasse,
+          pferdAlter: erstesPferd.alter,
+          pferdBeschreibung: erstesPferd.beschreibung,
+          pferdBilder: erstesPferd.bilder,
+          pferde: validePferde,
+          ort: formData.privatOrt,
+          plz: formData.privatPlz,
+          kategorien: formData.interessen,
+          interessenThemen: formData.interessenThemen,
+          block3Zertifikate: formData.block3Zertifikate,
+          gesuche: formData.gesuche,
+          sucheText
+        });
+      }
+
+      if (res.userId) {
+        sessionStorage.setItem('userId', String(res.userId));
+        sessionStorage.setItem('userRole', 'nutzer');
+        sessionStorage.setItem('userName', `${formData.vorname} ${formData.nachname}`.trim() || formData.profilName || 'Nutzer');
+      }
+
+      alert("Konto erstellt. Bitte Abo und Zahlungsart auswählen.");
+      window.location.href = '/abo?onboarding=1&role=nutzer';
+    } catch (err) {
+      console.error('Registrierungsfehler:', err);
+      alert('Ein Fehler bei der Registrierung ist aufgetreten.');
+    } finally {
+      setUploading(false);
     }
-
-    if (res.userId) {
-      sessionStorage.setItem('userId', String(res.userId));
-      sessionStorage.setItem('userRole', 'nutzer');
-      sessionStorage.setItem('userName', `${formData.vorname} ${formData.nachname}`.trim() || formData.profilName || 'Nutzer');
-    }
-
-    alert("Konto erstellt. Bitte Abo und Zahlungsart auswählen.");
-    window.location.href = '/abo?onboarding=1&role=nutzer';
   };
 
   return (
@@ -306,9 +373,9 @@ export default function RegistrierungNutzer() {
             <h2 className="text-lg font-black uppercase italic mb-6 text-emerald-600">1. Profilbild & Kurzprofil</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="flex flex-col items-center gap-4">
-                <label className="w-28 h-28 bg-slate-100 rounded-[1.5rem] border-4 border-white shadow-lg flex items-center justify-center overflow-hidden cursor-pointer relative">
+                <label htmlFor="profile-images" className="w-28 h-28 bg-slate-100 rounded-[1.5rem] border-4 border-white shadow-lg flex items-center justify-center overflow-hidden cursor-pointer relative">
                   <Camera size={28} className="text-slate-300" />
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setImages(e.target.files)} />
+                  <input id="profile-images" name="profile-images" type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setImages(e.target.files)} />
                 </label>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">
                   {images ? `${images.length} Bild(er) gewählt` : 'Profilbild hochladen'}
@@ -316,6 +383,8 @@ export default function RegistrierungNutzer() {
               </div>
               <div className="md:col-span-2 grid grid-cols-1 gap-3">
                 <input
+                  id="profilName"
+                  name="profilName"
                   placeholder="Profilname (z.B. Anna & Pferd Luna)"
                   value={formData.profilName}
                   onChange={(e) => setFormValue('profilName', e.target.value)}
@@ -323,6 +392,8 @@ export default function RegistrierungNutzer() {
                 />
                 {fieldErrors.profilName && <p className="-mt-2 text-[10px] font-bold text-red-500">{fieldErrors.profilName}</p>}
                 <textarea
+                  id="profilBeschreibung"
+                  name="profilBeschreibung"
                   placeholder="Kurzbeschreibung: Schreibe was dich ausmacht (empfohlen)"
                   value={formData.profilBeschreibung}
                   onChange={(e) => setFormValue('profilBeschreibung', e.target.value)}
@@ -695,7 +766,14 @@ export default function RegistrierungNutzer() {
                   </p>
                 </div>
                 <div className="relative">
-                  <input type="file" multiple className="hidden" id="cert-upload-nutzer" />
+                  <input 
+                    type="file" 
+                    multiple 
+                    className="hidden" 
+                    id="cert-upload-nutzer"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setCertificates(e.target.files)}
+                  />
                   <label
                     htmlFor="cert-upload-nutzer"
                     className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase italic tracking-widest cursor-pointer hover:bg-emerald-600 transition-all shadow-lg block"
@@ -707,6 +785,9 @@ export default function RegistrierungNutzer() {
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="text-[8px] font-black uppercase text-slate-400">Unterstützte Formate: PDF, JPG, PNG (max. 5MB pro Datei)</span>
+                {certificates && certificates.length > 0 && (
+                  <span className="text-[8px] font-black uppercase text-emerald-600">✓ {certificates.length} Datei(en) gewählt</span>
+                )}
               </div>
             </div>
           </section>
@@ -733,8 +814,10 @@ export default function RegistrierungNutzer() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Name</label>
+                      <label htmlFor={`pferd-name-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Name</label>
                       <input
+                        id={`pferd-name-${index}`}
+                        name={`pferd-name-${index}`}
                         placeholder="z.B. Starlight"
                         value={pferd.name}
                         onChange={(e) => updatePferd(index, 'name', e.target.value)}
@@ -742,8 +825,10 @@ export default function RegistrierungNutzer() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Rasse</label>
+                      <label htmlFor={`pferd-rasse-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Rasse</label>
                       <input
+                        id={`pferd-rasse-${index}`}
+                        name={`pferd-rasse-${index}`}
                         placeholder="z.B. Hannoveraner"
                         value={pferd.rasse}
                         onChange={(e) => updatePferd(index, 'rasse', e.target.value)}
@@ -751,8 +836,10 @@ export default function RegistrierungNutzer() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Alter</label>
+                      <label htmlFor={`pferd-alter-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Alter</label>
                       <input
+                        id={`pferd-alter-${index}`}
+                        name={`pferd-alter-${index}`}
                         placeholder="z.B. 7"
                         value={pferd.alter}
                         onChange={(e) => updatePferd(index, 'alter', e.target.value)}
@@ -762,8 +849,10 @@ export default function RegistrierungNutzer() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Beschreibung</label>
+                    <label htmlFor={`pferd-beschreibung-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Beschreibung</label>
                     <textarea
+                      id={`pferd-beschreibung-${index}`}
+                      name={`pferd-beschreibung-${index}`}
                       placeholder="Besonderheiten, Gesundheitsstand, Trainingslevel..."
                       value={pferd.beschreibung}
                       onChange={(e) => updatePferd(index, 'beschreibung', e.target.value)}
@@ -773,10 +862,12 @@ export default function RegistrierungNutzer() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Pferdebilder</label>
-                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-emerald-500">
+                    <label htmlFor={`pferd-bilder-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Pferdebilder</label>
+                    <label htmlFor={`pferd-bilder-${index}`} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-emerald-500">
                       Bilder auswählen
                       <input
+                        id={`pferd-bilder-${index}`}
+                        name={`pferd-bilder-${index}`}
                         type="file"
                         accept="image/*"
                         multiple
@@ -807,6 +898,8 @@ export default function RegistrierungNutzer() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input
+                id="vorname"
+                name="vorname"
                 placeholder="Vorname"
                 value={formData.vorname}
                 onChange={(e) => setFormValue('vorname', e.target.value)}
@@ -815,6 +908,8 @@ export default function RegistrierungNutzer() {
               />
               {fieldErrors.vorname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.vorname}</p>}
               <input
+                id="nachname"
+                name="nachname"
                 placeholder="Nachname"
                 value={formData.nachname}
                 onChange={(e) => setFormValue('nachname', e.target.value)}
@@ -823,8 +918,10 @@ export default function RegistrierungNutzer() {
               />
               {fieldErrors.nachname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.nachname}</p>}
               <div className="md:col-span-2 grid gap-2">
-                <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Geburtsdatum (nicht öffentlich)</label>
+                <label htmlFor="birthDate" className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Geburtsdatum (nicht öffentlich)</label>
                 <input
+                  id="birthDate"
+                  name="birthDate"
                   type="date"
                   value={formData.birthDate}
                   onChange={(e) => setFormValue('birthDate', e.target.value)}
@@ -834,6 +931,8 @@ export default function RegistrierungNutzer() {
               </div>
               <div className="md:col-span-2 grid grid-cols-3 gap-2">
                 <input
+                  id="privatStrasse"
+                  name="privatStrasse"
                   placeholder="Privatadresse (Straße)"
                   value={formData.privatStrasse}
                   onChange={(e) => setFormValue('privatStrasse', e.target.value)}
@@ -841,6 +940,8 @@ export default function RegistrierungNutzer() {
                   required
                 />
                 <input
+                  id="privatHausnummer"
+                  name="privatHausnummer"
                   placeholder="Nr."
                   value={formData.privatHausnummer}
                   onChange={(e) => setFormValue('privatHausnummer', e.target.value)}
@@ -852,6 +953,8 @@ export default function RegistrierungNutzer() {
                 <p className="md:col-span-2 -mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatStrasse || fieldErrors.privatHausnummer}</p>
               )}
               <input
+                id="privatPlz"
+                name="privatPlz"
                 placeholder="PLZ"
                 value={formData.privatPlz}
                 onChange={(e) => setFormValue('privatPlz', e.target.value)}
@@ -860,6 +963,8 @@ export default function RegistrierungNutzer() {
               />
               {fieldErrors.privatPlz && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatPlz}</p>}
               <input
+                id="privatOrt"
+                name="privatOrt"
                 placeholder="Ort"
                 value={formData.privatOrt}
                 onChange={(e) => setFormValue('privatOrt', e.target.value)}
@@ -874,13 +979,24 @@ export default function RegistrierungNutzer() {
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest">Ausweis-Verifikation</p>
                     <p className="text-[9px] text-slate-400 uppercase">Lade ein Foto deines Ausweises hoch (Manuelle Prüfung)</p>
+                    {idProof && idProof.length > 0 && (
+                      <p className="text-[8px] text-emerald-400 font-black uppercase mt-1">✓ {idProof.length} Datei(en) gewählt</p>
+                    )}
                   </div>
-                  <input type="file" className="hidden" id="id-upload-nutzer" />
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    id="id-upload-nutzer"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setIdProof(e.target.files)}
+                  />
                   <label htmlFor="id-upload-nutzer" className="ml-auto bg-white text-slate-900 px-4 py-2 rounded-lg text-[9px] font-black uppercase cursor-pointer hover:bg-emerald-400 transition-colors">Upload</label>
                 </div>
               </div>
 
               <input
+                id="email"
+                name="email"
                 type="email"
                 placeholder="E-Mail für Login"
                 value={formData.email}
@@ -890,6 +1006,8 @@ export default function RegistrierungNutzer() {
               />
               {fieldErrors.email && <p className="md:col-span-2 -mt-2 text-[10px] font-bold text-red-300">{fieldErrors.email}</p>}
               <input
+                id="password"
+                name="password"
                 type="password"
                 placeholder="Passwort"
                 value={formData.password}
@@ -899,6 +1017,8 @@ export default function RegistrierungNutzer() {
               />
               {fieldErrors.password && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.password}</p>}
               <input
+                id="confirmPassword"
+                name="confirmPassword"
                 type="password"
                 placeholder="Passwort bestätigen"
                 value={formData.confirmPassword}
@@ -935,8 +1055,8 @@ export default function RegistrierungNutzer() {
               </label>
             </div>
 
-            <button type="submit" className="w-full bg-emerald-600 py-4 rounded-2xl text-lg font-black uppercase italic tracking-widest hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20">
-              Konto erstellen & Starten
+            <button type="submit" disabled={uploading} className="w-full bg-emerald-600 py-4 rounded-2xl text-lg font-black uppercase italic tracking-widest hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
+              {uploading ? 'Konto wird erstellt und Dateien werden hochgeladen...' : 'Konto erstellen & Starten'}
             </button>
 
             <p className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400">

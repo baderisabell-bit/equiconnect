@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { saveExpertProfileData, uploadProfileHorseImage } from '../../actions';
+import { saveExpertProfileData, uploadProfileHorseImage, uploadProfileImage, uploadCertificates, uploadIdentityVerification } from '../../actions';
 import { 
   Camera, ChevronDown, ChevronUp, ShieldCheck, 
   MapPin, User, Mail, Lock, FileText, Check 
@@ -30,6 +30,10 @@ export default function RegistrierungExperte() {
     datenschutz: false
   });
 
+  const [profileImages, setProfileImages] = useState<FileList | null>(null);
+  const [certificates, setCertificates] = useState<FileList | null>(null);
+  const [idProof, setIdProof] = useState<FileList | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [openSection, setOpenSection] = useState<string | null>("FN-Abzeichen");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [zertifikatFreitext, setZertifikatFreitext] = useState<Record<string, string>>({});
@@ -180,91 +184,154 @@ export default function RegistrierungExperte() {
       return;
     }
 
-    const payload = {
-      name: formData.gewerbeName,
-      website: formData.website,
-      ustId: formData.ustId,
-      gewerbeAdresse: `${formData.gewerbeStrasse} ${formData.gewerbeHausnummer}, ${formData.gewerbePlz} ${formData.gewerbeOrt}`.trim(),
-      ort: formData.gewerbeOrt,
-      plz: formData.gewerbePlz,
-      angebote: formData.angebote,
-      zertifikate: formData.zertifikate,
-      angebotText: formData.angebote.join(', '),
-      freitextBeschreibung: formData.freitextBeschreibung,
-      vorname: formData.vorname,
-      nachname: formData.nachname,
-      birthDate: formData.birthDate,
-      pferdName: formData.pferdName,
-      pferdRasse: formData.pferdRasse,
-      pferdAlter: formData.pferdAlter,
-      privatAdresse: `${formData.privatStrasse} ${formData.privatHausnummer}, ${formData.privatPlz} ${formData.privatOrt}`.trim(),
-      email: formData.email,
-      newsletterExperte: formData.newsletterExperte,
-      updatedAt: new Date().toISOString()
-    };
+    setUploading(true);
+    try {
+      const payload = {
+        name: formData.gewerbeName,
+        website: formData.website,
+        ustId: formData.ustId,
+        gewerbeAdresse: `${formData.gewerbeStrasse} ${formData.gewerbeHausnummer}, ${formData.gewerbePlz} ${formData.gewerbeOrt}`.trim(),
+        ort: formData.gewerbeOrt,
+        plz: formData.gewerbePlz,
+        angebote: formData.angebote,
+        zertifikate: formData.zertifikate,
+        angebotText: formData.angebote.join(', '),
+        freitextBeschreibung: formData.freitextBeschreibung,
+        vorname: formData.vorname,
+        nachname: formData.nachname,
+        birthDate: formData.birthDate,
+        pferdName: formData.pferdName,
+        pferdRasse: formData.pferdRasse,
+        pferdAlter: formData.pferdAlter,
+        privatAdresse: `${formData.privatStrasse} ${formData.privatHausnummer}, ${formData.privatPlz} ${formData.privatOrt}`.trim(),
+        email: formData.email,
+        newsletterExperte: formData.newsletterExperte,
+        updatedAt: new Date().toISOString()
+      };
 
-    const userIdRaw = sessionStorage.getItem('userId');
-    if (!userIdRaw) {
-      alert('Bitte zuerst einloggen, damit dein Profil serverseitig gespeichert werden kann.');
-      window.location.href = '/login';
-      return;
-    }
+      const userIdRaw = sessionStorage.getItem('userId');
+      if (!userIdRaw) {
+        alert('Bitte zuerst einloggen, damit dein Profil serverseitig gespeichert werden kann.');
+        window.location.href = '/login';
+        return;
+      }
 
-    const userId = parseInt(userIdRaw, 10);
-    if (Number.isNaN(userId)) {
-      alert('Session ungültig. Bitte erneut einloggen.');
-      window.location.href = '/login';
-      return;
-    }
+      const userId = parseInt(userIdRaw, 10);
+      if (Number.isNaN(userId)) {
+        alert('Session ungültig. Bitte erneut einloggen.');
+        window.location.href = '/login';
+        return;
+      }
 
-    const gespeichertePferde = await Promise.all(
-      pferde.map(async (pferd) => {
-        const bildUrls: string[] = [];
-
-        for (const file of pferd.bilder) {
-          const uploadData = new FormData();
-          uploadData.append('file', file);
-          const uploadRes = await uploadProfileHorseImage(userId, 'experte', uploadData);
-          if (uploadRes.success && uploadRes.url) {
-            bildUrls.push(uploadRes.url);
+      // Upload profile images
+      if (profileImages && profileImages.length > 0) {
+        for (const file of Array.from(profileImages)) {
+          try {
+            const uploadData = new FormData();
+            uploadData.append('file', file);
+            const uploadRes = await uploadProfileImage(userId, uploadData);
+            if (!uploadRes.success) {
+              console.warn(`⚠ Profilbild Upload fehlgeschlagen: ${uploadRes.error}`);
+            }
+          } catch (err) {
+            console.error('Fehler beim Profilbild-Upload:', err);
           }
         }
+      }
 
-        return {
-          name: pferd.name.trim(),
-          rasse: pferd.rasse.trim(),
-          alter: pferd.alter.trim(),
-          beschreibung: pferd.beschreibung.trim(),
-          bilder: bildUrls
-        };
-      })
-    );
+      // Upload certificates - stored in admin-only folder
+      if (certificates && certificates.length > 0) {
+        for (const file of Array.from(certificates)) {
+          try {
+            const uploadData = new FormData();
+            uploadData.append('file', file);
+            const uploadRes = await uploadCertificates(userId, uploadData);
+            if (!uploadRes.success) {
+              console.warn(`⚠ Zertifikat Upload fehlgeschlagen: ${uploadRes.error}`);
+            }
+          } catch (err) {
+            console.error('Fehler beim Zertifikat-Upload:', err);
+          }
+        }
+      }
 
-    const validePferde = gespeichertePferde.filter((pferd) =>
-      pferd.name || pferd.rasse || pferd.alter || pferd.beschreibung || pferd.bilder.length > 0
-    );
+      // Upload ID proof - stored in admin-only folder
+      if (idProof && idProof.length > 0) {
+        for (const file of Array.from(idProof)) {
+          try {
+            const uploadData = new FormData();
+            uploadData.append('file', file);
+            const uploadRes = await uploadIdentityVerification(userId, uploadData);
+            if (!uploadRes.success) {
+              console.warn(`⚠ Ausweisverifikation Upload fehlgeschlagen: ${uploadRes.error}`);
+            }
+          } catch (err) {
+            console.error('Fehler beim Ausweisverifikation-Upload:', err);
+          }
+        }
+      }
 
-    const erstesPferd = validePferde[0] || { name: formData.pferdName, rasse: formData.pferdRasse, alter: formData.pferdAlter, beschreibung: '', bilder: [] as string[] };
+      const gespeichertePferde = await Promise.all(
+        pferde.map(async (pferd) => {
+          const bildUrls: string[] = [];
 
-    const res = await saveExpertProfileData(userId, {
-      ...payload,
-      pferdName: erstesPferd.name,
-      pferdRasse: erstesPferd.rasse,
-      pferdAlter: erstesPferd.alter,
-      pferdBeschreibung: erstesPferd.beschreibung,
-      pferdBilder: erstesPferd.bilder,
-      pferde: validePferde
-    });
-    if (!res.success) {
-      alert(res.error || 'Speichern fehlgeschlagen.');
-      return;
+          for (const file of pferd.bilder) {
+            try {
+              const uploadData = new FormData();
+              uploadData.append('file', file);
+              const uploadRes = await uploadProfileHorseImage(userId, 'experte', uploadData);
+              if (uploadRes.success && uploadRes.url) {
+                bildUrls.push(uploadRes.url);
+              } else {
+                console.warn(`⚠ Pferdbild Upload fehlgeschlagen: ${uploadRes.error}`);
+              }
+            } catch (err) {
+              console.error('Fehler beim Pferdbild-Upload:', err);
+            }
+          }
+
+          return {
+            name: pferd.name.trim(),
+            rasse: pferd.rasse.trim(),
+            alter: pferd.alter.trim(),
+            beschreibung: pferd.beschreibung.trim(),
+            bilder: bildUrls
+          };
+        })
+      );
+
+      const validePferde = gespeichertePferde.filter((pferd) =>
+        pferd.name || pferd.rasse || pferd.alter || pferd.beschreibung || pferd.bilder.length > 0
+      );
+
+      const erstesPferd = validePferde[0] || { name: formData.pferdName, rasse: formData.pferdRasse, alter: formData.pferdAlter, beschreibung: '', bilder: [] as string[] };
+
+      const res = await saveExpertProfileData(userId, {
+        ...payload,
+        pferdName: erstesPferd.name,
+        pferdRasse: erstesPferd.rasse,
+        pferdAlter: erstesPferd.alter,
+        pferdBeschreibung: erstesPferd.beschreibung,
+        pferdBilder: erstesPferd.bilder,
+        pferde: validePferde
+      });
+      if (!res.success) {
+        alert(res.error || 'Speichern fehlgeschlagen.');
+        setUploading(false);
+        return;
+      }
+
+      sessionStorage.setItem('userRole', 'experte');
+      sessionStorage.setItem('userName', `${formData.vorname} ${formData.nachname}`.trim() || formData.gewerbeName || 'Experte');
+      sessionStorage.setItem('equiconnect-founding-info-pending', '1');
+      alert('Auswahl gespeichert. Du kannst sie jetzt im Profil und in der Suche sehen.');
+      window.location.href = '/abo?onboarding=1&role=experte';
+    } catch (err) {
+      console.error('Profil-Einreichungsfehler:', err);
+      alert('Ein Fehler bei der Profileinreichung ist aufgetreten.');
+    } finally {
+      setUploading(false);
     }
-
-    sessionStorage.setItem('userRole', 'experte');
-    sessionStorage.setItem('userName', `${formData.vorname} ${formData.nachname}`.trim() || formData.gewerbeName || 'Experte');
-    sessionStorage.setItem('equiconnect-founding-info-pending', '1');
-    alert('Auswahl gespeichert. Du kannst sie jetzt im Profil und in der Suche sehen.');
-    window.location.href = '/abo?onboarding=1&role=experte';
   };
 
   return (
@@ -289,6 +356,8 @@ export default function RegistrierungExperte() {
             </div>
             <div className="md:col-span-2 grid grid-cols-1 gap-3">
               <input
+                id="gewerbeName"
+                name="gewerbeName"
                 placeholder="Gewerbename / Stallname"
                 value={formData.gewerbeName}
                 onChange={(e) => setFormValue('gewerbeName', e.target.value)}
@@ -298,6 +367,8 @@ export default function RegistrierungExperte() {
               {fieldErrors.gewerbeName && <p className="-mt-2 text-[10px] font-bold text-red-500">{fieldErrors.gewerbeName}</p>}
               <div className="grid grid-cols-3 gap-2">
                 <input
+                  id="gewerbeStrasse"
+                  name="gewerbeStrasse"
                   placeholder="Straße"
                   value={formData.gewerbeStrasse}
                   onChange={(e) => setFormValue('gewerbeStrasse', e.target.value)}
@@ -305,6 +376,8 @@ export default function RegistrierungExperte() {
                   className="col-span-2 w-full p-3 text-sm bg-slate-50 rounded-xl font-bold"
                 />
                 <input
+                  id="gewerbeHausnummer"
+                  name="gewerbeHausnummer"
                   placeholder="Nr."
                   value={formData.gewerbeHausnummer}
                   onChange={(e) => setFormValue('gewerbeHausnummer', e.target.value)}
@@ -317,6 +390,8 @@ export default function RegistrierungExperte() {
               )}
               <div className="grid grid-cols-3 gap-2">
                 <input
+                  id="gewerbePlz"
+                  name="gewerbePlz"
                   placeholder="PLZ"
                   value={formData.gewerbePlz}
                   onChange={(e) => setFormValue('gewerbePlz', e.target.value)}
@@ -324,6 +399,8 @@ export default function RegistrierungExperte() {
                   className="w-full p-3 text-sm bg-slate-50 rounded-xl font-bold"
                 />
                 <input
+                  id="gewerbeOrt"
+                  name="gewerbeOrt"
                   placeholder="Ort"
                   value={formData.gewerbeOrt}
                   onChange={(e) => setFormValue('gewerbeOrt', e.target.value)}
@@ -335,12 +412,16 @@ export default function RegistrierungExperte() {
                 <p className="-mt-2 text-[10px] font-bold text-red-500">{fieldErrors.gewerbePlz || fieldErrors.gewerbeOrt}</p>
               )}
               <input
+                id="website"
+                name="website"
                 placeholder="Webseite"
                 value={formData.website}
                 onChange={(e) => setFormValue('website', e.target.value)}
                 className="w-full p-3 text-sm bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-emerald-200 outline-none"
               />
               <input
+                id="ustId"
+                name="ustId"
                 placeholder="USt-ID / Steuernummer (Für Impressum)"
                 value={formData.ustId}
                 onChange={(e) => setFormValue('ustId', e.target.value)}
@@ -354,6 +435,8 @@ export default function RegistrierungExperte() {
                   Beschreibung
                 </label>
                 <textarea 
+                  id="freitextBeschreibung"
+                  name="freitextBeschreibung"
                   ref={beschreibungRef}
                   rows={1}
                   placeholder="Beschreibe hier kurz deine Arbeitsweise, deinen Stall oder dein spezielles Angebot..." 
@@ -744,7 +827,14 @@ export default function RegistrierungExperte() {
                   </p>
                 </div>
                 <div className="relative">
-                  <input type="file" multiple className="hidden" id="cert-upload-nutzer" />
+                  <input 
+                    type="file" 
+                    multiple 
+                    className="hidden" 
+                    id="cert-upload-nutzer"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setCertificates(e.target.files)}
+                  />
                   <label
                     htmlFor="cert-upload-nutzer"
                     className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase italic tracking-widest cursor-pointer hover:bg-emerald-600 transition-all shadow-lg block"
@@ -756,6 +846,9 @@ export default function RegistrierungExperte() {
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="text-[8px] font-black uppercase text-slate-400">Unterstützte Formate: PDF, JPG, PNG (max. 5MB pro Datei)</span>
+                {certificates && certificates.length > 0 && (
+                  <span className="text-[8px] font-black uppercase text-emerald-600">✓ {certificates.length} Datei(en) gewählt</span>
+                )}
               </div>
             </div>
           </section>
@@ -782,8 +875,10 @@ export default function RegistrierungExperte() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Name</label>
+                      <label htmlFor={`experte-schulpferd-name-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Name</label>
                       <input
+                        id={`experte-schulpferd-name-${index}`}
+                        name={`experte-schulpferd-name-${index}`}
                         placeholder="z.B. Starlight"
                         value={pferd.name}
                         onChange={(e) => updatePferd(index, 'name', e.target.value)}
@@ -791,8 +886,10 @@ export default function RegistrierungExperte() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Rasse</label>
+                      <label htmlFor={`experte-schulpferd-rasse-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Rasse</label>
                       <input
+                        id={`experte-schulpferd-rasse-${index}`}
+                        name={`experte-schulpferd-rasse-${index}`}
                         placeholder="z.B. Hannoveraner"
                         value={pferd.rasse}
                         onChange={(e) => updatePferd(index, 'rasse', e.target.value)}
@@ -800,8 +897,10 @@ export default function RegistrierungExperte() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Alter</label>
+                      <label htmlFor={`experte-schulpferd-alter-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Alter</label>
                       <input
+                        id={`experte-schulpferd-alter-${index}`}
+                        name={`experte-schulpferd-alter-${index}`}
                         placeholder="z.B. 7"
                         value={pferd.alter}
                         onChange={(e) => updatePferd(index, 'alter', e.target.value)}
@@ -811,8 +910,10 @@ export default function RegistrierungExperte() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Beschreibung</label>
+                    <label htmlFor={`experte-pferd-beschreibung-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Beschreibung</label>
                     <textarea
+                      id={`experte-pferd-beschreibung-${index}`}
+                      name={`experte-pferd-beschreibung-${index}`}
                       placeholder="Besonderheiten, Trainingsstand, Charakter..."
                       value={pferd.beschreibung}
                       onChange={(e) => updatePferd(index, 'beschreibung', e.target.value)}
@@ -822,10 +923,12 @@ export default function RegistrierungExperte() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Pferdebilder</label>
-                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-emerald-500">
+                    <label htmlFor={`experte-pferd-bilder-${index}`} className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Pferdebilder</label>
+                    <label htmlFor={`experte-pferd-bilder-${index}`} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest cursor-pointer hover:bg-emerald-500">
                       Bilder auswählen
                       <input
+                        id={`experte-pferd-bilder-${index}`}
+                        name={`experte-pferd-bilder-${index}`}
                         type="file"
                         accept="image/*"
                         multiple
@@ -861,6 +964,8 @@ export default function RegistrierungExperte() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input
+              id="vorname"
+              name="vorname"
               placeholder="Vorname"
               value={formData.vorname}
               onChange={(e) => setFormValue('vorname', e.target.value)}
@@ -869,6 +974,8 @@ export default function RegistrierungExperte() {
             />
             {fieldErrors.vorname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.vorname}</p>}
             <input
+              id="nachname"
+              name="nachname"
               placeholder="Nachname"
               value={formData.nachname}
               onChange={(e) => setFormValue('nachname', e.target.value)}
@@ -877,8 +984,10 @@ export default function RegistrierungExperte() {
             />
             {fieldErrors.nachname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.nachname}</p>}
             <div className="md:col-span-2 grid gap-2">
-              <label className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Geburtsdatum (nicht öffentlich)</label>
+              <label htmlFor="birthDate" className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Geburtsdatum (nicht öffentlich)</label>
               <input
+                id="birthDate"
+                name="birthDate"
                 type="date"
                 value={formData.birthDate}
                 onChange={(e) => setFormValue('birthDate', e.target.value)}
@@ -888,6 +997,8 @@ export default function RegistrierungExperte() {
             </div>
             <div className="md:col-span-2 grid grid-cols-3 gap-2">
               <input
+                id="privatStrasse"
+                name="privatStrasse"
                 placeholder="Privatadresse (Straße)"
                 value={formData.privatStrasse}
                 onChange={(e) => setFormValue('privatStrasse', e.target.value)}
@@ -895,6 +1006,8 @@ export default function RegistrierungExperte() {
                 className="col-span-2 p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
               />
               <input
+                id="privatHausnummer"
+                name="privatHausnummer"
                 placeholder="Nr."
                 value={formData.privatHausnummer}
                 onChange={(e) => setFormValue('privatHausnummer', e.target.value)}
@@ -906,38 +1019,48 @@ export default function RegistrierungExperte() {
               <p className="md:col-span-2 -mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatStrasse || fieldErrors.privatHausnummer}</p>
             )}
             <input
-              placeholder="PLZ"
-              value={formData.privatPlz}
-              onChange={(e) => setFormValue('privatPlz', e.target.value)}
-              required
-              className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-            />
-            {fieldErrors.privatPlz && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatPlz}</p>}
-            <input
-              placeholder="Ort"
-              value={formData.privatOrt}
-              onChange={(e) => setFormValue('privatOrt', e.target.value)}
-              required
-              className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-            />
-            {fieldErrors.privatOrt && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatOrt}</p>}
+                id="privatPlz"
+                name="privatPlz"
+                placeholder="PLZ"
+                value={formData.privatPlz}
+                onChange={(e) => setFormValue('privatPlz', e.target.value)}
+                required
+                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+              />
+              {fieldErrors.privatPlz && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatPlz}</p>}
+              <input
+                id="privatOrt"
+                name="privatOrt"
+                placeholder="Ort"
+                value={formData.privatOrt}
+                onChange={(e) => setFormValue('privatOrt', e.target.value)}
+                required
+                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+              />
+              {fieldErrors.privatOrt && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatOrt}</p>}
 
             <div className="md:col-span-2 mt-3 p-5 rounded-2xl border border-white/10 bg-white/5">
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-4">Mein Pferd (optional)</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <input
+                  id="pferdName"
+                  name="pferdName"
                   placeholder="Name"
                   value={formData.pferdName}
                   onChange={(e) => setFormValue('pferdName', e.target.value)}
                   className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
                 />
                 <input
+                  id="pferdRasse"
+                  name="pferdRasse"
                   placeholder="Rasse"
                   value={formData.pferdRasse}
                   onChange={(e) => setFormValue('pferdRasse', e.target.value)}
                   className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
                 />
                 <input
+                  id="pferdAlter"
+                  name="pferdAlter"
                   placeholder="Alter"
                   value={formData.pferdAlter}
                   onChange={(e) => setFormValue('pferdAlter', e.target.value)}
@@ -952,13 +1075,24 @@ export default function RegistrierungExperte() {
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest">Ausweis-Verifikation</p>
                   <p className="text-[9px] text-slate-400 uppercase">Lade ein Foto deines Ausweises hoch (Manuelle Prüfung)</p>
+                  {idProof && idProof.length > 0 && (
+                    <p className="text-[8px] text-emerald-400 font-black uppercase mt-1">✓ {idProof.length} Datei(en) gewählt</p>
+                  )}
                 </div>
-                <input type="file" className="hidden" id="id-upload" />
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  id="id-upload"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => setIdProof(e.target.files)}
+                />
                 <label htmlFor="id-upload" className="ml-auto bg-white text-slate-900 px-4 py-2 rounded-lg text-[9px] font-black uppercase cursor-pointer hover:bg-emerald-400 transition-colors">Upload</label>
               </div>
             </div>
 
             <input
+              id="email"
+              name="email"
               type="email"
               placeholder="E-Mail für Login"
               value={formData.email}
@@ -968,6 +1102,8 @@ export default function RegistrierungExperte() {
             />
             {fieldErrors.email && <p className="md:col-span-2 -mt-2 text-[10px] font-bold text-red-300">{fieldErrors.email}</p>}
             <input
+              id="password"
+              name="password"
               type="password"
               placeholder="Passwort"
               value={formData.password}
@@ -977,6 +1113,8 @@ export default function RegistrierungExperte() {
             />
             {fieldErrors.password && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.password}</p>}
             <input
+              id="confirmPassword"
+              name="confirmPassword"
               type="password"
               placeholder="Passwort bestätigen"
               value={formData.confirmPassword}
@@ -1014,9 +1152,10 @@ export default function RegistrierungExperte() {
           <button
             type="button"
             onClick={handleProfilEinreichen}
-            className="w-full bg-emerald-600 py-4 rounded-2xl text-lg font-black uppercase italic tracking-widest hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20"
+            disabled={uploading}
+            className="w-full bg-emerald-600 py-4 rounded-2xl text-lg font-black uppercase italic tracking-widest hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Profil zur Prüfung einreichen
+            {uploading ? 'Profil wird eingereich und Dateien werden hochgeladen...' : 'Profil zur Prüfung einreichen'}
           </button>
 
           <p className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400">

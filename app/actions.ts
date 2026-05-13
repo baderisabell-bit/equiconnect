@@ -139,26 +139,47 @@ async function persistUploadedFile(params: {
   const blobToken = String(process.env.BLOB_READ_WRITE_TOKEN || '').trim();
   let finalUrl = '';
 
-  if (blobToken) {
-    // Production: Upload to Vercel Blob
-    const blob = await put(`${folder}/${fileName}`, file, {
-      access: 'public',
-      addRandomSuffix: false,
-      contentType: String(file.type || '').trim() || undefined,
-      token: blobToken,
-    });
-    console.log('✓ Blob uploaded to Vercel:', blob.url);
-    finalUrl = blob.url;
-  } else {
-    // Dev fallback: use local filesystem
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const uploadDir = path.join(process.cwd(), 'public', ...folder.split('/'));
-    await mkdir(uploadDir, { recursive: true });
-    const filePath = path.join(uploadDir, fileName);
-    await writeFile(filePath, buffer);
-    finalUrl = `/${folder}/${fileName}`;
-    console.log('✓ File uploaded to local storage:', finalUrl);
+  try {
+    if (blobToken) {
+      // Production: Upload to Vercel Blob
+      console.log(`📤 Uploading to Vercel Blob: ${folder}/${fileName}`);
+      const blob = await put(`${folder}/${fileName}`, file, {
+        access: 'public',
+        addRandomSuffix: false,
+        contentType: String(file.type || '').trim() || undefined,
+        token: blobToken,
+      });
+      console.log('✓ Blob uploaded to Vercel:', blob.url);
+      finalUrl = blob.url;
+    } else {
+      // Dev fallback: use local filesystem
+      console.log(`📤 Uploading to local filesystem: ${folder}/${fileName}`);
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      
+      // Admin files go to private directory, others to public
+      const isAdminFolder = folder.includes('admin');
+      const basePath = isAdminFolder 
+        ? path.join(process.cwd(), '.uploads')
+        : path.join(process.cwd(), 'public');
+      
+      const uploadDir = path.join(basePath, ...folder.split('/'));
+      await mkdir(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, fileName);
+      await writeFile(filePath, buffer);
+      
+      // For admin files, return path for API download route
+      // For public files, return direct static URL
+      finalUrl = isAdminFolder 
+        ? `/api/admin/downloads?path=${encodeURIComponent(folder + '/' + fileName)}`
+        : `/${folder}/${fileName}`;
+      
+      console.log('✓ File uploaded to local storage:', finalUrl);
+    }
+  } catch (uploadError: any) {
+    const errorMsg = String(uploadError?.message || uploadError || 'Unbekannter Upload-Fehler');
+    console.error(`❌ File upload failed (${folder}/${fileName}):`, errorMsg, uploadError);
+    throw new Error(`Datei-Upload fehlgeschlagen: ${errorMsg}`);
   }
 
   // Update database only for profile folder
@@ -175,7 +196,7 @@ async function persistUploadedFile(params: {
     }
   }
 
-  console.log(`Upload complete: ${folder}/${fileName} -> ${finalUrl}`);
+  console.log(`✓ Upload complete: ${folder}/${fileName} -> ${finalUrl}`);
   return finalUrl;
 }
 
@@ -327,12 +348,35 @@ export async function adminLogout() {
   return { success: true };
 }
 
+// Admin Authentication Helper
+async function verifyAdminAuth(): Promise<boolean> {
+  try {
+    const cookieStore = await cookies();
+    const adminCookie = cookieStore.get(ADMIN_AUTH_COOKIE)?.value;
+    const expectedPassword = String(process.env.ADMIN_PANEL_CODE || '').trim();
+    
+    if (!expectedPassword) {
+      console.warn('⚠️ ADMIN_PANEL_CODE nicht konfiguriert');
+      return false;
+    }
+    
+    return adminCookie === expectedPassword;
+  } catch (error) {
+    console.error('Admin auth check failed:', error);
+    return false;
+  }
+}
+
 // Profile Image Functions
 export async function uploadProfileImage(userId: number, formData: FormData) {
   try {
     const file = formData.get('file') as File;
-    if (!file) return { success: false, error: 'Keine Datei gefunden.' };
+    if (!file) {
+      console.warn('❌ uploadProfileImage: Keine Datei in FormData');
+      return { success: false, error: 'Keine Datei gefunden.' };
+    }
     
+    console.log(`📤 uploadProfileImage: Uploading ${file.name} (${file.size} bytes) for user ${userId}`);
     const url = await persistUploadedFile({
       file,
       userId,
@@ -340,17 +384,24 @@ export async function uploadProfileImage(userId: number, formData: FormData) {
       prefix: 'profile'
     });
     
+    console.log(`✓ uploadProfileImage: Success - ${url}`);
     return { success: true, url };
   } catch (error: any) {
-    return { success: false, error: 'Upload fehlgeschlagen.' };
+    const errorMsg = String(error?.message || error || 'Unbekannter Fehler');
+    console.error(`❌ uploadProfileImage failed:`, errorMsg, error);
+    return { success: false, error: `Upload fehlgeschlagen: ${errorMsg}` };
   }
 }
 
 export async function uploadProfileHorseImage(userId: number, role: string, formData: FormData) {
   try {
     const file = formData.get('file') as File;
-    if (!file) return { success: false, error: 'Keine Datei gefunden.' };
+    if (!file) {
+      console.warn('❌ uploadProfileHorseImage: Keine Datei in FormData');
+      return { success: false, error: 'Keine Datei gefunden.' };
+    }
     
+    console.log(`📤 uploadProfileHorseImage: Uploading ${file.name} (${file.size} bytes) for user ${userId} (role: ${role})`);
     const folder = role === 'experte' ? 'uploads/expert-horses' : 'uploads/student-horses';
     const url = await persistUploadedFile({
       file,
@@ -359,21 +410,78 @@ export async function uploadProfileHorseImage(userId: number, role: string, form
       prefix: `horse-${role}`
     });
     
+    console.log(`✓ uploadProfileHorseImage: Success - ${url}`);
     return { success: true, url, mediaType: 'image' };
   } catch (error: any) {
-    return { success: false, error: 'Upload fehlgeschlagen.' };
+    const errorMsg = String(error?.message || error || 'Unbekannter Fehler');
+    console.error(`❌ uploadProfileHorseImage failed:`, errorMsg, error);
+    return { success: false, error: `Upload fehlgeschlagen: ${errorMsg}` };
+  }
+}
+
+export async function uploadCertificates(userId: number, formData: FormData) {
+  try {
+    const file = formData.get('file') as File;
+    if (!file) {
+      console.warn('❌ uploadCertificates: Keine Datei in FormData');
+      return { success: false, error: 'Keine Datei gefunden.' };
+    }
+    
+    console.log(`📤 uploadCertificates: Uploading ${file.name} (${file.size} bytes) for user ${userId}`);
+    const url = await persistUploadedFile({
+      file,
+      userId,
+      folder: 'uploads/admin/certificates',
+      prefix: 'cert'
+    });
+    
+    console.log(`✓ uploadCertificates: Success - ${url}`);
+    return { success: true, url };
+  } catch (error: any) {
+    const errorMsg = String(error?.message || error || 'Unbekannter Fehler');
+    console.error(`❌ uploadCertificates failed:`, errorMsg, error);
+    return { success: false, error: `Upload fehlgeschlagen: ${errorMsg}` };
+  }
+}
+
+export async function uploadIdentityVerification(userId: number, formData: FormData) {
+  try {
+    const file = formData.get('file') as File;
+    if (!file) {
+      console.warn('❌ uploadIdentityVerification: Keine Datei in FormData');
+      return { success: false, error: 'Keine Datei gefunden.' };
+    }
+    
+    console.log(`📤 uploadIdentityVerification: Uploading ${file.name} (${file.size} bytes) for user ${userId}`);
+    const url = await persistUploadedFile({
+      file,
+      userId,
+      folder: 'uploads/admin/verification',
+      prefix: 'id-verify'
+    });
+    
+    console.log(`✓ uploadIdentityVerification: Success - ${url}`);
+    return { success: true, url };
+  } catch (error: any) {
+    const errorMsg = String(error?.message || error || 'Unbekannter Fehler');
+    console.error(`❌ uploadIdentityVerification failed:`, errorMsg, error);
+    return { success: false, error: `Upload fehlgeschlagen: ${errorMsg}` };
   }
 }
 
 export async function uploadNetworkMedia(userId: number, formData: FormData) {
   try {
     const file = formData.get('file') as File;
-    if (!file) return { success: false, error: 'Keine Datei gefunden.' };
+    if (!file) {
+      console.warn('❌ uploadNetworkMedia: Keine Datei in FormData');
+      return { success: false, error: 'Keine Datei gefunden.' };
+    }
     
     const isVideo = String(file.type || '').startsWith('video/');
     const folder = 'uploads/network-media';
     const prefix = isVideo ? 'video' : 'image';
     
+    console.log(`📤 uploadNetworkMedia: Uploading ${file.name} (${file.size} bytes, type: ${file.type}) for user ${userId}`);
     const url = await persistUploadedFile({
       file,
       userId,
@@ -381,9 +489,12 @@ export async function uploadNetworkMedia(userId: number, formData: FormData) {
       prefix
     });
     
+    console.log(`✓ uploadNetworkMedia: Success - ${url}`);
     return { success: true, url, mediaType: isVideo ? 'video' : 'image' };
   } catch (error: any) {
-    return { success: false, error: 'Upload fehlgeschlagen.' };
+    const errorMsg = String(error?.message || error || 'Unbekannter Fehler');
+    console.error(`❌ uploadNetworkMedia failed:`, errorMsg, error);
+    return { success: false, error: `Upload fehlgeschlagen: ${errorMsg}` };
   }
 }
 
@@ -2193,9 +2304,13 @@ export async function saveGalerieItems(userId: number, items: any): Promise<any>
 export async function uploadGalerieMedia(userId: number, formData: FormData) {
   try {
     const file = formData.get('file') as File;
-    if (!file) return { success: false, error: 'Keine Datei gefunden.' };
+    if (!file) {
+      console.warn('❌ uploadGalerieMedia: Keine Datei in FormData');
+      return { success: false, error: 'Keine Datei gefunden.' };
+    }
     
     const isVideo = String(file.type || '').startsWith('video/');
+    console.log(`📤 uploadGalerieMedia: Uploading ${file.name} (${file.size} bytes, type: ${file.type}) for user ${userId}`);
     const url = await persistUploadedFile({
       file,
       userId,
@@ -2203,26 +2318,36 @@ export async function uploadGalerieMedia(userId: number, formData: FormData) {
       prefix: isVideo ? 'video' : 'image'
     });
     
+    console.log(`✓ uploadGalerieMedia: Success - ${url}`);
     return { success: true, url, mediaType: isVideo ? 'video' : 'image' };
   } catch (error: any) {
-    return { success: false, error: 'Upload fehlgeschlagen.' };
+    const errorMsg = String(error?.message || error || 'Unbekannter Fehler');
+    console.error(`❌ uploadGalerieMedia failed:`, errorMsg, error);
+    return { success: false, error: `Upload fehlgeschlagen: ${errorMsg}` };
   }
 }
 
 export async function uploadOwnAdvertisingMedia(userId: number, formData: FormData) {
   try {
     const file = formData.get('file') as File;
-    if (!file) return { success: false, error: 'Keine Datei gefunden.' };
+    if (!file) {
+      console.warn('❌ uploadOwnAdvertisingMedia: Keine Datei in FormData');
+      return { success: false, error: 'Keine Datei gefunden.' };
+    }
     
+    console.log(`📤 uploadOwnAdvertisingMedia: Uploading ${file.name} (${file.size} bytes) for user ${userId}`);
     const url = await persistUploadedFile({
       file,
       userId,
       folder: 'uploads/advertising'
     });
     
+    console.log(`✓ uploadOwnAdvertisingMedia: Success - ${url}`);
     return { success: true, url };
   } catch (error: any) {
-    return { success: false, error: 'Upload fehlgeschlagen.' };
+    const errorMsg = String(error?.message || error || 'Unbekannter Fehler');
+    console.error(`❌ uploadOwnAdvertisingMedia failed:`, errorMsg, error);
+    return { success: false, error: `Upload fehlgeschlagen: ${errorMsg}` };
   }
 }
 
