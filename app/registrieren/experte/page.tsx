@@ -995,26 +995,34 @@ export default function RegistrierungExperte() {
           <h2 className="text-lg font-black uppercase italic text-emerald-400">4. Private Daten & Sicherheit</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              id="vorname"
-              name="vorname"
-              placeholder="Vorname"
-              value={formData.vorname}
-              onChange={(e) => setFormValue('vorname', e.target.value)}
-              required
-              className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-            />
-            {fieldErrors.vorname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.vorname}</p>}
-            <input
-              id="nachname"
-              name="nachname"
-              placeholder="Nachname"
-              value={formData.nachname}
-              onChange={(e) => setFormValue('nachname', e.target.value)}
-              required
-              className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-            />
-            {fieldErrors.nachname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.nachname}</p>}
+            <div>
+              <label htmlFor="vorname" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Vorname</label>
+              <input
+                id="vorname"
+                name="vorname"
+                placeholder="Vorname"
+                value={formData.vorname}
+                onChange={(e) => setFormValue('vorname', e.target.value)}
+                required
+                autoComplete="given-name"
+                className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+              />
+              {fieldErrors.vorname && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.vorname}</p>}
+            </div>
+            <div>
+              <label htmlFor="nachname" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Nachname</label>
+              <input
+                id="nachname"
+                name="nachname"
+                placeholder="Nachname"
+                value={formData.nachname}
+                onChange={(e) => setFormValue('nachname', e.target.value)}
+                required
+                autoComplete="family-name"
+                className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+              />
+              {fieldErrors.nachname && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.nachname}</p>}
+            </div>
             <div className="md:col-span-2 grid gap-2">
               <label htmlFor="birthDate" className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Geburtsdatum (nicht öffentlich)</label>
               <input
@@ -1023,6 +1031,7 @@ export default function RegistrierungExperte() {
                 type="date"
                 value={formData.birthDate}
                 onChange={(e) => setFormValue('birthDate', e.target.value)}
+                autoComplete="bday"
                 className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
               />
               {fieldErrors.birthDate && <p className="-mt-1 text-[10px] font-bold text-red-300">{fieldErrors.birthDate}</p>}
@@ -1102,6 +1111,7 @@ export default function RegistrierungExperte() {
               value={formData.email}
               onChange={(e) => setFormValue('email', e.target.value)}
               required
+              autoComplete="email"
               className="md:col-span-2 p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
             />
             {fieldErrors.email && <p className="md:col-span-2 -mt-2 text-[10px] font-bold text-red-300">{fieldErrors.email}</p>}
@@ -1113,6 +1123,7 @@ export default function RegistrierungExperte() {
               value={formData.password}
               onChange={(e) => setFormValue('password', e.target.value)}
               required
+              autoComplete="new-password"
               className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
             />
             {fieldErrors.password && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.password}</p>}
@@ -1124,6 +1135,7 @@ export default function RegistrierungExperte() {
               value={formData.confirmPassword}
               onChange={(e) => setFormValue('confirmPassword', e.target.value)}
               required
+              autoComplete="new-password"
               className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
             />
             {fieldErrors.confirmPassword && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.confirmPassword}</p>}
