@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { registerUser, saveExpertProfileData, uploadProfileHorseImage, uploadProfileImage, uploadCertificates, uploadIdentityVerification } from '../../actions';
+import { registerUser, saveExpertProfileData, uploadProfileHorseImage, uploadCertificates, uploadIdentityVerification } from '../../actions';
 import { 
   Camera, ChevronDown, ChevronUp, ShieldCheck, 
   MapPin, User, Mail, Lock, FileText, Check 
@@ -30,7 +30,6 @@ export default function RegistrierungExperte() {
     datenschutz: false
   });
 
-  const [profileImages, setProfileImages] = useState<FileList | null>(null);
   const [certificates, setCertificates] = useState<FileList | null>(null);
   const [idProof, setIdProof] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -232,22 +231,6 @@ export default function RegistrierungExperte() {
         updatedAt: new Date().toISOString()
       };
 
-      // Upload profile images
-      if (profileImages && profileImages.length > 0) {
-        for (const file of Array.from(profileImages)) {
-          try {
-            const uploadData = new FormData();
-            uploadData.append('file', file);
-            const uploadRes = await uploadProfileImage(userId, uploadData);
-            if (!uploadRes.success) {
-              console.warn(`⚠ Profilbild Upload fehlgeschlagen: ${uploadRes.error}`);
-            }
-          } catch (err) {
-            console.error('Fehler beim Profilbild-Upload:', err);
-          }
-        }
-      }
-
       // Certificates and ID uploads: required during expert registration
       if (!certificates || certificates.length === 0) {
         alert('Bitte mindestens ein Zertifikat hochladen.');
@@ -353,10 +336,12 @@ export default function RegistrierungExperte() {
         return;
       }
 
+      sessionStorage.setItem('userId', String(userId));
       sessionStorage.setItem('userRole', 'experte');
+      sessionStorage.setItem('userEmail', formData.email);
       sessionStorage.setItem('userName', `${formData.vorname} ${formData.nachname}`.trim() || formData.gewerbeName || 'Experte');
       sessionStorage.setItem('equiconnect-founding-info-pending', '1');
-      alert('Auswahl gespeichert. Du kannst sie jetzt im Profil und in der Suche sehen.');
+      alert('Konto erstellt. Du bist jetzt eingeloggt und kannst dein Profil direkt nutzen.');
       window.location.href = '/abo?onboarding=1&role=experte';
     } catch (err) {
       console.error('Profil-Einreichungsfehler:', err);
@@ -376,16 +361,10 @@ export default function RegistrierungExperte() {
 
       <main className="max-w-[58rem] mx-auto px-5 mt-8 space-y-6">
         
-        {/* BLOCK 1: PROFILBILD & GEWERBEDATEN */}
+        {/* BLOCK 1: GEWERBEDATEN */}
         <section className="bg-white rounded-[2rem] p-7 shadow-sm border border-slate-100">
           <h2 className="text-lg font-black uppercase italic mb-6 text-emerald-600">1. Gewerbedaten (Impressum)</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-28 h-28 bg-slate-100 rounded-[1.5rem] border-4 border-white shadow-lg flex items-center justify-center overflow-hidden">
-                <Camera size={28} className="text-slate-300" />
-              </div>
-              <button className="text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white px-4 py-2 rounded-full">Bild wählen</button>
-            </div>
             <div className="md:col-span-2 grid grid-cols-1 gap-3">
               <input
                 id="gewerbeName"

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { registerUser, saveUserProfileData, uploadProfileHorseImage, uploadProfileImage } from '../../actions';
+import { registerUser, saveUserProfileData, uploadProfileHorseImage } from '../../actions';
 import Link from 'next/link';
 import { Camera, Check, FileText, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import { ANGEBOT_KATEGORIEN, ZERTIFIKAT_KATEGORIEN } from '../../suche/kategorien-daten';
@@ -29,7 +29,6 @@ export default function RegistrierungNutzer() {
     role: 'nutzer'
   });
 
-  const [images, setImages] = useState<FileList | null>(null);
   // Certificates and ID verification are uploaded after login in the user profile (admin-only access to files)
   const [uploading, setUploading] = useState(false);
   const [pferde, setPferde] = useState<Array<{ name: string; rasse: string; alter: string; beschreibung: string; bilder: File[] }>>([
@@ -230,22 +229,6 @@ export default function RegistrierungNutzer() {
       }
 
       if (res.userId) {
-        // Upload profile images
-        if (images && images.length > 0) {
-          for (const file of Array.from(images)) {
-            try {
-              const uploadData = new FormData();
-              uploadData.append('file', file);
-              const uploadRes = await uploadProfileImage(res.userId, uploadData);
-              if (!uploadRes.success) {
-                console.warn(`⚠ Profilbild Upload fehlgeschlagen: ${uploadRes.error}`);
-              }
-            } catch (err) {
-              console.error('Fehler beim Profilbild-Upload:', err);
-            }
-          }
-        }
-
         // Certificates and ID uploads are intentionally NOT handled during registration.
         // Users should log in and upload documents from their profile/settings page instead.
 
@@ -318,7 +301,7 @@ export default function RegistrierungNutzer() {
         sessionStorage.setItem('userName', `${formData.vorname} ${formData.nachname}`.trim() || formData.profilName || 'Nutzer');
       }
 
-      alert("Konto erstellt. Bitte Abo und Zahlungsart auswählen.");
+      alert("Konto erstellt. Du bist jetzt eingeloggt.");
       window.location.href = '/abo?onboarding=1&role=nutzer';
     } catch (err) {
       console.error('Registrierungsfehler:', err);
@@ -340,18 +323,8 @@ export default function RegistrierungNutzer() {
 
           {/* BLOCK 1: PROFILBILD, NAME & BESCHREIBUNG */}
           <section className="bg-white rounded-[2rem] p-7 shadow-sm border border-slate-100">
-            <h2 className="text-lg font-black uppercase italic mb-6 text-emerald-600">1. Profilbild & Kurzprofil</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="flex flex-col items-center gap-4">
-                <label htmlFor="profile-images" className="w-28 h-28 bg-slate-100 rounded-[1.5rem] border-4 border-white shadow-lg flex items-center justify-center overflow-hidden cursor-pointer relative">
-                  <Camera size={28} className="text-slate-300" />
-                  <input id="profile-images" name="profile-images" type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setImages(e.target.files)} />
-                </label>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">
-                  {images ? `${images.length} Bild(er) gewählt` : 'Profilbild hochladen'}
-                </span>
-              </div>
-              <div className="md:col-span-2 grid grid-cols-1 gap-3">
+            <h2 className="text-lg font-black uppercase italic mb-6 text-emerald-600">1. Profilname & Kurzprofil</h2>
+            <div className="grid grid-cols-1 gap-3">
                 <label htmlFor="profilName" className="block text-[10px] font-bold uppercase text-slate-600 mb-1">Profilname</label>
                 <input
                   id="profilName"
@@ -371,7 +344,6 @@ export default function RegistrierungNutzer() {
                   onChange={(e) => setFormValue('profilBeschreibung', e.target.value)}
                   className="w-full p-4 text-sm bg-slate-50 rounded-[1.5rem] font-medium border-2 border-transparent focus:border-emerald-200 outline-none min-h-[120px] resize-none"
                 />
-              </div>
             </div>
           </section>
 
