@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { saveExpertProfileData, uploadProfileHorseImage, uploadProfileImage, uploadCertificates, uploadIdentityVerification } from '../../actions';
+import { registerUser, saveExpertProfileData, uploadProfileHorseImage, uploadProfileImage, uploadCertificates, uploadIdentityVerification } from '../../actions';
 import { 
   Camera, ChevronDown, ChevronUp, ShieldCheck, 
   MapPin, User, Mail, Lock, FileText, Check 
@@ -186,6 +186,29 @@ export default function RegistrierungExperte() {
 
     setUploading(true);
     try {
+      // Step 1: Register the user during expert registration
+      const registerRes = await registerUser({
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        name: formData.gewerbeName,
+        vorname: formData.vorname,
+        role: 'experte'
+      });
+
+      if (!registerRes.success) {
+        alert(registerRes.error || 'Registrierung fehlgeschlagen.');
+        setUploading(false);
+        return;
+      }
+
+      const userId = registerRes.userId;
+      if (!userId || Number.isNaN(userId)) {
+        alert('Benutzer konnte nicht erstellt werden.');
+        setUploading(false);
+        return;
+      }
+
       const payload = {
         name: formData.gewerbeName,
         website: formData.website,
@@ -208,20 +231,6 @@ export default function RegistrierungExperte() {
         newsletterExperte: formData.newsletterExperte,
         updatedAt: new Date().toISOString()
       };
-
-      const userIdRaw = sessionStorage.getItem('userId');
-      if (!userIdRaw) {
-        alert('Bitte zuerst einloggen, damit dein Profil serverseitig gespeichert werden kann.');
-        window.location.href = '/login';
-        return;
-      }
-
-      const userId = parseInt(userIdRaw, 10);
-      if (Number.isNaN(userId)) {
-        alert('Session ungültig. Bitte erneut einloggen.');
-        window.location.href = '/login';
-        return;
-      }
 
       // Upload profile images
       if (profileImages && profileImages.length > 0) {
@@ -253,12 +262,15 @@ export default function RegistrierungExperte() {
       }
 
       // Upload certificates (admin-only storage)
+      const uploadedCertificateUrls: string[] = [];
       for (const file of Array.from(certificates)) {
         try {
           const uploadData = new FormData();
           uploadData.append('file', file);
           const uploadRes = await uploadCertificates(userId, uploadData);
-          if (!uploadRes.success) {
+          if (uploadRes.success && uploadRes.url) {
+            uploadedCertificateUrls.push(uploadRes.url);
+          } else {
             console.warn(`⚠ Zertifikat Upload fehlgeschlagen: ${uploadRes.error}`);
           }
         } catch (err) {
@@ -267,12 +279,15 @@ export default function RegistrierungExperte() {
       }
 
       // Upload ID proof (admin-only storage)
+      const uploadedIdUrls: string[] = [];
       for (const file of Array.from(idProof)) {
         try {
           const uploadData = new FormData();
           uploadData.append('file', file);
           const uploadRes = await uploadIdentityVerification(userId, uploadData);
-          if (!uploadRes.success) {
+          if (uploadRes.success && uploadRes.url) {
+            uploadedIdUrls.push(uploadRes.url);
+          } else {
             console.warn(`⚠ Ausweisverifikation Upload fehlgeschlagen: ${uploadRes.error}`);
           }
         } catch (err) {
@@ -318,6 +333,14 @@ export default function RegistrierungExperte() {
       const res = await saveExpertProfileData(userId, {
         ...payload,
         pferdName: erstesPferd.name,
+        // Persist uploaded document URLs so admin can review them
+        uploadedCertificates: uploadedCertificateUrls,
+        uploadedIdDocs: uploadedIdUrls,
+        profil_data: {
+          uploadedCertificates: uploadedCertificateUrls,
+          uploadedIdDocs: uploadedIdUrls
+        },
+
         pferdRasse: erstesPferd.rasse,
         pferdAlter: erstesPferd.alter,
         pferdBeschreibung: erstesPferd.beschreibung,

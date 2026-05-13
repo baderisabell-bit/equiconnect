@@ -894,8 +894,82 @@ export async function loginUser(emailOrObj: string | { email?: string; password?
 
 export async function registerUser(data: any): Promise<any> {
   try {
-    return { success: false, error: 'Registrierung nicht implementiert.', userId: null } as any;
+    const email = String(data?.email || '').trim().toLowerCase();
+    const password = String(data?.password || '').trim();
+    const confirmPassword = String(data?.confirmPassword || '').trim();
+    const name = String(data?.name || data?.vorname || data?.gewerbeName || '').trim();
+    const role = String(data?.role || 'nutzer').trim();
+
+    // Validation
+    if (!email || !email.includes('@')) {
+      return { success: false, error: 'Gültige E-Mail erforderlich.', userId: null } as any;
+    }
+
+    if (!password || password.length < 8) {
+      return { success: false, error: 'Passwort muss mindestens 8 Zeichen lang sein.', userId: null } as any;
+    }
+
+    if (password !== confirmPassword) {
+      return { success: false, error: 'Passwörter stimmen nicht überein.', userId: null } as any;
+    }
+
+    if (!name) {
+      return { success: false, error: 'Name erforderlich.', userId: null } as any;
+    }
+
+    try {
+      // Check if email already exists
+      const existingCheck = await pool.query('SELECT id FROM users WHERE lower(email) = $1 LIMIT 1', [email]);
+      if (existingCheck.rows && existingCheck.rows.length > 0) {
+        return { success: false, error: 'Diese E-Mail-Adresse ist bereits registriert.', userId: null } as any;
+      }
+
+      // Hash password with bcrypt
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Insert new user
+      const res = await pool.query(
+        'INSERT INTO users (email, password_hash, name, role, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, email, name, role',
+        [email, hashedPassword, name, role]
+      );
+
+      const newUser = res.rows?.[0];
+      if (!newUser) {
+        return { success: false, error: 'Benutzer konnte nicht erstellt werden.', userId: null } as any;
+      }
+
+      const userId = Number(newUser.id);
+
+      // Set cookies for immediate login
+      try {
+        const cookieOpts: any = {
+          path: '/',
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        };
+        const rc = await cookies();
+        rc.set({ name: 'userId', value: String(userId), ...cookieOpts });
+        rc.set({ name: 'userEmail', value: String(email), ...cookieOpts });
+        rc.set({ name: 'userName', value: String(name), ...cookieOpts });
+        rc.set({ name: 'userRole', value: String(role), ...cookieOpts });
+      } catch (cErr) {
+        console.warn('Could not set auth cookies:', cErr);
+      }
+
+      return { success: true, userId, user: { id: userId, email, name, role }, error: null } as any;
+    } catch (err: any) {
+      const isConn = isLikelyDatabaseConnectionError(err) || String(err?.message || '').toLowerCase().includes('relation "users"');
+      if (process.env.NODE_ENV !== 'production' && isConn) {
+        // Dev fallback if DB not available
+        const devUserId = 1;
+        return { success: true, userId: devUserId, user: { id: devUserId, email, name, role }, devFallback: true, error: null } as any;
+      }
+      console.error('Register user DB error:', err);
+      return { success: false, error: 'Registrierung fehlgeschlagen.', userId: null } as any;
+    }
   } catch (error: any) {
+    console.error('Register user error:', error);
     return { success: false, error: 'Registrierung fehlgeschlagen.', userId: null } as any;
   }
 }
@@ -2482,13 +2556,90 @@ export async function getResolvedUserRole(userId: number) {
 
 // ==================== ADMIN - VERIFICATION ====================
 export async function getVerificationProfiles(params?: any) {
-  const profiles: any[] = [];
-  return { success: true, profiles, items: profiles, error: null };
+  try {
+    const adminCode = (params && String(params).trim()) || '';
+    const expected = String(process.env.ADMIN_PANEL_CODE || '').trim();
+    if (!expected || adminCode !== expected) {
+      return { success: false, error: 'Unauthorized', items: [] };
+    }
+
+    const q = await pool.query(
+      `SELECT u.id as user_id, u.email, u.role, up.display_name, up.zertifikate, up.profil_data, u.user_verifiziert as user_verifiziert, up.updated_at
+       FROM users u
+       LEFT JOIN user_profiles up ON u.id = up.user_id
+       WHERE (COALESCE(up.profil_data->>'uploadedCertificates','') <> '' OR COALESCE(up.profil_data->>'uploadedIdDocs','') <> '' OR array_length(up.zertifikate,1) IS NOT NULL)
+       ORDER BY up.updated_at DESC NULLS LAST
+       LIMIT 500;`
+    );
+
+    const items = (q.rows || []).map((row: any) => ({
+      user_id: row.user_id,
+      role: row.role,
+      vorname: (row.profil_data && row.profil_data.vorname) || null,
+      nachname: (row.profil_data && row.profil_data.nachname) || null,
+      email: row.email,
+      verifiziert: Boolean(row.user_verifiziert),
+      display_name: row.display_name || null,
+      zertifikate: Array.isArray(row.zertifikate) ? row.zertifikate : [],
+      profil_data: row.profil_data || {},
+      updated_at: row.updated_at || null
+    }));
+
+    return { success: true, items, error: null };
+  } catch (error: any) {
+    console.error('getVerificationProfiles error', error);
+    return { success: false, items: [], error: String(error?.message || error) };
+  }
 }
 
 export async function updateVerificationStatus(paramsOrProfileId?: { adminCode?: string; userId?: number; accountVerified?: boolean; verifiedCertificates?: any[] } | number, status?: string) {
-  return { success: true, error: null };
+  try {
+    const params = typeof paramsOrProfileId === 'number' ? { userId: paramsOrProfileId } : (paramsOrProfileId || {});
+    const adminCode = String(params.adminCode || '').trim();
+    const expected = String(process.env.ADMIN_PANEL_CODE || '').trim();
+    if (!expected || adminCode !== expected) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const userId = Number(params.userId || 0);
+    const accountVerified = Boolean(params.accountVerified);
+    const verifiedCertificates = Array.isArray(params.verifiedCertificates) ? params.verifiedCertificates : [];
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return { success: false, error: 'Ungültige userId' };
+    }
+
+    // Update users.user_verifiziert (if column exists) and ensure user_profiles.profil_data contains verifizierteZertifikate
+    try {
+      await pool.query('UPDATE users SET user_verifiziert = $1 WHERE id = $2', [accountVerified, userId]);
+    } catch (err) {
+      // ignore - column may not exist in some schemas
+      console.warn('Warning: Could not update users.user_verifiziert', String(err || ''));
+    }
+
+    // Fetch existing profil_data
+    const cur = await pool.query('SELECT profil_data FROM user_profiles WHERE user_id = $1 LIMIT 1', [userId]);
+    const existing = cur.rows[0] && cur.rows[0].profil_data ? cur.rows[0].profil_data : {};
+    const merged = {
+      ...(typeof existing === 'object' ? existing : {}),
+      verifizierteZertifikate: verifiedCertificates
+    };
+
+    // Upsert profile row
+    await pool.query(
+      `INSERT INTO user_profiles (user_id, role, profil_data, updated_at)
+       VALUES ($1, COALESCE((SELECT role FROM user_profiles WHERE user_id = $1), 'nutzer'), $2::jsonb, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET profil_data = $2::jsonb, updated_at = NOW();`,
+      [userId, JSON.stringify(merged)]
+    );
+
+    return { success: true, error: null };
+  } catch (error: any) {
+    console.error('updateVerificationStatus error', error);
+    return { success: false, error: String(error?.message || error) };
+  }
 }
+
 
 // ==================== ADMIN - ADVERTISING ====================
 export async function adminGetAdvertisingSubmissions(code?: string, filter?: string) {
