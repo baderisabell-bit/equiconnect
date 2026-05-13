@@ -352,12 +352,14 @@ export default function RegistrierungNutzer() {
                 </span>
               </div>
               <div className="md:col-span-2 grid grid-cols-1 gap-3">
+                <label htmlFor="profilName" className="block text-[10px] font-bold uppercase text-slate-600 mb-1">Profilname</label>
                 <input
                   id="profilName"
                   name="profilName"
                   placeholder="Profilname (z.B. Anna & Pferd Luna)"
                   value={formData.profilName}
                   onChange={(e) => setFormValue('profilName', e.target.value)}
+                  autoComplete="off"
                   className="w-full p-3 text-sm bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-emerald-200 outline-none"
                 />
                 {fieldErrors.profilName && <p className="-mt-2 text-[10px] font-bold text-red-500">{fieldErrors.profilName}</p>}
@@ -841,26 +843,34 @@ export default function RegistrierungNutzer() {
             <h2 className="text-lg font-black uppercase italic text-emerald-400">4. Private Daten & Sicherheit (nicht öffentlich sichtbar)</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                id="vorname"
-                name="vorname"
-                placeholder="Vorname"
-                value={formData.vorname}
-                onChange={(e) => setFormValue('vorname', e.target.value)}
-                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                required
-              />
-              {fieldErrors.vorname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.vorname}</p>}
-              <input
-                id="nachname"
-                name="nachname"
-                placeholder="Nachname"
-                value={formData.nachname}
-                onChange={(e) => setFormValue('nachname', e.target.value)}
-                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                required
-              />
-              {fieldErrors.nachname && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.nachname}</p>}
+              <div>
+                <label htmlFor="vorname" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Vorname</label>
+                <input
+                  id="vorname"
+                  name="vorname"
+                  placeholder="Vorname"
+                  value={formData.vorname}
+                  onChange={(e) => setFormValue('vorname', e.target.value)}
+                  autoComplete="given-name"
+                  className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                  required
+                />
+                {fieldErrors.vorname && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.vorname}</p>}
+              </div>
+              <div>
+                <label htmlFor="nachname" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Nachname</label>
+                <input
+                  id="nachname"
+                  name="nachname"
+                  placeholder="Nachname"
+                  value={formData.nachname}
+                  onChange={(e) => setFormValue('nachname', e.target.value)}
+                  autoComplete="family-name"
+                  className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                  required
+                />
+                {fieldErrors.nachname && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.nachname}</p>}
+              </div>
               <div className="md:col-span-2 grid gap-2">
                 <label htmlFor="birthDate" className="text-[9px] font-black uppercase ml-2 text-slate-500 italic">Geburtsdatum (nicht öffentlich)</label>
                 <input
@@ -869,53 +879,70 @@ export default function RegistrierungNutzer() {
                   type="date"
                   value={formData.birthDate}
                   onChange={(e) => setFormValue('birthDate', e.target.value)}
+                  autoComplete="bday"
                   className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
                 />
                 {fieldErrors.birthDate && <p className="-mt-1 text-[10px] font-bold text-red-300">{fieldErrors.birthDate}</p>}
               </div>
               <div className="md:col-span-2 grid grid-cols-3 gap-2">
-                <input
-                  id="privatStrasse"
-                  name="privatStrasse"
-                  placeholder="Privatadresse (Straße)"
-                  value={formData.privatStrasse}
-                  onChange={(e) => setFormValue('privatStrasse', e.target.value)}
-                  className="col-span-2 p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                  required
-                />
-                <input
-                  id="privatHausnummer"
-                  name="privatHausnummer"
-                  placeholder="Nr."
-                  value={formData.privatHausnummer}
-                  onChange={(e) => setFormValue('privatHausnummer', e.target.value)}
-                  className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                  required
-                />
+                <div className="col-span-2">
+                  <label htmlFor="privatStrasse" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Straße</label>
+                  <input
+                    id="privatStrasse"
+                    name="privatStrasse"
+                    placeholder="Privatadresse (Straße)"
+                    value={formData.privatStrasse}
+                    onChange={(e) => setFormValue('privatStrasse', e.target.value)}
+                    autoComplete="street-address"
+                    className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="privatHausnummer" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Nr.</label>
+                  <input
+                    id="privatHausnummer"
+                    name="privatHausnummer"
+                    placeholder="Nr."
+                    value={formData.privatHausnummer}
+                    onChange={(e) => setFormValue('privatHausnummer', e.target.value)}
+                    autoComplete="street-address"
+                    className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                    required
+                  />
+                </div>
               </div>
               {(fieldErrors.privatStrasse || fieldErrors.privatHausnummer) && (
                 <p className="md:col-span-2 -mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatStrasse || fieldErrors.privatHausnummer}</p>
               )}
-              <input
-                id="privatPlz"
-                name="privatPlz"
-                placeholder="PLZ"
-                value={formData.privatPlz}
-                onChange={(e) => setFormValue('privatPlz', e.target.value)}
-                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                required
-              />
-              {fieldErrors.privatPlz && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatPlz}</p>}
-              <input
-                id="privatOrt"
-                name="privatOrt"
-                placeholder="Ort"
-                value={formData.privatOrt}
-                onChange={(e) => setFormValue('privatOrt', e.target.value)}
-                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                required
-              />
-              {fieldErrors.privatOrt && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.privatOrt}</p>}
+              <div>
+                <label htmlFor="privatPlz" className="block text-[10px] font-bold uppercase text-white/70 mb-1">PLZ</label>
+                <input
+                  id="privatPlz"
+                  name="privatPlz"
+                  placeholder="PLZ"
+                  value={formData.privatPlz}
+                  onChange={(e) => setFormValue('privatPlz', e.target.value)}
+                  autoComplete="postal-code"
+                  className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                  required
+                />
+                {fieldErrors.privatPlz && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.privatPlz}</p>}
+              </div>
+              <div>
+                <label htmlFor="privatOrt" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Ort</label>
+                <input
+                  id="privatOrt"
+                  name="privatOrt"
+                  placeholder="Ort"
+                  value={formData.privatOrt}
+                  onChange={(e) => setFormValue('privatOrt', e.target.value)}
+                  autoComplete="address-level2"
+                  className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                  required
+                />
+                {fieldErrors.privatOrt && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.privatOrt}</p>}
+              </div>
 
               <div className="md:col-span-2 py-5 border-t border-white/10 mt-3">
                 <div className="flex items-start gap-4 p-5 bg-emerald-50/30 border border-emerald-100 rounded-2xl">
@@ -927,39 +954,51 @@ export default function RegistrierungNutzer() {
                 </div>
               </div>
 
-              <input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="E-Mail für Login"
-                value={formData.email}
-                onChange={(e) => setFormValue('email', e.target.value)}
-                className="md:col-span-2 p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                required
-              />
-              {fieldErrors.email && <p className="md:col-span-2 -mt-2 text-[10px] font-bold text-red-300">{fieldErrors.email}</p>}
-              <input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Passwort"
-                value={formData.password}
-                onChange={(e) => setFormValue('password', e.target.value)}
-                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                required
-              />
-              {fieldErrors.password && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.password}</p>}
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                placeholder="Passwort bestätigen"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormValue('confirmPassword', e.target.value)}
-                className="p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
-                required
-              />
-              {fieldErrors.confirmPassword && <p className="-mt-2 text-[10px] font-bold text-red-300">{fieldErrors.confirmPassword}</p>}
+              <div className="md:col-span-2">
+                <label htmlFor="email" className="block text-[10px] font-bold uppercase text-white/70 mb-1">E-Mail für Login</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="E-Mail für Login"
+                  value={formData.email}
+                  onChange={(e) => setFormValue('email', e.target.value)}
+                  required
+                  autoComplete="email"
+                  className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                />
+                {fieldErrors.email && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.email}</p>}
+              </div>
+              <div>
+                <label htmlFor="password" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Passwort</label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Passwort"
+                  value={formData.password}
+                  onChange={(e) => setFormValue('password', e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                />
+                {fieldErrors.password && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.password}</p>}
+              </div>
+              <div>
+                <label htmlFor="confirmPassword" className="block text-[10px] font-bold uppercase text-white/70 mb-1">Passwort bestätigen</label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  placeholder="Passwort bestätigen"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormValue('confirmPassword', e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  className="w-full p-3 text-sm bg-white/5 border border-white/10 rounded-xl"
+                />
+                {fieldErrors.confirmPassword && <p className="mt-1 text-[10px] font-bold text-red-300">{fieldErrors.confirmPassword}</p>}
+              </div>
             </div>
 
             <div className="space-y-4 pt-6 border-t border-white/10">
