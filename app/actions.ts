@@ -927,10 +927,68 @@ export async function registerUser(data: any): Promise<any> {
       // Hash password with bcrypt
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Insert new user
+      // Insert new user using the actual columns available in the current DB schema.
+      const columnsResult = await pool.query(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_name = 'users'
+           AND table_schema = 'public'`
+      );
+      const availableColumns = new Set((columnsResult.rows || []).map((row: any) => String(row.column_name || '').trim()));
+
+      const valueByColumn: Record<string, any> = {
+        email,
+        password_hash: hashedPassword,
+        password_digest: hashedPassword,
+        hashed_password: hashedPassword,
+        password: hashedPassword,
+        passhash: hashedPassword,
+        name,
+        display_name: name,
+        full_name: name,
+        role,
+        user_role: role,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const preferredColumns = [
+        'email',
+        'password_hash',
+        'password_digest',
+        'hashed_password',
+        'password',
+        'passhash',
+        'name',
+        'display_name',
+        'full_name',
+        'role',
+        'user_role',
+        'created_at',
+        'updated_at',
+      ];
+
+      const insertColumns = preferredColumns.filter((column) => availableColumns.has(column) && valueByColumn[column] !== undefined);
+
+      if (!insertColumns.includes('email')) {
+        return { success: false, error: 'Datenbankspalte für E-Mail fehlt.', userId: null } as any;
+      }
+
+      const passwordColumn = ['password_hash', 'password_digest', 'hashed_password', 'password', 'passhash'].find((column) => insertColumns.includes(column));
+      if (!passwordColumn) {
+        return { success: false, error: 'Datenbankspalte für Passwort fehlt.', userId: null } as any;
+      }
+
+      const insertPlaceholders = insertColumns.map((_, index) => `$${index + 1}`).join(', ');
+      const insertValues = insertColumns.map((column) => valueByColumn[column]);
+      const returningColumns = ['id', 'email'];
+      if (insertColumns.includes('name')) returningColumns.push('name');
+      if (insertColumns.includes('display_name')) returningColumns.push('display_name');
+      if (insertColumns.includes('role')) returningColumns.push('role');
+
       const res = await pool.query(
-        'INSERT INTO users (email, password_hash, name, role, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING id, email, name, role',
-        [email, hashedPassword, name, role]
+        `INSERT INTO users (${insertColumns.join(', ')}) VALUES (${insertPlaceholders}) RETURNING ${returningColumns.join(', ')}`,
+        insertValues
       );
 
       const newUser = res.rows?.[0];
@@ -939,6 +997,8 @@ export async function registerUser(data: any): Promise<any> {
       }
 
       const userId = Number(newUser.id);
+      const returnedName = String(newUser.name || newUser.display_name || name || email).trim();
+      const returnedRole = String(newUser.role || role).trim();
 
       // Set cookies for immediate login
       try {
@@ -951,13 +1011,13 @@ export async function registerUser(data: any): Promise<any> {
         const rc = await cookies();
         rc.set({ name: 'userId', value: String(userId), ...cookieOpts });
         rc.set({ name: 'userEmail', value: String(email), ...cookieOpts });
-        rc.set({ name: 'userName', value: String(name), ...cookieOpts });
-        rc.set({ name: 'userRole', value: String(role), ...cookieOpts });
+        rc.set({ name: 'userName', value: String(returnedName), ...cookieOpts });
+        rc.set({ name: 'userRole', value: String(returnedRole), ...cookieOpts });
       } catch (cErr) {
         console.warn('Could not set auth cookies:', cErr);
       }
 
-      return { success: true, userId, user: { id: userId, email, name, role }, error: null } as any;
+      return { success: true, userId, user: { id: userId, email, name: returnedName, role: returnedRole }, error: null } as any;
     } catch (err: any) {
       const isConn = isLikelyDatabaseConnectionError(err) || String(err?.message || '').toLowerCase().includes('relation "users"');
       if (process.env.NODE_ENV !== 'production' && isConn) {
