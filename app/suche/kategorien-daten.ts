@@ -1,8 +1,15 @@
 export const ANGEBOT_KATEGORIEN = [
   {
+    label: "Bodenarbeit",
+    themen: [
+      "Grundlagen & Kommunikation", "Gymnastizierende Bodenarbeit", "Longieren", 
+      "Gelassenheitstraining", "Zirzensik", "Jungpferdeausbildung", "Reha & Gesunderhaltung"
+    ]
+  },
+  {
     label: "Reitunterricht",
     themen: [
-      "Springen", "Dressur", "Vielseitigkeit", "Fahren", "Westernreiten", 
+      "Reitunterricht für Kinder", "Springen", "Dressur", "Vielseitigkeit", "Fahren", "Westernreiten", 
       "Voltigieren", "Klassisch-barocke Reiterei", "Rennreiten", "Gangreiten",
       { name: "Working-Equitation-Trainer" },
       { name: "Centered-Riding-Instructor", subs: ["Level 1", "Level 2", "Level 3"] },
